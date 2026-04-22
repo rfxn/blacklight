@@ -551,3 +551,184 @@ def test_apply_warranted_without_hypothesis_raises() -> None:
     )
     with pytest.raises(ValueError, match="requires new_hypothesis"):
         apply_revision(case, result, trigger="x")
+
+
+# ---------------------------------------------------------------------------
+# Sentinel P1-SPEC-03 / P1-SPEC-05 / P3-BUG-04 regression tests
+# ---------------------------------------------------------------------------
+
+def test_revise_clamps_out_of_range_confidence(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """P1-SPEC-03: model-emitted confidence outside [0,1] must clamp, not crash.
+
+    The json-schema had to drop minimum/maximum for Anthropic's output_config
+    live-beta (commit 36863d6), but pydantic still enforces Field(ge=0, le=1).
+    Without the clamp, a 1.2 from Opus raises RevisionParseError.
+    """
+    import logging
+    from curator.case_engine import revise
+
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
+    case = _state("a")
+    rows = _rows_from_json("supports")
+    payload = {
+        "support_type": "supports",
+        "revision_warranted": True,
+        "new_hypothesis": {
+            "summary": "Campaign — PolyShell across host-2 and host-4",
+            "confidence": 1.2,  # out of range — must clamp to 1.0
+            "reasoning": (
+                "Prior 'Single host' extended by EV-0011/0012/0013 on host-4 "
+                "with matching callback."
+            ),
+        },
+        "evidence_thread_additions": [
+            {"host": "host-4", "evidence_ids": ["EV-0011", "EV-0012", "EV-0013"]},
+        ],
+        "capability_map_updates": {
+            "observed": [],
+            "inferred": [
+                {
+                    "cap": "credential harvest",
+                    "basis": "family pattern",
+                    "confidence": -0.1,  # out of range — must clamp to 0.0
+                },
+            ],
+            "likely_next": [],
+        },
+        "open_questions_additions": [],
+        "proposed_actions": [],
+    }
+    client = _mock_anthropic(payload)
+    with caplog.at_level(logging.WARNING, logger="curator.case_engine"):
+        result = revise(case, rows, client=client)
+    assert result.new_hypothesis is not None
+    assert result.new_hypothesis.confidence == pytest.approx(1.0)
+    assert result.capability_map_updates is not None
+    assert len(result.capability_map_updates.inferred) == 1
+    assert result.capability_map_updates.inferred[0].confidence == pytest.approx(0.0)
+    clamp_warnings = [r for r in caplog.records if "clamp" in r.getMessage().lower()]
+    assert len(clamp_warnings) >= 2, (
+        f"expected >=2 clamp warnings, got {len(clamp_warnings)}: "
+        f"{[r.getMessage() for r in caplog.records]}"
+    )
+
+
+def test_revise_merges_duplicate_host_entries_in_evidence_thread_additions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P1-SPEC-05: two array entries for the same host must merge, not overwrite.
+
+    The live-beta json_schema can't express dict[str, list[str]], so the wire
+    shape is an array of {host, evidence_ids}. Prior code used a
+    dict-comprehension which silently dropped the earlier entry on duplicate
+    host keys. Expected: setdefault/extend accumulator + per-host dedupe.
+    """
+    from curator.case_engine import revise
+
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
+    case = _state("a")
+    rows = _rows_from_json("supports")
+    payload = {
+        "support_type": "supports",
+        "revision_warranted": False,
+        "evidence_thread_additions": [
+            {"host": "host-4", "evidence_ids": ["EV-0011", "EV-0012"]},
+            {"host": "host-4", "evidence_ids": ["EV-0012", "EV-0013"]},  # dup host + dup id
+        ],
+        "capability_map_updates": None,
+        "open_questions_additions": [],
+        "proposed_actions": [],
+    }
+    client = _mock_anthropic(payload)
+    result = revise(case, rows, client=client)
+    assert list(result.evidence_thread_additions) == ["host-4"]
+    merged = result.evidence_thread_additions["host-4"]
+    assert merged == ["EV-0011", "EV-0012", "EV-0013"], (
+        f"duplicate-host entries must merge with per-host dedupe; got {merged!r}"
+    )
+
+
+def test_merge_capability_maps_allows_inferred_upgrade() -> None:
+    """P3-BUG-04: higher-confidence inferred entry should replace the prior.
+
+    Prior code short-circuited on any `cap` match — blocking both upgrades
+    and downgrades despite the comment claiming downgrade-only protection.
+    """
+    from curator.case_engine import apply_revision
+    from curator.case_schema import (
+        CapabilityMap, InferredCapability, RevisionResult,
+    )
+
+    case = _state("a").model_copy(deep=True)
+    case.capability_map = CapabilityMap(
+        observed=list(case.capability_map.observed),
+        inferred=[
+            InferredCapability(
+                cap="reverse_shell",
+                basis="initial family pattern",
+                confidence=0.5,
+            ),
+        ],
+        likely_next=list(case.capability_map.likely_next),
+    )
+    update = CapabilityMap(
+        inferred=[
+            InferredCapability(
+                cap="reverse_shell",
+                basis="second-round corroboration",
+                confidence=0.8,
+            ),
+        ],
+    )
+    result = RevisionResult(
+        support_type="supports",
+        revision_warranted=False,
+        capability_map_updates=update,
+    )
+    updated = apply_revision(case, result, trigger="round-2 evidence")
+    inferred = {i.cap: i for i in updated.capability_map.inferred}
+    assert "reverse_shell" in inferred
+    assert inferred["reverse_shell"].confidence == pytest.approx(0.8)
+    assert inferred["reverse_shell"].basis == "second-round corroboration"
+
+
+def test_merge_capability_maps_rejects_inferred_downgrade() -> None:
+    """P3-BUG-04 companion: a lower-confidence update must not overwrite."""
+    from curator.case_engine import apply_revision
+    from curator.case_schema import (
+        CapabilityMap, InferredCapability, RevisionResult,
+    )
+
+    case = _state("a").model_copy(deep=True)
+    case.capability_map = CapabilityMap(
+        observed=list(case.capability_map.observed),
+        inferred=[
+            InferredCapability(
+                cap="reverse_shell",
+                basis="initial family pattern",
+                confidence=0.5,
+            ),
+        ],
+        likely_next=list(case.capability_map.likely_next),
+    )
+    update = CapabilityMap(
+        inferred=[
+            InferredCapability(
+                cap="reverse_shell",
+                basis="weaker signal",
+                confidence=0.3,
+            ),
+        ],
+    )
+    result = RevisionResult(
+        support_type="supports",
+        revision_warranted=False,
+        capability_map_updates=update,
+    )
+    updated = apply_revision(case, result, trigger="round-2 weaker")
+    inferred = {i.cap: i for i in updated.capability_map.inferred}
+    assert inferred["reverse_shell"].confidence == pytest.approx(0.5)
+    assert inferred["reverse_shell"].basis == "initial family pattern"

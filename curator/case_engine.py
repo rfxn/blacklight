@@ -205,6 +205,40 @@ def _stub_result() -> RevisionResult:
     )
 
 
+def _clamp_confidences(payload: dict) -> None:
+    """Clamp every confidence field in a raw revision payload to [0.0, 1.0].
+
+    The output_config.format live-beta schema cannot carry minimum/maximum
+    (commit 36863d6), but curator.case_schema still enforces ge=0.0/le=1.0
+    via pydantic — a 1.2 from the model would raise before we see it. Walk
+    the known confidence paths and clamp in place, logging WARN on any fire.
+    Paths tracked: new_hypothesis.confidence + every entry in
+    capability_map_updates.{observed,inferred,likely_next}[*].confidence.
+    """
+    def _clamp(container: dict, key: str, where: str) -> None:
+        v = container.get(key)
+        if not isinstance(v, (int, float)):
+            return
+        if v < 0.0 or v > 1.0:
+            clamped = max(0.0, min(1.0, float(v)))
+            log.warning("clamp confidence at %s: %r -> %r", where, v, clamped)
+            container[key] = clamped
+
+    new_hyp = payload.get("new_hypothesis")
+    if isinstance(new_hyp, dict):
+        _clamp(new_hyp, "confidence", "new_hypothesis")
+
+    cap_updates = payload.get("capability_map_updates")
+    if isinstance(cap_updates, dict):
+        for bucket in ("observed", "inferred", "likely_next"):
+            entries = cap_updates.get(bucket)
+            if not isinstance(entries, list):
+                continue
+            for idx, entry in enumerate(entries):
+                if isinstance(entry, dict):
+                    _clamp(entry, "confidence", f"capability_map_updates.{bucket}[{idx}]")
+
+
 def _extract_json_text(response: "anthropic.types.Message") -> str:
     """Pull the first text block that parses as JSON. Raise otherwise."""
     candidates: list[str] = []
@@ -266,13 +300,24 @@ def revise(
         # Convert evidence_thread_additions from array-of-pairs to dict
         # (API json_schema can't express dict[str, list[str]] — we use an array
         # shape in the schema and normalize here before pydantic validation).
+        # Duplicate host keys must merge (not overwrite) — the model may emit
+        # host-by-host rather than one entry per host.
         raw_threads = payload.get("evidence_thread_additions", [])
         if isinstance(raw_threads, list):
-            payload["evidence_thread_additions"] = {
-                item["host"]: item.get("evidence_ids", [])
-                for item in raw_threads
-                if isinstance(item, dict) and "host" in item
-            }
+            merged_threads: dict[str, list[str]] = {}
+            for item in raw_threads:
+                if not isinstance(item, dict) or "host" not in item:
+                    continue
+                bucket = merged_threads.setdefault(item["host"], [])
+                seen = set(bucket)
+                for eid in item.get("evidence_ids", []):
+                    if eid not in seen:
+                        bucket.append(eid)
+                        seen.add(eid)
+            payload["evidence_thread_additions"] = merged_threads
+        # Clamp out-of-range confidences — schema dropped min/max bounds
+        # for the live-beta (36863d6), but pydantic still enforces ge/le.
+        _clamp_confidences(payload)
         # Drop proposed_actions items with non-datetime 'at' fields —
         # the model occasionally puts host names or plain text in 'at'
         # rather than an ISO timestamp, causing pydantic datetime parse failures.
@@ -388,9 +433,10 @@ def _merge_capability_maps(base: CapabilityMap, update: CapabilityMap) -> Capabi
     # inferred
     inferred_by_cap = {i.cap: i for i in base.inferred}
     for i in update.inferred:
-        if i.cap not in inferred_by_cap:
+        existing = inferred_by_cap.get(i.cap)
+        if existing is None or i.confidence > existing.confidence:
+            # keep higher-confidence update only — never downgrade silently
             inferred_by_cap[i.cap] = i
-        # else: keep base — do not downgrade a prior confidence silently.
 
     # likely_next
     new_likely_next = update.likely_next if update.likely_next else base.likely_next
