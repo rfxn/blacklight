@@ -45,9 +45,18 @@ main() {
     local path_map_entries=""
     local p
 
+    # Safe-path allowlist: absolute path of [A-Za-z0-9._/-] only. Rejects "
+    # \ and shell metacharacters so manifest.json stays well-formed JSON
+    # even when the caller supplies an arbitrary BL_REPORT_PATHS string.
+    local path_re='^/[A-Za-z0-9._/-]+$'
+
     # shellcheck disable=SC2086  # intentional word-split on space-separated path list
     for p in $paths; do
         [[ -e "$p" ]] || continue  # skip missing paths silently
+        if ! [[ "$p" =~ $path_re ]]; then
+            log "skipping path with unsafe characters: $p"
+            continue
+        fi
         local target_sub
         case "$p" in
             /var/www/*)       target_sub="fs" ;;
@@ -55,10 +64,8 @@ main() {
             /etc/cron*)       target_sub="cron" ;;
             *)                target_sub="fs" ;;
         esac
-        # Strip leading / so the tar entry is relative.
         local stripped="${p#/}"
         command mkdir -p "$staging/$target_sub/$(command dirname "$stripped")"
-        # cp -a preserves mtimes — critical for timeline hunter
         command cp -a "$p" "$staging/$target_sub/$stripped" 2>/dev/null || continue  # silently drop unreadable
         path_map_entries="${path_map_entries}\"$target_sub/$stripped\":\"$p\","
     done
