@@ -323,7 +323,7 @@ All three reference (do not inline) operator-content skill files. If a routed sk
 **⚠ OPERATOR GATE — realism review before commit.**
 
 Plan phase writes:
-- `a.php` — 2-layer base64/gzinflate obfuscated PHP skeleton, POST/GET command shim, `.top` callback template (`lanhd6549tdhse.top` per EXHIBITS.md), realistic Magento media path simulation. ~15 lines.
+- `a.php` — 2-layer base64/gzinflate obfuscated PHP skeleton, POST/GET command shim, `.top` callback template (`vagqea4wrlkdg.top` per EXHIBITS.md — randomly-generated, depot-excluded), realistic Magento media path simulation. ~15 lines.
 - `access.log` — ~50 lines: interleaved legitimate Magento traffic + URL-evasion hits (`GET /pub/media/catalog/product/.cache/a.php/product.jpg`).
 
 Inline provenance marker at top of each file: `# staged exhibit — APSB25-94 public advisory reconstruction — NOT customer data`.

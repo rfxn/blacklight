@@ -20,7 +20,7 @@ def test_url_evasion_matches(tmp_path: Path) -> None:
 
 def test_suspicious_tld_matches(tmp_path: Path) -> None:
     log = tmp_path / "access.log"
-    log.write_text('outbound POST to http://lanhd6549tdhse.top/gate\n')
+    log.write_text('outbound POST to http://vagqea4wrlkdg.top/gate\n')
     hits = _extract_suspicious(log)
     assert len(hits) == 1
     assert hits[0]["kind"] == "suspicious_callback"
