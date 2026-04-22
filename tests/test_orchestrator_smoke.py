@@ -375,3 +375,75 @@ def test_tar_safety_rejects_absolute_via_cli(
     )
     assert proc.returncode == 2
     assert b"absolute" in proc.stderr.lower() or b"reject" in proc.stderr.lower()
+
+
+# === P25 Day 4: intent reconstructor wiring ===
+
+
+def _make_fs_row(category: str = "webshell_candidate", conf: float = 0.85) -> EvidenceRow:
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return EvidenceRow(
+        id="ev_test",
+        case_id="CASE-2026-0007",
+        report_id="rpt-test",
+        host="host-2",
+        hunter="fs",
+        category=category,
+        finding=f"synthetic {category} for orchestrator wiring test",
+        confidence=conf,
+        source_refs=["fs/test.php"],
+        raw_evidence_excerpt="<?php eval(base64_decode($_POST['x'])); ?>",
+        observed_at=now,
+        reported_at=now,
+    )
+
+
+def _open_case_for_test():
+    """Build a minimal CaseFile for intent-wiring tests."""
+    from datetime import datetime, timezone
+    from curator.case_schema import CaseFile, Hypothesis, HypothesisCurrent
+    now = datetime.now(timezone.utc)
+    return CaseFile(
+        case_id="CASE-2026-0007",
+        status="active",
+        opened_at=now,
+        last_updated_at=now,
+        updated_by="test",
+        hypothesis=Hypothesis(current=HypothesisCurrent(summary="PolyShell", confidence=0.4, reasoning="r")),
+    )
+
+
+@pytest.mark.asyncio
+async def test_intent_merge_via_orchestrator(tmp_path, monkeypatch):
+    """webshell_candidate + .php in tar -> intent runs -> capability_map populated."""
+    monkeypatch.setenv("BL_SKIP_LIVE", "1")
+    from curator.orchestrator import _maybe_reconstruct_intent
+    from curator.case_engine import CapabilityMap  # noqa: F401 — sanity import
+
+    # Build a work_root with an fs/test.php artifact
+    (tmp_path / "fs").mkdir()
+    (tmp_path / "fs" / "test.php").write_text("<?php eval($_POST['x']); ?>")
+
+    case = _open_case_for_test()  # helper: uses _open_case with 1 row
+    row = _make_fs_row(category="webshell_candidate")
+    updated = await _maybe_reconstruct_intent([row], tmp_path, case)
+    # BL_SKIP_LIVE=1 stub returns 1 observed entry
+    assert len(updated.capability_map.observed) >= 1
+    assert updated.capability_map.observed[0].cap == "rce_via_webshell"
+
+
+@pytest.mark.asyncio
+async def test_intent_skipped_without_webshell_candidate(tmp_path, monkeypatch):
+    """No webshell_candidate row -> intent does NOT run, case unchanged."""
+    monkeypatch.setenv("BL_SKIP_LIVE", "1")
+    from curator.orchestrator import _maybe_reconstruct_intent
+
+    (tmp_path / "fs").mkdir()
+    (tmp_path / "fs" / "test.php").write_text("<?php ?>")
+
+    case = _open_case_for_test()
+    row = _make_fs_row(category="log_anomaly")  # NOT webshell_candidate
+    updated = await _maybe_reconstruct_intent([row], tmp_path, case)
+    # capability_map unchanged (empty observed)
+    assert len(updated.capability_map.observed) == 0

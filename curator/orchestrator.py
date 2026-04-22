@@ -135,6 +135,38 @@ def _open_case(host: str, rows: list[EvidenceRow]) -> CaseFile:
     )
 
 
+async def _maybe_reconstruct_intent(
+    rows: list[EvidenceRow],
+    work_root: Path,
+    case: CaseFile,
+) -> CaseFile:
+    """Run intent reconstructor if webshell_candidate rows exist AND a .php is in the tar.
+
+    Returns the updated case (capability_map merged) or the input case unchanged.
+    Catches intent-call errors and logs — orchestrator never raises on intent failure.
+    """
+    webshell_rows = [r for r in rows if r.category == "webshell_candidate"]
+    if not webshell_rows:
+        return case
+    php_files = sorted(
+        (p for p in (work_root / "fs").rglob("*.php") if p.is_file()),
+        key=lambda p: p.stat().st_size, reverse=True,
+    )
+    if not php_files:
+        log.warning("webshell_candidate hit but no .php in tar — skipping intent")
+        return case
+    artifact = php_files[0]
+    log.info("invoking intent.reconstruct on %s (%d bytes)", artifact.name, artifact.stat().st_size)
+    try:
+        from curator import intent
+        from curator.case_engine import merge_capability_map
+        cap_map = await asyncio.to_thread(intent.reconstruct, artifact, case)
+        return merge_capability_map(case, cap_map)
+    except Exception as exc:  # noqa: BLE001 — orchestrator never raises on intent failure
+        log.warning("intent.reconstruct raised %s: %s — keeping case unchanged", type(exc).__name__, exc)
+        return case
+
+
 async def _run_hunters(input: HunterInput) -> tuple[list[HunterOutput], bool]:
     """Run fs+log in parallel, timeline on their outputs. Soft-fail per spec 11b #5.
 
@@ -222,6 +254,7 @@ async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
 
     if existing is None:
         case = _open_case(envelope.host_id, rows)
+        case = await _maybe_reconstruct_intent(rows, work_root, case)
         await asyncio.to_thread(dump_case, case, str(case_path))
         log.info("opened %s; wrote %s", case.case_id, case_path)
         return (case, partial)
@@ -245,6 +278,7 @@ async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
     revision = await asyncio.to_thread(revise, prior_case, rows)
     trigger = f"{envelope.host_id} report {envelope.report_id}"
     updated = apply_revision(prior_case, revision, trigger=trigger)
+    updated = await _maybe_reconstruct_intent(rows, work_root, updated)
     await asyncio.to_thread(dump_case, updated, str(case_path))
     log.info(
         "revised %s: support_type=%s, revision_warranted=%s, history len=%d",
