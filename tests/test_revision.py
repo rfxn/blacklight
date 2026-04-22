@@ -120,47 +120,234 @@ def test_case_state_b_parses() -> None:
 # revision matrix — skipped until Day 3
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skip(reason=SKIP_REASON)
-def test_state_a_supports() -> None:
+def test_state_a_supports(monkeypatch: pytest.MonkeyPatch) -> None:
     """state_a (single-host, 0.4) + supports evidence → support_type == 'supports'.
     Confidence should rise modestly (not a bare bump)."""
-    raise NotImplementedError
+    from curator.case_engine import apply_revision, revise
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
+    case = _state("a")
+    rows = _rows_from_json("supports")
+    payload = {
+        "support_type": "supports",
+        "revision_warranted": True,
+        "new_hypothesis": {
+            "summary": "Campaign — PolyShell across host-2 and host-4 (shared C2)",
+            "confidence": 0.6,
+            "reasoning": (
+                "Prior hypothesis 'Single host compromise — PolyShell variant' "
+                "(conf 0.4). New evidence EV-0011, EV-0012, EV-0013 on host-4 "
+                "shows matching callback vagqea4wrlkdg.top + URL-evasion "
+                "signature. Upgrading to campaign attribution."
+            ),
+        },
+        "evidence_thread_additions": {"host-4": ["EV-0011", "EV-0012", "EV-0013"]},
+        "capability_map_updates": None,
+        "open_questions_additions": ["host-7 same fleet — probe next."],
+        "proposed_actions": [],
+    }
+    client = _mock_anthropic(payload)
+    result = revise(case, rows, client=client)
+    assert result.support_type == "supports"
+    assert result.revision_warranted is True
+    assert result.new_hypothesis is not None
+    # discipline rule 1: reasoning names the prior hypothesis
+    assert "Single host" in result.new_hypothesis.reasoning or \
+           "single host" in result.new_hypothesis.reasoning.lower()
+    # discipline rule 2: confidence change cites specific evidence
+    for ev in ("EV-0011", "EV-0012", "EV-0013"):
+        assert ev in result.new_hypothesis.reasoning
+    # confidence moved modestly (not bare bump)
+    assert 0.5 <= result.new_hypothesis.confidence <= 0.75
+    # apply-path integrity check
+    updated = apply_revision(case, result, trigger="host-4 report rpt-supports-0001")
+    assert len(updated.hypothesis.history) == 1
+    assert updated.hypothesis.history[0].confidence == pytest.approx(0.4)
 
 
-@pytest.mark.skip(reason=SKIP_REASON)
-def test_state_a_contradicts() -> None:
+def test_state_a_contradicts(monkeypatch: pytest.MonkeyPatch) -> None:
     """state_a + contradicting evidence → 'contradicts'. Current hypothesis
     must be acknowledged and updated, not silently replaced."""
-    raise NotImplementedError
+    from curator.case_engine import apply_revision, revise
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
+    case = _state("a")
+    rows = _rows_from_json("contradicts")
+    payload = {
+        "support_type": "contradicts",
+        "revision_warranted": True,
+        "new_hypothesis": {
+            "summary": "Single host compromise confined to host-2 (host-4 Nginx-clean excluded)",
+            "confidence": 0.45,
+            "reasoning": (
+                "Prior hypothesis 'Single host compromise — PolyShell variant' "
+                "implied possible campaign. New evidence EV-0021/22/23 shows "
+                "host-4 stack is Nginx-only with zero PHP runtime — PolyShell "
+                "PHP stage cannot execute there. Contradiction: host-4 is NOT "
+                "a second victim; the hypothesis is updated to emphasize "
+                "host-2-only containment."
+            ),
+        },
+        "evidence_thread_additions": {},
+        "capability_map_updates": None,
+        "open_questions_additions": [
+            "Are there other Apache hosts in the fleet with Magento 2.4.x that should be probed?",
+        ],
+        "proposed_actions": [],
+    }
+    client = _mock_anthropic(payload)
+    result = revise(case, rows, client=client)
+    assert result.support_type == "contradicts"
+    # discipline rule 3: reasoning names the contradiction directly
+    assert "contradict" in result.new_hypothesis.reasoning.lower()
+    # discipline rule 1: prior hypothesis named
+    assert "Single host" in result.new_hypothesis.reasoning or \
+           "prior" in result.new_hypothesis.reasoning.lower()
+    # host-4 is NOT added to threads (negative evidence does not join a thread)
+    assert "host-4" not in result.evidence_thread_additions
+    # apply-path: history appended, current replaced
+    updated = apply_revision(case, result, trigger="host-4 negative-result report")
+    assert updated.hypothesis.current.summary != case.hypothesis.current.summary
+    assert len(updated.hypothesis.history) == 1
 
 
-@pytest.mark.skip(reason=SKIP_REASON)
-def test_state_a_extends() -> None:
+def test_state_a_extends(monkeypatch: pytest.MonkeyPatch) -> None:
     """state_a + extending evidence → 'extends'. Hypothesis gains detail
     without significant confidence shift."""
-    raise NotImplementedError
+    from curator.case_engine import apply_revision, revise
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
+    case = _state("a")
+    # Reuse extends_rows.json but treat as single-host-extension context
+    rows = _rows_from_json("extends")
+    payload = {
+        "support_type": "extends",
+        "revision_warranted": True,
+        "new_hypothesis": {
+            "summary": "Single-host compromise with timeline correlation — PolyShell, 14s deploy-to-exercise",
+            "confidence": 0.45,
+            "reasoning": (
+                "Prior hypothesis 'Single host compromise — PolyShell variant' "
+                "unchanged in scope. New evidence EV-0031/32/33 adds timeline "
+                "detail (deploy-to-exercise 14s) — extends the claim with "
+                "temporal precision. No additional host. Confidence moves "
+                "marginally 0.4 → 0.45."
+            ),
+        },
+        "evidence_thread_additions": {"host-7": ["EV-0031", "EV-0032", "EV-0033"]},
+        "capability_map_updates": None,
+        "open_questions_additions": [],
+        "proposed_actions": [],
+    }
+    client = _mock_anthropic(payload)
+    result = revise(case, rows, client=client)
+    assert result.support_type == "extends"
+    # discipline: extend is not upgrade — confidence shift small
+    assert abs(result.new_hypothesis.confidence - 0.4) <= 0.15
 
 
-@pytest.mark.skip(reason=SKIP_REASON)
-def test_state_b_supports() -> None:
+def test_state_b_supports(monkeypatch: pytest.MonkeyPatch) -> None:
     """state_b (two-host, 0.6) + supports → 'supports'. Campaign attribution
     should strengthen; confidence moves but with explicit reasoning."""
-    raise NotImplementedError
+    from curator.case_engine import revise
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
+    case = _state("b")
+    rows = _rows_from_json("extends")  # host-7 corroborates campaign
+    payload = {
+        "support_type": "supports",
+        "revision_warranted": True,
+        "new_hypothesis": {
+            "summary": "Campaign — PolyShell across host-2, host-4, host-7 (shared C2 vagqea4wrlkdg.top)",
+            "confidence": 0.80,
+            "reasoning": (
+                "Prior hypothesis 'Campaign — PolyShell deployed across host-2 and "
+                "host-4' (conf 0.6). New evidence EV-0031, EV-0032, EV-0033 on host-7: "
+                "matching obfuscation fingerprint + shared callback + "
+                "consistent 14s deploy-to-exercise timing. Third host same "
+                "campaign. Confidence rises 0.6 → 0.8."
+            ),
+        },
+        "evidence_thread_additions": {"host-7": ["EV-0031", "EV-0032", "EV-0033"]},
+        "capability_map_updates": None,
+        "open_questions_additions": [],
+        "proposed_actions": [],
+    }
+    client = _mock_anthropic(payload)
+    result = revise(case, rows, client=client)
+    assert result.support_type == "supports"
+    assert result.new_hypothesis.confidence > case.hypothesis.current.confidence
+    # No bare bumps: reasoning references specific evidence ids
+    for ev in ("EV-0031", "EV-0032", "EV-0033"):
+        assert ev in result.new_hypothesis.reasoning
 
 
-@pytest.mark.skip(reason=SKIP_REASON)
-def test_state_b_contradicts() -> None:
-    """state_b + contradicting evidence (e.g. different family markers) →
+def test_state_b_contradicts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """state_b + contradicting evidence (different family markers) →
     'contradicts'. open_questions should flag the competing hypothesis
     rather than force-fit into the existing case."""
-    raise NotImplementedError
+    from curator.case_engine import revise
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
+    case = _state("b")
+    rows = _rows_from_json("contradicts")  # re-use Nginx-clean shape
+    payload = {
+        "support_type": "contradicts",
+        "revision_warranted": True,
+        "new_hypothesis": {
+            "summary": "Campaign — host-2, host-4 (host-N negative result narrows scope)",
+            "confidence": 0.55,
+            "reasoning": (
+                "Prior hypothesis 'Campaign — PolyShell across host-2 and host-4' "
+                "remains valid for those two. New evidence EV-0021/22/23 on a "
+                "further fleet host shows Nginx-only, zero-PHP: host excluded. "
+                "Confidence moves slightly down 0.6 → 0.55 — campaign scope was "
+                "assumed to grow, negative result pulls back."
+            ),
+        },
+        "evidence_thread_additions": {},
+        "capability_map_updates": None,
+        "open_questions_additions": [
+            "Is the campaign Apache+mod_security-specific? A Nginx host with "
+            "equivalent Magento would rule that in/out.",
+        ],
+        "proposed_actions": [],
+    }
+    client = _mock_anthropic(payload)
+    result = revise(case, rows, client=client)
+    assert result.support_type == "contradicts"
+    # discipline rule 4: competing hypothesis in open_questions, not force-fit
+    assert len(result.open_questions_additions) >= 1
 
 
-@pytest.mark.skip(reason=SKIP_REASON)
-def test_state_b_extends() -> None:
+def test_state_b_extends(monkeypatch: pytest.MonkeyPatch) -> None:
     """state_b + extending evidence (third host, same TTPs) → 'extends'.
     evidence_thread_additions should land on the correct host."""
-    raise NotImplementedError
+    from curator.case_engine import revise
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
+    case = _state("b")
+    rows = _rows_from_json("extends")
+    payload = {
+        "support_type": "extends",
+        "revision_warranted": True,
+        "new_hypothesis": {
+            "summary": "Campaign — PolyShell across host-2, host-4, host-7 (14s deploy-to-exercise cadence)",
+            "confidence": 0.65,
+            "reasoning": (
+                "Prior hypothesis 'Campaign — PolyShell deployed across host-2 "
+                "and host-4' extends to include host-7 with matching TTPs. "
+                "Evidence EV-0031/32/33 adds timeline precision (14s cadence). "
+                "Confidence moves modestly 0.6 → 0.65 — scope grew with "
+                "consistent family markers."
+            ),
+        },
+        "evidence_thread_additions": {"host-7": ["EV-0031", "EV-0032", "EV-0033"]},
+        "capability_map_updates": None,
+        "open_questions_additions": [],
+        "proposed_actions": [],
+    }
+    client = _mock_anthropic(payload)
+    result = revise(case, rows, client=client)
+    assert result.support_type == "extends"
+    assert "host-7" in result.evidence_thread_additions
+    assert result.evidence_thread_additions["host-7"] == ["EV-0031", "EV-0032", "EV-0033"]
+    # extend discipline: confidence moves but modestly
+    assert 0.55 <= result.new_hypothesis.confidence <= 0.75
 
 
 # ---------------------------------------------------------------------------
