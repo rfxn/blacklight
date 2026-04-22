@@ -58,9 +58,24 @@ def test_initial_hypothesis_confidence_capped_at_04() -> None:
     assert h.confidence == 0.4
 
 
+def test_initial_hypothesis_tie_break_stable_across_row_orders() -> None:
+    """P3-BUG-06: when two categories tie on max confidence, top_category
+    must not depend on which row the orchestrator happens to iterate first.
+    Day-2 hunter ordering guarantees insertion determinism, but Day-3
+    revision reads from sqlite where row order is not guaranteed.
+    """
+    row_a = _row(category="unusual_php_path", conf=0.7, hunter="fs")
+    row_b = _row(category="url_evasion", conf=0.7, hunter="log")
+    forward = _build_initial_hypothesis([row_a, row_b])
+    reverse = _build_initial_hypothesis([row_b, row_a])
+    assert forward.summary == reverse.summary
+
+
 def test_initial_hypothesis_summary_names_top_category() -> None:
-    rows = [_row(category="unusual_php_path") for _ in range(3)] + [
-        _row(category="url_evasion", hunter="log") for _ in range(1)
+    # Use a clear max (not a tie) so the test asserts top_category
+    # selection, not the P3-BUG-06 tie-break (covered separately).
+    rows = [_row(category="unusual_php_path", conf=0.8) for _ in range(3)] + [
+        _row(category="url_evasion", conf=0.5, hunter="log") for _ in range(1)
     ]
     h = _build_initial_hypothesis(rows)
     assert "unusual_php_path" in h.summary

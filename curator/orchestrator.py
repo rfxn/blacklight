@@ -98,7 +98,10 @@ def _build_initial_hypothesis(rows: list[EvidenceRow]) -> HypothesisCurrent:
         prev = per_cat_max.get(r.category, 0.0)
         if r.confidence > prev:
             per_cat_max[r.category] = r.confidence
-    top_category = max(per_cat_max.items(), key=lambda kv: kv[1])[0]
+    # Deterministic tie-break on category name so hypothesis text is stable
+    # under any rows ordering — sqlite fetches in Day-3+ revision paths do
+    # not guarantee insertion order.
+    top_category = max(per_cat_max.items(), key=lambda kv: (kv[1], kv[0]))[0]
     hosts = sorted({r.host for r in rows})
     conf = min(max(r.confidence for r in rows), 0.4)
     top3 = sorted(rows, key=lambda r: -r.confidence)[:3]
