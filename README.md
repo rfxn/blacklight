@@ -16,14 +16,21 @@ cp .secrets/env.example .secrets/env    # add your ANTHROPIC_API_KEY
 docker-compose -f compose/docker-compose.yml up -d --build
 ```
 
-The fleet comes up as three containers: `bl-curator` (the investigator, Managed Agent), `bl-host-2` (Apache + ModSec + staged PolyShell from public APSB25-94 advisory), and `bl-host-3` (clean Nginx). Feed a report to the curator:
+The fleet comes up as three containers: `bl-curator` (the investigator, Managed Agent), `bl-host-2` (Apache + ModSec + staged PolyShell from public APSB25-94 advisory), and `bl-host-3` (clean Nginx). Confirm health, feed a report to the curator, then investigate:
 
 ```bash
-docker exec bl-host-2 /opt/bl-agent/bl-report /tmp/host-2.tar
-docker cp bl-host-2:/tmp/host-2.tar bl-curator:/app/inbox/
-docker exec bl-curator python -m curator.orchestrator /app/inbox/host-2.tar
+docker exec bl-curator curl -fsS http://localhost:8080/health
+
+docker exec bl-host-2 /opt/bl-agent/bl-report
+docker exec bl-curator ls /app/inbox/
+
+docker exec -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" bl-curator \
+    bash -c 'python -m curator.orchestrator /app/inbox/*.tar'
+
 docker exec bl-curator cat /app/curator/storage/cases/CASE-2026-0007.yaml
 ```
+
+`bl-report` collects the host's filesystem + logs, tars them, and HTTP-posts the bundle to the curator's inbox — no positional arguments and no manual `docker cp` needed. The orchestrator dispatches three Sonnet 4.6 hunters in parallel against the report, writes evidence rows into sqlite, and materializes the case file. The first run opens `CASE-2026-0007` at confidence 0.4; subsequent reports trigger the Opus 4.7 hypothesis-revision path and append to `hypothesis.history`.
 
 ---
 

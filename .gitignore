@@ -29,4 +29,5 @@ Thumbs.db
 .env
 .env.*
 !.env.example
-.secrets/
+.secrets/*
+!.secrets/env.example
