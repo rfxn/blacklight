@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import logging
 import os
+import re
 import sys
 import tarfile
 import uuid
@@ -29,12 +30,32 @@ from curator.report_envelope import parse_envelope, validate_tar_safety
 
 log = logging.getLogger("orchestrator")
 
-# Day 2: fixed case id. Auto-allocation lands Day 3+ when the case engine wires in.
-_DAY2_CASE_ID = "CASE-2026-0007"
-
-
 def _storage_root() -> Path:
     return Path(os.environ.get("BL_STORAGE", "curator/storage"))
+
+
+_CASE_ID_RE = re.compile(r"^CASE-(\d{4})-(\d{4})\.yaml$")
+
+
+def _allocate_case_id(cases_dir: Path, *, year: int | None = None) -> str:
+    """Scan cases_dir for CASE-{year}-{NNNN}.yaml; return next CASE-{year}-{NNNN}.
+
+    First call on a fresh fleet returns CASE-{year}-0007 to preserve the Day-2
+    baseline identity (CASE-2026-0007 is referenced from EXPECTED.md, fixtures,
+    and the demo script). Subsequent calls return max(NNNN)+1.
+    """
+    yr = year if year is not None else datetime.now(timezone.utc).year
+    max_n = 0
+    if cases_dir.is_dir():
+        for entry in cases_dir.iterdir():
+            m = _CASE_ID_RE.match(entry.name)
+            if not m:
+                continue
+            if int(m.group(1)) != yr:
+                continue
+            max_n = max(max_n, int(m.group(2)))
+    next_n = max_n + 1 if max_n >= 7 else 7
+    return f"CASE-{yr}-{next_n:04d}"
 
 
 def _check_preconditions() -> None:
@@ -72,7 +93,6 @@ def _findings_to_rows(
             rows.append(
                 EvidenceRow(
                     id="",  # filled by insert_evidence
-                    case_id=_DAY2_CASE_ID,
                     report_id=report_id,
                     host=host,
                     hunter=out.hunter,
@@ -122,10 +142,10 @@ def _existing_case_path(cases_dir: Path, case_id: str) -> "Path | None":
     return p if p.is_file() else None
 
 
-def _open_case(host: str, rows: list[EvidenceRow]) -> CaseFile:
+def _open_case(host: str, rows: list[EvidenceRow], case_id: str) -> CaseFile:
     now = datetime.now(timezone.utc)
     return CaseFile(
-        case_id=_DAY2_CASE_ID,
+        case_id=case_id,
         status="active",
         opened_at=now,
         last_updated_at=now,
@@ -249,11 +269,18 @@ async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
     await asyncio.to_thread(insert_evidence, db_path, rows)
     log.info("wrote %d evidence rows", len(rows))
 
-    case_path = cases_dir / f"{_DAY2_CASE_ID}.yaml"
-    existing = _existing_case_path(cases_dir, _DAY2_CASE_ID)
+    existing_cases = sorted(cases_dir.glob("CASE-*.yaml")) if cases_dir.is_dir() else []
+    if existing_cases:
+        existing = existing_cases[0]
+        case_id = _CASE_ID_RE.match(existing.name).group(0).removesuffix(".yaml")
+        case_path = existing
+    else:
+        case_id = _allocate_case_id(cases_dir)
+        case_path = cases_dir / f"{case_id}.yaml"
+        existing = None
 
     if existing is None:
-        case = _open_case(envelope.host_id, rows)
+        case = _open_case(envelope.host_id, rows, case_id)
         case = await _maybe_reconstruct_intent(rows, work_root, case)
         await asyncio.to_thread(dump_case, case, str(case_path))
         log.info("opened %s; wrote %s", case.case_id, case_path)

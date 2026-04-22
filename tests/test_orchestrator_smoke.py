@@ -111,7 +111,10 @@ def test_findings_to_rows_preserves_counts() -> None:
     rows = _findings_to_rows([fs_out], "host-2", "rpt-z")
     assert len(rows) == 1
     assert rows[0].host == "host-2"
-    assert rows[0].case_id == "CASE-2026-0007"
+    # P33: _findings_to_rows no longer stamps case_id (set later in process_report
+    # after allocator / existing-case resolution). Row-level case_id stays None
+    # until a future phase adds post-open backfill.
+    assert rows[0].case_id is None
 
 
 @pytest.mark.asyncio
@@ -242,8 +245,11 @@ async def test_one_hunter_failure_records_partial_findings(
 
     assert partial is True
     assert case is not None
-    from curator.evidence import fetch_by_case
-    rows = fetch_by_case(tmp_path / "storage" / "evidence.db", "CASE-2026-0007")
+    # P33: rows are inserted before case allocation, so case_id is None in the DB.
+    # Query by report_id (the fixture envelope's rpt-sample-host2) to verify
+    # surviving hunters' findings landed despite one hunter raising.
+    from curator.evidence import fetch_by_report
+    rows = fetch_by_report(tmp_path / "storage" / "evidence.db", "rpt-sample-host2")
     hunters_with_rows = {r.hunter for r in rows}
     assert "fs" in hunters_with_rows
     assert "log" not in hunters_with_rows
