@@ -1,0 +1,17 @@
+exceptions:
+- path_glob: vendor/**
+  reason: Magento framework-legitimate PHP
+  rule_id_ref: BL-rce-via-webshell-001
+generated_at: '2026-04-24T00:00:00Z'
+rules:
+- applies_to:
+  - apache
+  - apache-modsec
+  body: 'SecRule REQUEST_URI "@rx test" "id:900001,phase:2,deny,status:403,msg:''test''"'
+  capability_ref: rce_via_webshell
+  confidence: 0.85
+  rule_id: BL-rce-via-webshell-001
+  validation_error: null
+suggested_rules: []
+validation_test: GET /test.php HTTP/1.1
+version: 1
