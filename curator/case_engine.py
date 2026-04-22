@@ -19,7 +19,6 @@ from typing import Callable, Optional
 import anthropic
 
 from curator.case_schema import (
-    ActionTaken,
     CaseFile,
     CapabilityMap,
     Hypothesis,
