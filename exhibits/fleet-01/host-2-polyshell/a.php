@@ -3,7 +3,7 @@
 // 2-layer obfuscation (base64 → gzinflate eval). Outer shell recognizable;
 // inner payload is a placeholder executing `echo "BL-STAGE";` — no actual
 // functionality. Intent reconstructor (Day 4) will walk both layers.
-$_x="eJxLTklNyy9ILcpMLlbwz1ZwSizJSFWwTQ8sSk1RUEpUT8+LzFdITklNyy9ILcpMLlZISSxJVEhOLCtLSlXIVygoLU5VSE8sVigB0tTUxNTCnJLMvMzUvOKKzJxUheLU5JJiAGjdGxQ=";
+$_x="S03OyFdQcvLRDQ5xdHdVsgYA";
 $y=gzinflate(base64_decode($_x));
 // dormant-capability markers (commented for exhibit; do not execute)
 // - cmd: $_POST['c'] -> system()
