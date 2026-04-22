@@ -52,8 +52,11 @@ def load_prompt(path: Path) -> str:
     if path in _PROMPT_CACHE:
         return _PROMPT_CACHE[path]
     text = path.read_text(encoding="utf-8")
-    if "TODO: operator content" in text.splitlines()[:3] if text else False:
-        log.warning("skill/prompt %s is a stub — proceeding without enriched context", path)
+    head = "\n".join(text.splitlines()[:3]) if text else ""
+    if "TODO: operator content" in head:
+        raise RuntimeError(
+            f"prompt {path} is an operator-content stub — refusing to send to Sonnet"
+        )
     _PROMPT_CACHE[path] = text
     return text
 

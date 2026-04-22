@@ -22,6 +22,17 @@ def test_load_prompt(tmp_path: Path) -> None:
     assert load_prompt(p).startswith("# hello")
 
 
+def test_load_prompt_refuses_operator_stub(tmp_path: Path) -> None:
+    """P3-BUG-02: prompt whose head contains a stub marker must raise, not warn.
+
+    Guards against shipping a TODO skeleton to Sonnet 4.6 at $3/Mtok.
+    """
+    p = tmp_path / "stub.md"
+    p.write_text("TODO: operator content — fill this in\nline2\nline3\n")
+    with pytest.raises(RuntimeError, match="operator-content stub"):
+        load_prompt(p)
+
+
 def test_build_tool_schema_shape() -> None:
     s = build_tool_schema()
     assert s["name"] == "report_findings"
