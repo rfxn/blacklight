@@ -170,3 +170,78 @@ def test_state_b_extends() -> None:
 @pytest.mark.parametrize("kind", ["supports", "contradicts", "extends"])
 def test_evidence_report_fixture_exists(kind: str) -> None:
     assert _report(kind).exists(), f"missing evidence report fixture: {kind}.yaml"
+
+
+# ---------------------------------------------------------------------------
+# Day-3 P13: plumbing smoke — revise() builds correctly, parses mock JSON
+# ---------------------------------------------------------------------------
+
+def test_revise_mock_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """revise() with a mock Anthropic client returns a RevisionResult."""
+    from unittest.mock import MagicMock
+    from curator.case_engine import revise
+    from curator.evidence import EvidenceRow
+
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
+
+    payload = {
+        "support_type": "supports",
+        "revision_warranted": True,
+        "new_hypothesis": {
+            "summary": "Campaign — PolyShell across host-2 and host-4",
+            "confidence": 0.6,
+            "reasoning": "Prior hypothesis 'single host PolyShell' (conf 0.4). "
+                         "New evidence EV-0011/0012/0013 shows host-4 with "
+                         "matching callback vagqea4wrlkdg.top — extends to campaign.",
+        },
+        "evidence_thread_additions": {"host-4": ["EV-0011", "EV-0012", "EV-0013"]},
+        "capability_map_updates": None,
+        "open_questions_additions": [],
+        "proposed_actions": [],
+    }
+    text_block = type("B", (), {"type": "text", "text": json.dumps(payload)})
+    fake_response = type("R", (), {
+        "content": [text_block],
+        "stop_reason": "end_turn",
+        "usage": None,
+    })
+    client = MagicMock()
+    client.messages.create = MagicMock(return_value=fake_response)
+
+    case = _state("a")
+    rows = [
+        EvidenceRow(
+            id="EV-0011", case_id="CASE-2026-0007", report_id="rpt-supports-0001",
+            host="host-4", hunter="fs", category="unusual_php_path",
+            finding="PHP file b.php outside framework tree",
+            confidence=0.75, source_refs=["fs/.../b.php"],
+            raw_evidence_excerpt="", observed_at="2026-04-03T08:52:11Z",
+            reported_at="2026-04-03T08:55:00Z",
+        ),
+    ]
+    result = revise(case, rows, client=client)
+    assert result.support_type == "supports"
+    assert result.revision_warranted is True
+    assert result.new_hypothesis is not None
+    assert result.new_hypothesis.confidence == pytest.approx(0.6)
+    assert result.evidence_thread_additions == {"host-4": ["EV-0011", "EV-0012", "EV-0013"]}
+
+    # Discipline checks on the call kwargs
+    kwargs = client.messages.create.call_args.kwargs
+    assert kwargs["model"] == "claude-opus-4-7"
+    assert kwargs["thinking"] == {"type": "adaptive", "display": "summarized"}
+    assert kwargs["output_config"]["effort"] == "high"
+    assert kwargs["output_config"]["format"]["type"] == "json_schema"
+    assert "tool_choice" not in kwargs  # Opus 4.7 + thinking rejects forced tool_choice
+    assert "budget_tokens" not in kwargs  # removed on Opus 4.7
+    # Evidence summarization discipline: the JSON evidence batch must NOT contain
+    # raw_evidence_excerpt as a key in the data. We check by parsing the JSON
+    # portion after the known header separator.
+    user_content = kwargs["messages"][0]["content"]
+    separator = "NEW EVIDENCE BATCH (summaries; no raw_evidence_excerpt exposure):\n"
+    assert separator in user_content, "user message missing expected evidence header"
+    evidence_json_str = user_content.split(separator, 1)[1]
+    evidence_data = json.loads(evidence_json_str)
+    for ev in evidence_data:
+        assert "raw_evidence_excerpt" not in ev, \
+            "engine view must not expose raw_evidence_excerpt (CLAUDE.md §Pre-committed-mitigations)"
