@@ -73,7 +73,8 @@ def test_intent_mocked_opus_returns_observed_rce(tmp_path, monkeypatch):
     assert result.inferred[0].cap == "credential_harvest"
 
 
-def test_intent_mocked_malformed_response_raises(tmp_path):
+def test_intent_mocked_malformed_response_raises(tmp_path, monkeypatch):
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
     artifact = tmp_path / "a.php"
     artifact.write_text("<?php ?>")
     mock_client = MagicMock()
@@ -85,7 +86,8 @@ def test_intent_mocked_malformed_response_raises(tmp_path):
         reconstruct(artifact, _fake_case(), client=mock_client)
 
 
-def test_intent_mocked_confidence_out_of_range_clamped(tmp_path):
+def test_intent_mocked_confidence_out_of_range_clamped(tmp_path, monkeypatch):
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
     artifact = tmp_path / "a.php"
     artifact.write_text("<?php ?>")
     payload = {
