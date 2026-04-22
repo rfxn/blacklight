@@ -448,3 +448,24 @@ def _merge_capability_maps(base: CapabilityMap, update: CapabilityMap) -> Capabi
         inferred=list(inferred_by_cap.values()),
         likely_next=new_likely_next,
     )
+
+
+def merge_capability_map(
+    case: CaseFile,
+    cap_map: CapabilityMap,
+    *,
+    updated_by: str = "intent_reconstructor",
+    clock: Optional[Callable[[], datetime]] = None,
+) -> CaseFile:
+    """Merge a CapabilityMap into a case's capability_map. Returns a new CaseFile.
+
+    Intended caller: intent reconstructor path (orchestrator P25). Does NOT
+    mutate hypothesis, evidence_threads, open_questions, or actions_taken —
+    those are revise()'s domain.
+    """
+    now = (clock or (lambda: datetime.now(timezone.utc)))()
+    updated = case.model_copy(deep=True)
+    updated.last_updated_at = now
+    updated.updated_by = updated_by
+    updated.capability_map = _merge_capability_maps(updated.capability_map, cap_map)
+    return updated
