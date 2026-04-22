@@ -234,8 +234,9 @@ def synthesize(
         messages=[{"role": "user", "content": user_content}],
     )
 
-    text = _extract_json_text(response)
+    text: str = ""
     try:
+        text = _extract_json_text(response)
         payload = json.loads(text)
         raw = SynthesisResult.model_validate(payload)
     except Exception as exc:
