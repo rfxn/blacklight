@@ -82,7 +82,10 @@ services:
       - curator
 
   host-3:
-    image: nginx:1.27-alpine
+    build:
+      context: ..
+      dockerfile: compose/host-nginx.Dockerfile
+    image: blacklight/host-nginx:dev
     container_name: bl-host-3
     hostname: host-3
     volumes:

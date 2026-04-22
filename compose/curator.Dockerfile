@@ -7,7 +7,9 @@ WORKDIR /app
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt \
  && apt-get update \
- && apt-get install -y --no-install-recommends curl \
+ && apt-get install -y --no-install-recommends \
+      curl \
+      apache2 apache2-utils libapache2-mod-security2 \
  && rm -rf /var/lib/apt/lists/*
 
 COPY curator /app/curator
