@@ -199,7 +199,7 @@ def _stub_result() -> RevisionResult:
         evidence_thread_additions={},
         capability_map_updates=None,
         open_questions_additions=[
-            "BL_SKIP_LIVE active — no model call made; no revision proposed.",
+            "no revision proposed (model call skipped in this run).",
         ],
         proposed_actions=[],
     )
@@ -342,6 +342,8 @@ def revise(
         ) from exc
 
 
+# Not idempotent: caller guarantees one invocation per distinct RevisionResult.
+# Repeat calls append to hypothesis.history / open_questions / actions_taken each time.
 def apply_revision(
     case: CaseFile,
     result: RevisionResult,

@@ -48,6 +48,24 @@ def _make_tar_with_entry(path: Path, member_name: str) -> None:
         t.addfile(info, io.BytesIO(data))
 
 
+def _make_tar_with_symlink(path: Path, member_name: str, linkname: str) -> None:
+    """Build a tar containing a benign file + a single symlink entry.
+
+    Mirrors the bl-report P9 class: a tarball with manifest.json + a log-file
+    symlink whose linkname points outside the extraction root (e.g., an
+    Apache-container /var/log symlink pointing to /dev/stdout).
+    """
+    with tarfile.open(path, "w") as t:
+        manifest = b"{}"
+        info = tarfile.TarInfo(name="manifest.json")
+        info.size = len(manifest)
+        t.addfile(info, io.BytesIO(manifest))
+        sym = tarfile.TarInfo(name=member_name)
+        sym.type = tarfile.SYMTYPE
+        sym.linkname = linkname
+        t.addfile(sym)
+
+
 def test_tar_safety_rejects_absolute_path(tmp_path: Path) -> None:
     t = tmp_path / "bad.tar"
     _make_tar_with_entry(t, "/etc/passwd")
@@ -60,3 +78,30 @@ def test_tar_safety_rejects_dotdot(tmp_path: Path) -> None:
     _make_tar_with_entry(t, "../../../root/.ssh/id_rsa")
     with pytest.raises(ValueError, match="escape"):
         validate_tar_safety(t)
+
+
+@pytest.mark.parametrize(
+    "linkname",
+    [
+        "/dev/stdout",        # device-symlink escape (bl-report P9 class)
+        "../../../etc/passwd",  # traversal-symlink escape
+    ],
+)
+def test_tar_safety_rejects_symlink_escape(tmp_path: Path, linkname: str) -> None:
+    """P3-BUG-13: symlinks whose linkname escapes the extraction root are rejected.
+
+    Guards the Day-2 P9 shape — bl-report tarred /var/log/apache2/*.log symlinks
+    that pointed to /dev/stdout inside the php:8.3-apache container; the
+    validator correctly refused. Also covers the traversal-symlink variant.
+    """
+    t = tmp_path / "bad.tar"
+    _make_tar_with_symlink(t, "logs/access.log", linkname)
+    with pytest.raises(ValueError, match="escape"):
+        validate_tar_safety(t)
+
+
+def test_tar_safety_accepts_in_root_relative_symlink(tmp_path: Path) -> None:
+    """Positive companion: a benign in-root relative symlink passes validation."""
+    t = tmp_path / "ok.tar"
+    _make_tar_with_symlink(t, "logs/latest.log", "relative/target.txt")
+    validate_tar_safety(t)  # must not raise

@@ -131,13 +131,15 @@ def test_state_a_supports(monkeypatch: pytest.MonkeyPatch) -> None:
         "support_type": "supports",
         "revision_warranted": True,
         "new_hypothesis": {
-            "summary": "Campaign — PolyShell across host-2 and host-4 (shared C2)",
+            "summary": "Campaign — PolyShell across host-2 and host-4 (shared shell fingerprint, distinct callbacks)",
             "confidence": 0.6,
             "reasoning": (
                 "Prior hypothesis 'Single host compromise — PolyShell variant' "
                 "(conf 0.4). New evidence EV-0011, EV-0012, EV-0013 on host-4 "
-                "shows matching callback vagqea4wrlkdg.top + URL-evasion "
-                "signature. Upgrading to campaign attribution."
+                "shows matching obfuscation fingerprint + URL-evasion signature; "
+                "callback k3qmz8wpt7fdx.top is distinct from host-2's "
+                "vagqea4wrlkdg.top but the shell family is the same. Upgrading "
+                "to campaign attribution."
             ),
         },
         "evidence_thread_additions": {"host-4": ["EV-0011", "EV-0012", "EV-0013"]},
@@ -254,14 +256,14 @@ def test_state_b_supports(monkeypatch: pytest.MonkeyPatch) -> None:
         "support_type": "supports",
         "revision_warranted": True,
         "new_hypothesis": {
-            "summary": "Campaign — PolyShell across host-2, host-4, host-7 (shared C2 vagqea4wrlkdg.top)",
+            "summary": "Campaign — PolyShell across three hosts (shared shell family; two hosts share C2 vagqea4wrlkdg.top, one uses a distinct callback)",
             "confidence": 0.80,
             "reasoning": (
-                "Prior hypothesis 'Campaign — PolyShell deployed across host-2 and "
-                "host-4' (conf 0.6). New evidence EV-0031, EV-0032, EV-0033 on host-7: "
-                "matching obfuscation fingerprint + shared callback + "
-                "consistent 14s deploy-to-exercise timing. Third host same "
-                "campaign. Confidence rises 0.6 → 0.8."
+                "Prior hypothesis 'Campaign — PolyShell deployed across two hosts' "
+                "(conf 0.6). New evidence EV-0031, EV-0032, EV-0033 on host-7: "
+                "matching obfuscation fingerprint + callback vagqea4wrlkdg.top "
+                "(same as host-2) + consistent 14s deploy-to-exercise timing. "
+                "Third host same campaign. Confidence rises 0.6 → 0.8."
             ),
         },
         "evidence_thread_additions": {"host-7": ["EV-0031", "EV-0032", "EV-0033"]},
@@ -379,7 +381,9 @@ def test_revise_mock_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
             "confidence": 0.6,
             "reasoning": "Prior hypothesis 'single host PolyShell' (conf 0.4). "
                          "New evidence EV-0011/0012/0013 shows host-4 with "
-                         "matching callback vagqea4wrlkdg.top — extends to campaign.",
+                         "matching shell family + callback k3qmz8wpt7fdx.top "
+                         "(distinct from host-2's vagqea4wrlkdg.top) — extends "
+                         "to campaign.",
         },
         "evidence_thread_additions": {"host-4": ["EV-0011", "EV-0012", "EV-0013"]},
         "capability_map_updates": None,
@@ -732,3 +736,23 @@ def test_merge_capability_maps_rejects_inferred_downgrade() -> None:
     inferred = {i.cap: i for i in updated.capability_map.inferred}
     assert inferred["reverse_shell"].confidence == pytest.approx(0.5)
     assert inferred["reverse_shell"].basis == "initial family pattern"
+
+
+def test_revise_stub_does_not_leak_env_var_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P2-SLOP-06: skip-mode stub must not embed the BL_SKIP_LIVE literal.
+
+    The stub persists into case-YAML open_questions when the orchestrator runs
+    with BL_SKIP_LIVE=1 for smoke / demo-dry-run. A judge inspecting the YAML
+    should not see internal env-var names leak into case content.
+    """
+    from curator.case_engine import revise
+
+    monkeypatch.setenv("BL_SKIP_LIVE", "1")
+    case = _state("a")
+    result = revise(case, [])
+    payload = result.model_dump_json()
+    assert "BL_SKIP_LIVE" not in payload, (
+        f"stub leaked env-var literal into RevisionResult: {payload}"
+    )

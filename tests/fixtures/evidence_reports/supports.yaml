@@ -22,7 +22,7 @@ findings:
     raw_evidence_excerpt: ""
   - id: EV-0013
     category: outbound_callback
-    finding: "POST to vagqea4wrlkdg.top/gate from Apache process — callback domain matches host-2 exhibit"
+    finding: "POST to k3qmz8wpt7fdx.top/gate from Apache process — distinct callback, shell-family fingerprint matches host-2"
     confidence: 0.80
     source_refs:
       - "logs/var/log/apache2/error.log:57"
