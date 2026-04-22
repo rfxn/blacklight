@@ -24,11 +24,13 @@ require() {
 }
 
 main() {
-    require curl tar
+    require curl tar du
 
     command mkdir -p "$REPORT_DIR"
     local ts
     ts=$(date -u +%Y%m%dT%H%M%SZ)
+    local report_id
+    report_id="rpt-$(command printf '%s' "$HOST_ID-$ts" | sha256sum | command cut -c1-8)"
     local tarball="$REPORT_DIR/report-${HOST_ID}-${ts}.tar.gz"
 
     local staging
@@ -36,13 +38,56 @@ main() {
     # shellcheck disable=SC2064  # expand $staging at trap-set time
     trap "command rm -rf '$staging'" EXIT
 
-    # TODO(day-2): wire to fs/log/timeline hunters' pre-filtered signals
-    # rather than broad filesystem grab.
-    command mkdir -p "$staging/etc" "$staging/logs" "$staging/procs"
+    command mkdir -p "$staging/fs" "$staging/logs" "$staging/cron" "$staging/procs"
 
-    # Safe metadata snapshot — TODO(day-2) narrow to suspicious paths only
+    # Scope: operator-configurable paths. Defaults cover Magento hosting stack.
+    local paths="${BL_REPORT_PATHS:-/var/www/html /var/log/apache2 /etc/cron.d}"
+    local path_map_entries=""
+    local p
+
+    # shellcheck disable=SC2086  # intentional word-split on space-separated path list
+    for p in $paths; do
+        [[ -e "$p" ]] || continue  # skip missing paths silently
+        local target_sub
+        case "$p" in
+            /var/www/*)       target_sub="fs" ;;
+            /var/log/*)       target_sub="logs" ;;
+            /etc/cron*)       target_sub="cron" ;;
+            *)                target_sub="fs" ;;
+        esac
+        # Strip leading / so the tar entry is relative.
+        local stripped="${p#/}"
+        command mkdir -p "$staging/$target_sub/$(command dirname "$stripped")"
+        # cp -a preserves mtimes — critical for timeline hunter
+        command cp -a "$p" "$staging/$target_sub/$stripped" 2>/dev/null || continue  # silently drop unreadable
+        path_map_entries="${path_map_entries}\"$target_sub/$stripped\":\"$p\","
+    done
+
+    # procs snapshot (unchanged Day 1 behavior)
     ps auxwwf > "$staging/procs/ps.txt" 2>/dev/null || true  # ps fails in some minimal containers
     ss -tlnp > "$staging/procs/sockets.txt" 2>/dev/null || true  # ss may be absent, non-fatal
+
+    # Manifest envelope — parsed by curator.report_envelope.ReportEnvelope
+    # Strip trailing comma from path_map_entries
+    path_map_entries="${path_map_entries%,}"
+    command cat > "$staging/manifest.json" <<EOF
+{
+  "report_id": "$report_id",
+  "host_id": "$HOST_ID",
+  "collected_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "tool_version": "bl-report 0.2.0",
+  "path_map": {${path_map_entries}}
+}
+EOF
+
+    # Size guardrail — abort before transmit if staging exceeds cap.
+    local max_mb="${BL_REPORT_MAX_MB:-50}"
+    local actual_mb
+    actual_mb=$(command du -sm "$staging" | command awk '{print $1}')
+    if (( actual_mb > max_mb )); then
+        log "staging exceeds BL_REPORT_MAX_MB=$max_mb (actual ${actual_mb}MB); aborting"
+        exit 3
+    fi
 
     command tar -C "$staging" -czf "$tarball" .
 
