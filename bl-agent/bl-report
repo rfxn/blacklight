@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# bl-report — tar suspicious findings + host state, POST to curator inbox.
+#
+# Collects:
+#   - candidate suspicious paths (Day 2 scope: hunter-driven signal list)
+#   - process snapshot, listening sockets, recent cron edits
+#   - last N lines of relevant logs
+# into a tarball, uploads to ${CURATOR_URL}/reports with X-Host-Id header.
+
+set -euo pipefail
+
+CURATOR_URL="${BL_CURATOR_URL:-http://bl-curator:8080}"
+HOST_ID="${BL_HOST_ID:-$(command hostname -s)}"
+REPORT_DIR="${BL_REPORT_DIR:-/var/bl-agent/reports}"
+
+log() { command printf '[bl-report %s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+
+require() {
+    local tool
+    for tool in "$@"; do
+        command -v "$tool" >/dev/null || { log "missing dependency: $tool"; exit 2; }
+    done
+}
+
+main() {
+    require curl tar
+
+    command mkdir -p "$REPORT_DIR"
+    local ts
+    ts=$(date -u +%Y%m%dT%H%M%SZ)
+    local tarball="$REPORT_DIR/report-${HOST_ID}-${ts}.tar.gz"
+
+    local staging
+    staging=$(command mktemp -d -t bl-report.XXXXXX)
+    # shellcheck disable=SC2064  # expand $staging at trap-set time
+    trap "command rm -rf '$staging'" EXIT
+
+    # TODO(day-2): wire to fs/log/timeline hunters' pre-filtered signals
+    # rather than broad filesystem grab.
+    command mkdir -p "$staging/etc" "$staging/logs" "$staging/procs"
+
+    # Safe metadata snapshot — TODO(day-2) narrow to suspicious paths only
+    ps auxwwf > "$staging/procs/ps.txt" 2>/dev/null || true  # ps fails in some minimal containers
+    ss -tlnp > "$staging/procs/sockets.txt" 2>/dev/null || true  # ss may be absent, non-fatal
+
+    command tar -C "$staging" -czf "$tarball" .
+
+    log "uploading $tarball to $CURATOR_URL/reports"
+    if ! curl -fsS -X POST \
+        -H "X-Host-Id: $HOST_ID" \
+        -H "Content-Type: application/x-tar" \
+        --data-binary "@$tarball" \
+        "$CURATOR_URL/reports" >/dev/null; then
+        log "upload failed; preserving $tarball for retry"
+        exit 1
+    fi
+
+    log "report accepted; removing local copy"
+    command rm -f "$tarball"
+}
+
+main "$@"

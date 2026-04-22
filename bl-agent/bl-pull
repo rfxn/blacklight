@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# bl-pull — pull current defense manifest from curator, verify, store locally.
+#
+# Part of the blacklight thin-agent bundle. Runs on each host in the fleet on
+# an interval (systemd timer). Day 1 is a scaffold; Day 4 populates the
+# hash-verification + version-diffing logic.
+
+set -euo pipefail
+
+CURATOR_URL="${BL_CURATOR_URL:-http://bl-curator:8080}"
+MANIFEST_LOCAL="${BL_MANIFEST_LOCAL:-/var/bl-agent/manifest.yaml}"
+MANIFEST_STAGE="${MANIFEST_LOCAL}.stage"
+
+log() { command printf '[bl-pull %s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+
+require() {
+    local tool
+    for tool in "$@"; do
+        command -v "$tool" >/dev/null || { log "missing dependency: $tool"; exit 2; }
+    done
+}
+
+main() {
+    require curl sha256sum
+
+    local tmpdir
+    tmpdir=$(command mktemp -d -t bl-pull.XXXXXX)
+    # shellcheck disable=SC2064  # we want $tmpdir expanded now, not on exit
+    trap "command rm -rf '$tmpdir'" EXIT
+
+    log "pulling manifest from $CURATOR_URL"
+    if ! curl -fsS -o "$tmpdir/manifest.yaml" "$CURATOR_URL/manifest.yaml"; then
+        log "manifest fetch failed"
+        exit 1
+    fi
+
+    # TODO(day-4): verify SHA-256 against hash header (X-Manifest-SHA256).
+    # Day 1 accepts any manifest to exercise the pull path end-to-end.
+
+    command install -D -m 0644 "$tmpdir/manifest.yaml" "$MANIFEST_STAGE"
+    command mv "$MANIFEST_STAGE" "$MANIFEST_LOCAL"
+    log "manifest written to $MANIFEST_LOCAL"
+}
+
+main "$@"

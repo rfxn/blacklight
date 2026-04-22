@@ -1,0 +1,53 @@
+#!/bin/bash
+#
+# bl-apply — read local manifest, filter by host stack profile, apply rules.
+#
+# Stack profile is detected at runtime (Apache+ModSec vs Nginx vs other).
+# Rules that match the profile are written to the appropriate conf.d path.
+# Rules that do not match are logged and skipped — this is the Day 4 demo
+# moment where host-3 (Nginx) correctly skips a ModSec rule meant for host-2.
+
+set -euo pipefail
+
+MANIFEST_LOCAL="${BL_MANIFEST_LOCAL:-/var/bl-agent/manifest.yaml}"
+# shellcheck disable=SC2034  # consumed Day 4 when rule-write path is populated
+MODSEC_DROPIN="${BL_MODSEC_DROPIN:-/etc/modsecurity.d/blacklight-defenses.conf}"
+
+log() { command printf '[bl-apply %s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+
+detect_stack() {
+    # Returns a short stack identifier on stdout. Checked against manifest
+    # rule `applies_to` fields (Day 4).
+    if command -v apache2 >/dev/null || command -v httpd >/dev/null; then
+        if [[ -d /etc/modsecurity || -d /etc/modsecurity.d ]]; then
+            command printf 'apache-modsec\n'
+            return 0
+        fi
+        command printf 'apache\n'
+        return 0
+    fi
+    if command -v nginx >/dev/null; then
+        command printf 'nginx\n'
+        return 0
+    fi
+    command printf 'unknown\n'
+}
+
+main() {
+    if [[ ! -r "$MANIFEST_LOCAL" ]]; then
+        log "manifest not found at $MANIFEST_LOCAL — run bl-pull first"
+        exit 1
+    fi
+
+    local stack
+    stack=$(detect_stack)
+    log "detected stack profile: $stack"
+
+    # TODO(day-4): parse manifest.yaml (yq), iterate defenses[],
+    # match .applies_to against $stack, write applicable rules to
+    # $MODSEC_DROPIN (or appropriate per-stack target), apachectl -t
+    # before reload, reload only on success.
+    log "Day 1 scaffold — no rules applied. Day 4 populates."
+}
+
+main "$@"

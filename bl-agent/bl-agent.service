@@ -1,0 +1,16 @@
+[Unit]
+Description=blacklight thin agent — pull/apply defense manifest, report to curator
+Documentation=https://github.com/rfxn/blacklight
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=BL_CURATOR_URL=http://bl-curator:8080
+ExecStart=/usr/local/sbin/bl-pull
+ExecStart=/usr/local/sbin/bl-apply
+ExecStart=/usr/local/sbin/bl-report
+# Day 4: run on a timer. Day 1 = declarative scaffolding only.
+
+[Install]
+WantedBy=multi-user.target
