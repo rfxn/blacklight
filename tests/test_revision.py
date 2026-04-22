@@ -245,3 +245,122 @@ def test_revise_mock_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
     for ev in evidence_data:
         assert "raw_evidence_excerpt" not in ev, \
             "engine view must not expose raw_evidence_excerpt (CLAUDE.md §Pre-committed-mitigations)"
+
+
+# ---------------------------------------------------------------------------
+# Day-3 P14: apply_revision pure-data transform tests
+# ---------------------------------------------------------------------------
+
+def test_apply_supports_appends_history() -> None:
+    from curator.case_engine import apply_revision
+    from curator.case_schema import (
+        HypothesisCurrent, RevisionResult,
+    )
+    case = _state("a")
+    new_hyp = HypothesisCurrent(
+        summary="Campaign — two hosts",
+        confidence=0.6,
+        reasoning="Prior 'Single host' extended to campaign by host-4 evidence EV-0011/12/13",
+    )
+    result = RevisionResult(
+        support_type="supports",
+        revision_warranted=True,
+        new_hypothesis=new_hyp,
+        evidence_thread_additions={"host-4": ["EV-0011", "EV-0012", "EV-0013"]},
+    )
+    updated = apply_revision(case, result, trigger="host-4 report")
+    assert updated.hypothesis.current.summary.startswith("Campaign")
+    assert updated.hypothesis.current.confidence == pytest.approx(0.6)
+    assert len(updated.hypothesis.history) == 1
+    assert updated.hypothesis.history[0].confidence == pytest.approx(0.4)
+    assert updated.hypothesis.history[0].trigger == "host-4 report"
+    # case immutability
+    assert case.hypothesis.current.summary != updated.hypothesis.current.summary
+
+
+def test_apply_noop_when_not_warranted() -> None:
+    from curator.case_engine import apply_revision
+    from curator.case_schema import RevisionResult
+    case = _state("a")
+    result = RevisionResult(
+        support_type="ambiguous",
+        revision_warranted=False,
+        open_questions_additions=["does host-4 even run PHP?"],
+    )
+    updated = apply_revision(case, result, trigger="host-4 ambiguous probe")
+    # hypothesis unchanged
+    assert updated.hypothesis.current.summary == case.hypothesis.current.summary
+    assert updated.hypothesis.history == case.hypothesis.history
+    # open questions extended
+    assert "does host-4 even run PHP?" in updated.open_questions
+
+
+def test_apply_merges_evidence_threads_without_duplicates() -> None:
+    from curator.case_engine import apply_revision
+    from curator.case_schema import RevisionResult
+    case = _state("a")  # has host-2: [EV-0001, EV-0002, EV-0003]
+    result = RevisionResult(
+        support_type="extends",
+        revision_warranted=False,
+        evidence_thread_additions={
+            "host-2": ["EV-0002", "EV-0004"],  # EV-0002 is a dup
+            "host-4": ["EV-0011"],
+        },
+    )
+    updated = apply_revision(case, result, trigger="re-analysis")
+    assert updated.evidence_threads["host-2"] == ["EV-0001", "EV-0002", "EV-0003", "EV-0004"]
+    assert updated.evidence_threads["host-4"] == ["EV-0011"]
+
+
+def test_apply_extends_capability_map_merges_without_duplicates() -> None:
+    from curator.case_engine import apply_revision
+    from curator.case_schema import (
+        CapabilityMap, InferredCapability, ObservedCapability, RevisionResult,
+    )
+    case = _state("a")  # observed: [{cap:"arbitrary PHP execution", evidence:["EV-0001"]}]
+    update = CapabilityMap(
+        observed=[
+            ObservedCapability(
+                cap="arbitrary PHP execution",
+                evidence=["EV-0011"],  # should merge into existing
+                confidence=1.0,
+            ),
+            ObservedCapability(
+                cap="C2 callback via .top domain",
+                evidence=["EV-0013"],
+                confidence=1.0,
+            ),
+        ],
+        inferred=[
+            InferredCapability(
+                cap="credential harvest capability (PolyShell family standard)",
+                basis="family pattern across host-2 and host-4",
+                confidence=0.75,
+            ),
+        ],
+    )
+    result = RevisionResult(
+        support_type="supports",
+        revision_warranted=False,
+        capability_map_updates=update,
+    )
+    updated = apply_revision(case, result, trigger="host-4 corroboration")
+    caps = {o.cap: o for o in updated.capability_map.observed}
+    assert "arbitrary PHP execution" in caps
+    assert caps["arbitrary PHP execution"].evidence == ["EV-0001", "EV-0011"]
+    assert "C2 callback via .top domain" in caps
+    assert len(updated.capability_map.inferred) == 1
+    assert updated.capability_map.inferred[0].cap.startswith("credential harvest")
+
+
+def test_apply_warranted_without_hypothesis_raises() -> None:
+    from curator.case_engine import apply_revision
+    from curator.case_schema import RevisionResult
+    case = _state("a")
+    result = RevisionResult(
+        support_type="supports",
+        revision_warranted=True,
+        new_hypothesis=None,  # inconsistent
+    )
+    with pytest.raises(ValueError, match="requires new_hypothesis"):
+        apply_revision(case, result, trigger="x")
