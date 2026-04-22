@@ -1,0 +1,19 @@
+# blacklight curator — Python dependencies
+# Target: Python 3.12
+
+# Anthropic SDK — Managed Agents beta requires the managed-agents-2026-04-01 header.
+# Pin the minimum that ships the Managed Agents client surface (verify on first install).
+anthropic>=0.47.0
+
+# Schema + serialization
+pydantic>=2.6,<3
+pyyaml>=6.0,<7
+
+# Local glue: manifest HTTP server + report inbox
+flask>=3.0,<4
+
+# Terminal UI for curator reasoning trace (demo artifact)
+rich>=13.7,<14
+
+# Testing
+pytest>=8.0,<9
