@@ -1,0 +1,8 @@
+# Day 1 placeholder — Day 3 populates with a realistic evidence report that
+# should drive the case-engine to return support_type == "extends".
+
+report_id: PLACEHOLDER-extends
+host: host-7
+hunter: timeline
+observed_at: 2026-04-05T16:22:00Z
+findings: []

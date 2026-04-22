@@ -1,0 +1,8 @@
+# Day 1 placeholder — Day 3 populates with a realistic evidence report that
+# should drive the case-engine to return support_type == "contradicts".
+
+report_id: PLACEHOLDER-contradicts
+host: host-5
+hunter: fs
+observed_at: 2026-04-07T12:10:00Z
+findings: []

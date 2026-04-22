@@ -1,0 +1,21 @@
+# Day 1 placeholder — Day 3 populates with a realistic evidence report that
+# should drive the case-engine to return support_type == "supports".
+#
+# Shape (to be locked alongside case_engine.revise() on Day 3):
+#   report_id: str
+#   host: str
+#   hunter: str                 # fs | log | timeline
+#   observed_at: ISO-8601
+#   findings:
+#     - id: EV-NNNN
+#       category: str
+#       finding: str
+#       confidence: float
+#       source_refs: [str]
+#       raw_evidence_excerpt: str   # size-bounded
+
+report_id: PLACEHOLDER-supports
+host: host-4
+hunter: fs
+observed_at: 2026-04-03T08:55:00Z
+findings: []
