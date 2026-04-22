@@ -15,6 +15,7 @@ Six API calls per run. Cheap. Run with:
 
 from __future__ import annotations
 
+import json
 import pathlib
 
 import pytest
@@ -44,9 +45,59 @@ def _report(kind: str) -> pathlib.Path:
     return REPORTS / f"{kind}.yaml"
 
 
+def _rows_from_json(kind: str, *, case_id: str = "CASE-2026-0007") -> list:
+    """Load evidence rows from tests/fixtures/evidence_reports/<kind>_rows.json."""
+    from curator.evidence import EvidenceRow
+    data = json.loads((REPORTS / f"{kind}_rows.json").read_text(encoding="utf-8"))
+    return [
+        EvidenceRow(
+            id=d["id"],
+            case_id=case_id,
+            report_id=f"rpt-{kind}-0001",
+            host=d["host"],
+            hunter=d["hunter"],
+            category=d["category"],
+            finding=d["finding"],
+            confidence=d["confidence"],
+            source_refs=d["source_refs"],
+            raw_evidence_excerpt="",
+            observed_at=d["observed_at"],
+            reported_at=d["observed_at"],
+        )
+        for d in data
+    ]
+
+
+def _mock_anthropic(response_payload: dict):
+    """Build a MagicMock anthropic.Anthropic client that returns response_payload as a text block."""
+    from unittest.mock import MagicMock
+    text_block = type("B", (), {"type": "text", "text": json.dumps(response_payload)})
+    fake_response = type("R", (), {
+        "content": [text_block], "stop_reason": "end_turn", "usage": None,
+    })
+    client = MagicMock()
+    client.messages.create = MagicMock(return_value=fake_response)
+    return client
+
+
 # ---------------------------------------------------------------------------
 # fixture sanity (runs today, not skipped)
 # ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("kind", ["supports", "contradicts", "extends"])
+def test_fixture_rows_parse_as_evidence_rows(kind: str) -> None:
+    """P11: JSON row fixtures parse into EvidenceRow with required fields present."""
+    rows = _rows_from_json(kind)
+    assert len(rows) >= 1
+    for row in rows:
+        assert row.id.startswith("EV-")
+        assert row.host
+        assert row.hunter
+        assert row.category
+        assert row.finding
+        assert 0.0 <= row.confidence <= 1.0
+        assert row.observed_at
+
 
 def test_case_state_a_parses() -> None:
     c = _state("a")

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "EV-0021",
+    "host": "host-4",
+    "hunter": "fs",
+    "category": "stack_profile",
+    "finding": "host-4 stack profile: Nginx only, no mod_php or php-fpm; zero PHP runtime — PolyShell PHP-stage cannot execute here",
+    "confidence": 0.95,
+    "source_refs": ["fs/etc/nginx/nginx.conf", "fs/etc/nginx/sites-enabled/default"],
+    "observed_at": "2026-04-03T09:01:02Z"
+  },
+  {
+    "id": "EV-0022",
+    "host": "host-4",
+    "hunter": "fs",
+    "category": "negative_result",
+    "finding": "no PHP files anywhere under /var/www (walked 4123 files); no .cache directories outside framework; clean",
+    "confidence": 0.9,
+    "source_refs": ["fs/var/www"],
+    "observed_at": "2026-04-03T09:01:40Z"
+  },
+  {
+    "id": "EV-0023",
+    "host": "host-4",
+    "hunter": "log",
+    "category": "negative_result",
+    "finding": "no outbound .top callbacks in 30 days of access.log; no requests to vagqea4wrlkdg.top; no double-extension paths",
+    "confidence": 0.9,
+    "source_refs": ["logs/var/log/nginx/access.log"],
+    "observed_at": "2026-04-03T09:02:15Z"
+  }
+]
