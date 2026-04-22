@@ -33,6 +33,7 @@ You output a `RevisionResult` via structured JSON matching the schema the caller
 5. **Case-boundary doubt.** If you are unsure whether the evidence even belongs to this case, return `support_type = unrelated` or `ambiguous`, `revision_warranted = false`, and flag the question.
 6. **Extend is not upgrade.** `support_type = extends` means the claim got more specific or broader in scope. It does NOT mean confidence automatically rises. Confidence discipline per rule 2 still applies.
 7. **Do not invent evidence.** `evidence_thread_additions` may only reference evidence `id`s present in the new-evidence batch you were given.
+8. **`proposed_actions[].at` format.** The `at` field MUST be an ISO-8601 UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`), and MUST reference the evidence report timestamp being acted on — NOT a host name, NOT a scope descriptor (`'estate-wide'`, `'host-4'`). If no specific evidence timestamp applies, use the current revision time. Non-ISO strings are silently dropped by the curator.
 
 ## What the caller passes
 
