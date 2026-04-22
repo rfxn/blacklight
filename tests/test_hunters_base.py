@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -107,7 +106,9 @@ def test_parse_tool_output_skips_out_of_range_confidence(caplog) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_sonnet_hunter_mock_returns_findings(tmp_path: Path) -> None:
+async def test_run_sonnet_hunter_mock_returns_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     prompt = tmp_path / "p.md"
     prompt.write_text("test prompt")
 
@@ -132,8 +133,9 @@ async def test_run_sonnet_hunter_mock_returns_findings(tmp_path: Path) -> None:
             self.messages.create = AsyncMock(return_value=fake_response)
 
     client = FakeClient()
-    # Ensure BL_SKIP_LIVE not set for this test
-    os.environ.pop("BL_SKIP_LIVE", None)
+    # Isolate BL_SKIP_LIVE via monkeypatch so teardown restores the
+    # original env (raw os.environ.pop leaks across tests).
+    monkeypatch.delenv("BL_SKIP_LIVE", raising=False)
     findings = await run_sonnet_hunter(prompt, "user content", client=client)
 
     assert len(findings) == 1
