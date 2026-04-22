@@ -137,11 +137,6 @@ def _build_initial_hypothesis(rows: list[EvidenceRow]) -> HypothesisCurrent:
     return HypothesisCurrent(summary=summary, confidence=conf, reasoning=reasoning)
 
 
-def _existing_case_path(cases_dir: Path, case_id: str) -> "Path | None":
-    p = cases_dir / f"{case_id}.yaml"
-    return p if p.is_file() else None
-
-
 def _open_case(host: str, rows: list[EvidenceRow], case_id: str) -> CaseFile:
     now = datetime.now(timezone.utc)
     return CaseFile(
