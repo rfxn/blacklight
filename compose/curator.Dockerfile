@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt \
  && rm -rf /var/lib/apt/lists/*
 
 COPY curator /app/curator
+COPY prompts /app/prompts
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
