@@ -29,18 +29,31 @@ main() {
     # shellcheck disable=SC2064  # we want $tmpdir expanded now, not on exit
     trap "command rm -rf '$tmpdir'" EXIT
 
-    log "pulling manifest from $CURATOR_URL"
+    log "fetching sidecar hash from $CURATOR_URL"
+    if ! curl -fsS -o "$tmpdir/manifest.yaml.sha256" "$CURATOR_URL/manifest.yaml.sha256"; then
+        log "manifest.yaml.sha256 fetch failed (curator may not have published yet)"
+        exit 1
+    fi
+
+    log "fetching manifest body"
     if ! curl -fsS -o "$tmpdir/manifest.yaml" "$CURATOR_URL/manifest.yaml"; then
         log "manifest fetch failed"
         exit 1
     fi
 
-    # TODO(day-4): verify SHA-256 against hash header (X-Manifest-SHA256).
-    # Day 1 accepts any manifest to exercise the pull path end-to-end.
+    # Verify hash. sha256sum -c expects the filename referenced in the sidecar
+    # to exist in CWD — cd into tmpdir for the verification.
+    ( cd "$tmpdir" && sha256sum -c manifest.yaml.sha256 >/dev/null ) || {  # sha256sum emits FAILED on mismatch; suppress stdout, keep stderr
+        log "SHA-256 mismatch — refusing to install (transient: race with in-flight publish; systemd timer will retry)"
+        exit 1
+    }
+    log "hash verified"
 
     command install -D -m 0644 "$tmpdir/manifest.yaml" "$MANIFEST_STAGE"
     command mv "$MANIFEST_STAGE" "$MANIFEST_LOCAL"
-    log "manifest written to $MANIFEST_LOCAL"
+    command install -D -m 0644 "$tmpdir/manifest.yaml.sha256" "${MANIFEST_LOCAL}.sha256.stage"
+    command mv "${MANIFEST_LOCAL}.sha256.stage" "${MANIFEST_LOCAL}.sha256"
+    log "manifest v$(yq '.version' "$MANIFEST_LOCAL" 2>/dev/null || command echo '?') written to $MANIFEST_LOCAL"  # yq optional — log 'manifest v?' on hosts without yq (bl-pull runs on all hosts, yq only added to Apache + nginx-alpine in P28)
 }
 
 main "$@"
