@@ -371,7 +371,7 @@ def test_tar_safety_rejects_absolute_via_cli(
         [sys.executable, "-m", "curator.orchestrator", str(bad)],
         capture_output=True,
         env=env,
-        cwd="/root/admin/work/proj/blacklight",
+        cwd=str(Path(__file__).resolve().parent.parent),
     )
     assert proc.returncode == 2
     assert b"absolute" in proc.stderr.lower() or b"reject" in proc.stderr.lower()

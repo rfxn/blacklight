@@ -120,6 +120,7 @@ Mutex file:/tmp
 PidFile /tmp/bl-validate-{uuid.uuid4().hex[:8]}.pid
 ErrorLog /dev/null
 Listen 127.0.0.1:65535
+LoadModule mpm_event_module /usr/lib/apache2/modules/mod_mpm_event.so
 LoadModule security2_module /usr/lib/apache2/modules/mod_security2.so
 LoadModule unique_id_module /usr/lib/apache2/modules/mod_unique_id.so
 <IfModule security2_module>
