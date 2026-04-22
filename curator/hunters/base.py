@@ -7,7 +7,6 @@ speed, not deep reasoning. That is the Day 3 case engine's job.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from dataclasses import dataclass, field
