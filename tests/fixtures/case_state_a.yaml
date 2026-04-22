@@ -1,0 +1,36 @@
+# Fixture A — single-host, confidence 0.4, initial hypothesis
+# Used by tests/test_revision.py (Day 3 populate) and by case_schema self-check.
+case_id: CASE-2026-0007
+status: active
+opened_at: 2026-04-01T14:32:11Z
+last_updated_at: 2026-04-01T14:32:11Z
+updated_by: fs_hunter@host-2
+
+hypothesis:
+  current:
+    summary: "Single host compromise — PolyShell variant at /pub/media/catalog/.cache/a.php"
+    confidence: 0.4
+    reasoning: "PHP file outside typical Magento paths, mtime 2026-03-29 03:14 UTC, multi-layer base64+gzinflate wrapper. Consistent with PolyShell family but only one host observed."
+  history: []
+
+evidence_threads:
+  host-2:
+    - EV-0001
+    - EV-0002
+    - EV-0003
+
+capability_map:
+  observed:
+    - cap: "arbitrary PHP execution"
+      evidence: ["EV-0001"]
+      confidence: 1.0
+  inferred: []
+  likely_next: []
+
+open_questions:
+  - "Is host-2 the only compromised host, or is this part of a wider campaign?"
+  - "Has the attacker executed the RCE path beyond initial deployment?"
+
+actions_taken: []
+merged_from: []
+split_into: []

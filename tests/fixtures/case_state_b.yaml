@@ -1,0 +1,62 @@
+# Fixture B — two-host, confidence 0.6, one revision in history
+# Mid-investigation state: case-engine has already revised once after host-4 report.
+case_id: CASE-2026-0007
+status: active
+opened_at: 2026-04-01T14:32:11Z
+last_updated_at: 2026-04-03T09:11:42Z
+updated_by: case_engine
+
+hypothesis:
+  current:
+    summary: "Campaign — PolyShell deployed across host-2 and host-4, shared C2 on .top TLD"
+    confidence: 0.6
+    reasoning: "Two hosts, matching obfuscation signature (multi-layer base64+gzinflate), shared callback domain pattern. Magento 2.4.x common. Consistent with APSB25-94 exploitation wave."
+  history:
+    - at: 2026-04-01T14:32:11Z
+      confidence: 0.4
+      summary: "Single host compromise — PolyShell variant at /pub/media/catalog/.cache/a.php"
+      trigger: "initial fs_hunter report on host-2"
+
+evidence_threads:
+  host-2:
+    - EV-0001
+    - EV-0002
+    - EV-0003
+  host-4:
+    - EV-0011
+    - EV-0012
+
+capability_map:
+  observed:
+    - cap: "arbitrary PHP execution"
+      evidence: ["EV-0001", "EV-0011"]
+      confidence: 1.0
+    - cap: "C2 callback via .top domain"
+      evidence: ["EV-0002", "EV-0012"]
+      confidence: 1.0
+  inferred:
+    - cap: "credential harvest capability (PolyShell family standard)"
+      basis: "PolyShell variants commonly ship a credharvest module; not yet exercised on either host"
+      confidence: 0.75
+  likely_next:
+    - action: "lateral movement via shared mount or DB credential reuse"
+      basis: "observed pattern in APSB25-94 campaign across hosting fleets"
+      confidence: 0.6
+      ranked: 1
+    - action: "skimmer injection into storefront JS"
+      basis: "common secondary monetization path for Magento compromise"
+      confidence: 0.45
+      ranked: 2
+
+open_questions:
+  - "Does host-7 (same fleet, same stack) show similar indicators?"
+
+actions_taken:
+  - at: 2026-04-03T09:11:42Z
+    action: "promoted_defense"
+    defense_id: "MODSEC-RULE-2026-0014"
+    category: "reactive"
+    reason: "Block .top callback pattern on hosts with Magento 2.4.x profile"
+
+merged_from: []
+split_into: []
