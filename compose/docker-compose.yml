@@ -16,8 +16,11 @@ services:
       dockerfile: compose/curator.Dockerfile
     image: blacklight/curator:dev
     container_name: bl-curator
-    ports:
-      - "8080:8080"
+    # Curator HTTP (manifest + health) served on internal :8080 — reachable to
+    # fleet hosts over the docker network. Host-port mapping deliberately
+    # omitted; probe health via `docker exec bl-curator curl localhost:8080/health`.
+    # If local Docker host has docker-proxy available, add `ports: ["18080:8080"]`
+    # to expose externally for operator curl / demo screen capture.
     volumes:
       - ../curator/storage:/app/curator/storage
       - curator-inbox:/app/inbox
@@ -44,8 +47,35 @@ services:
       # attacker's chosen directory shape and keep the harness-framing
       # string `exhibits/` out of the container namespace.
       - ../exhibits/fleet-01/host-2-polyshell/a.php:/var/www/html/pub/media/catalog/product/.cache/a.php:ro
-      - ../exhibits/fleet-01/host-2-polyshell/access.log:/var/log/apache2/access.log:ro
+      # access.log is staged at /srv/bl-exhibit/ (:ro), then seeded onto
+      # /var/log/apache2/access.log at container start via the entrypoint
+      # override below — Apache cannot append to a :ro bind, and the base
+      # image's /var/log/apache2/*.log symlinks to /dev/stdout collapse
+      # when a regular file is mounted over any of them.
+      - ../exhibits/fleet-01/host-2-polyshell/access.log:/srv/bl-exhibit/access.log:ro
       - ../bl-agent:/opt/bl-agent:ro
+    # Seed exhibit log into Apache's log dir before starting Apache. The base
+    # image ships /var/log/apache2/{access,error,other_vhosts_access}.log as
+    # symlinks to /dev/stdout|stderr, which (a) collapse when a regular file
+    # is bind-mounted over one of them, and (b) trigger the tar-safety
+    # validator on the curator side (symlink escape from the tar root).
+    # Replace all three with real writable files — mirrors how a real
+    # Debian Apache host ships. Then exec apache2-foreground.
+    # NB: docker-compose interpolates `$VAR` at YAML parse time, so shell
+    # variables in inline commands must be written as `$$VAR` to pass through.
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        for f in access.log error.log other_vhosts_access.log; do
+          rm -f "/var/log/apache2/$$f"
+          : > "/var/log/apache2/$$f"
+          chown www-data:www-data "/var/log/apache2/$$f"
+        done
+        cp /srv/bl-exhibit/access.log /var/log/apache2/access.log
+        chown www-data:www-data /var/log/apache2/access.log
+        exec apache2-foreground
     networks:
       - fleet
     depends_on:
