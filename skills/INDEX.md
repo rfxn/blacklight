@@ -20,32 +20,34 @@ Always load, regardless of other signals:
 Always load:
 
 - `defense-synthesis/modsec-patterns.md` — validated rule shapes for ModSec
-- `modsec-grammar/` OR `apf-grammar/` — the grammar reference for the defense
-  class being generated
+- `modsec-grammar/rules-101.md` (when generating ModSec) OR
+  `apf-grammar/basics.md` (when generating APF) — the grammar reference for
+  the defense class being generated
 
 ## When analyzing a host (triage + hunters)
 Route by observable signal:
 
 ```
-IF stack includes Magento 2.x → load magento-attacks/
+IF stack includes Magento 2.x → load magento-attacks/admin-paths.md
   AND IF Adobe advisory patched AFTER earliest suspicious mtime
-    → load apsb25-94/
+    → load apsb25-94/indicators.md
 IF PHP files found outside typical framework paths
-  → load webshell-families/
+  → load webshell-families/polyshell.md
 IF suspicious outbound callbacks in access.log or auth.log
-  → load linux-forensics/net-patterns
-IF cron / systemd units modified in recent window
-  → load linux-forensics/persistence
+  → load linux-forensics/net-patterns.md
+IF cron / systemd units / shell-init / ld.so.preload modified in recent window
+  → load linux-forensics/persistence.md
 IF file flagged but path is inside a known-benign vendor tree
   → load false-positives/
 IF compromise topology spans multiple hosts on a shared platform
-  → load hosting-stack/
+  → load hosting-stack/cpanel-anatomy.md
 ```
 
 ## When producing operator-facing briefs
 Load for format consistency with the team's existing IR voice:
 
-- `ic-brief-format/` — brief shape, severity vocabulary, artifact conventions
+- `ic-brief-format/template.md` — brief shape, severity vocabulary, artifact
+  conventions, IOC block format
 
 ---
 
