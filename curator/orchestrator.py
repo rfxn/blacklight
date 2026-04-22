@@ -1,10 +1,7 @@
 """Orchestrator v1 — CLI entry for Day 2 hunter dispatch + case open.
 
-Reads a bl-report tar from the inbox, validates, extracts, runs hunters
-in parallel (fs + log concurrent, timeline sequential on their outputs),
-writes evidence rows, and opens CASE-2026-0007 with a deterministic
-initial hypothesis. No model call for the hypothesis — preserves Day-3
-revision-test baseline.
+The initial hypothesis is computed deterministically (no model call)
+to preserve the Day-3 revision-test baseline.
 """
 
 from __future__ import annotations
@@ -136,7 +133,6 @@ async def _run_hunters(input: HunterInput) -> tuple[list[HunterOutput], bool]:
     Returns (outputs, had_partial_failure). Partial failure means at least one
     hunter raised; remaining hunters' findings are preserved and written.
     """
-    # return_exceptions=True implements spec 11b #5 soft-fail contract
     fs_result, log_result = await asyncio.gather(
         fs_hunter.run(input),
         log_hunter.run(input),

@@ -13,7 +13,7 @@ MANIFEST_LOCAL="${BL_MANIFEST_LOCAL:-/var/bl-agent/manifest.yaml}"
 # shellcheck disable=SC2034  # consumed Day 4 when rule-write path is populated
 MODSEC_DROPIN="${BL_MODSEC_DROPIN:-/etc/modsecurity.d/blacklight-defenses.conf}"
 
-log() { command printf '[bl-apply %s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+log() { command printf '[bl-apply %s] %s\n' "$(command date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 
 detect_stack() {
     # Returns a short stack identifier on stdout. Checked against manifest

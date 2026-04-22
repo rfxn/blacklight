@@ -1,10 +1,7 @@
 """sqlite evidence store for blacklight curator.
 
-Day-2 scope: single-writer (orchestrator). stdlib sqlite3 with
-asyncio.to_thread wrapping at the caller when invoked from coroutines.
-Schema matches HANDOFF §"evidence schema" — {id, host, hunter, category,
-finding, confidence, source_refs, raw_evidence_excerpt, observed_at,
-reported_at} plus report_id + case_id for orchestrator wiring.
+Day-2 scope: single-writer (orchestrator); callers wrap in
+asyncio.to_thread when invoked from coroutines.
 """
 
 from __future__ import annotations

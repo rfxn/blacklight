@@ -35,7 +35,7 @@ cmd_cases() {
         command printf 'no cases dir at %s\n' "$CASES_DIR"
         exit 1
     fi
-    command find "$CASES_DIR" -maxdepth 1 -name 'CASE-*.yaml' -type f -printf '%f\n' 2>/dev/null | command sort
+    command find "$CASES_DIR" -maxdepth 1 -name 'CASE-*.yaml' -type f -printf '%f\n' 2>/dev/null | command sort  # find may fail if CASES_DIR is unreadable — fall through to empty
 }
 
 cmd_case() {

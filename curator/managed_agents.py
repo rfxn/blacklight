@@ -1,17 +1,7 @@
-"""Managed Agents first-contact wrapper.
+"""Managed Agents first-contact wrapper — Agent/Environment/Session creation.
 
-blacklight's curator is architected as a Claude Managed Agents session — not a
-local Flask process that calls messages.create. The long-running investigation
-loop (case-file engine orchestration, hunter dispatch, intent reconstruction,
-synthesis) runs inside an Anthropic-managed sandbox via this module's wrappers.
-
-Reference: https://platform.claude.com/docs/en/managed-agents/overview
-Beta header auto-added by the SDK: managed-agents-2026-04-01
-
-This module is Day 1 scaffolding. Functions are import-ready but make no live
-calls without ANTHROPIC_API_KEY. First live smoke test is an operator action —
-create an Agent, an Environment, a Session, and consume one event from the
-stream. The Day 2 work layers hunter dispatch on top.
+Day 1 scaffolding. Functions import-ready; first live smoke test is an
+operator action (see first_contact_smoke_test).
 """
 
 from __future__ import annotations

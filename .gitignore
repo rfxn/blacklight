@@ -12,9 +12,7 @@ venv/
 curator/storage/evidence.db
 curator/storage/evidence.db-journal
 curator/storage/cases/*.yaml
-!curator/storage/cases/.gitkeep
 curator/storage/work/
-curator/storage/inbox/
 
 # logs
 *.log
@@ -31,3 +29,4 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+.secrets/
