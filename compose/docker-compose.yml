@@ -1,0 +1,68 @@
+# blacklight fleet — 3-host minimum for Day 1.
+# host-2 = Apache + ModSec + staged PolyShell (Day 2+ layer)
+# host-3 = Nginx clean (stack-profile skip demo, Day 4)
+# host-4 reserved for Day 2 if attribution arc wants a third data point.
+#
+# The curator here is LOCAL plumbing only: Flask manifest endpoint + report
+# inbox. The long-running Claude-driven investigation loop runs in a
+# Managed Agents session (see curator/managed_agents.py).
+
+version: "3.8"
+
+services:
+  curator:
+    build:
+      context: ..
+      dockerfile: compose/curator.Dockerfile
+    image: blacklight/curator:dev
+    container_name: bl-curator
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../curator/storage:/app/curator/storage
+      - curator-inbox:/app/inbox
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    networks:
+      - fleet
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  host-2:
+    build:
+      context: ..
+      dockerfile: compose/host-apache.Dockerfile
+    image: blacklight/host-apache:dev
+    container_name: bl-host-2
+    hostname: host-2
+    volumes:
+      - ../exhibits/fleet-01/host-2-polyshell:/var/www/html/exhibits:ro
+      - ../bl-agent:/opt/bl-agent:ro
+    networks:
+      - fleet
+    depends_on:
+      - curator
+
+  host-3:
+    image: nginx:1.27-alpine
+    container_name: bl-host-3
+    hostname: host-3
+    volumes:
+      - ../exhibits/fleet-01/host-3-nginx-clean:/usr/share/nginx/html/exhibits:ro
+      - ../bl-agent:/opt/bl-agent:ro
+    networks:
+      - fleet
+    depends_on:
+      - curator
+
+networks:
+  fleet:
+    driver: bridge
+    name: blacklight-fleet
+
+volumes:
+  curator-inbox:
+    name: blacklight-curator-inbox
