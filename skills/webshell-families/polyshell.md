@@ -1,34 +1,129 @@
 # webshell-families — PolyShell
 
-**TODO: operator content.** The intent reconstructor uses this skill to
-distinguish PolyShell variants from generic PHP webshells and to infer
-*dormant* capabilities from family patterns. Must be written by the operator
-with direct familiarity with the class.
+Loaded by the router when PHP files are flagged outside typical framework paths and the host's stack matches Magento 2.x. Drives the intent reconstructor's deobfuscation depth and its `inferred` / `likely_next` capability inference. Complements `apsb25-94/indicators.md` — that file lists public IOCs from the Adobe advisory; this file describes the family shape that lets the model reason about what the artifact *can* do beyond what's been observed.
 
-Required coverage:
+PolyShell is a class of PHP webshell observed in the APSB25-94 exploitation wave (Adobe Commerce / Magento Open Source 2.4.x, public advisory March 2026). The "Poly" prefix names two of its defining traits: polymorphic obfuscation per drop, and polyvalent command surface (the same loader hosts RCE, file-management, credential-harvest, and skimmer modules selected at request time).
 
-1. **Family signature** — what makes a PHP webshell specifically a PolyShell
-   variant. Structural patterns across obfuscation layers. The URL-evasion
-   behavior (`.jpg`/`.png`/`.gif` paths routing to PHP execution).
+---
 
-2. **Standard capability set** — modules a PolyShell variant commonly ships:
-   RCE endpoint, file manager, credential harvester, C2 callback, skimmer
-   injector. Which are present by default vs. opt-in. How each surfaces in
-   the deobfuscated code.
+## Family signature
 
-3. **Obfuscation conventions** — multi-layer `base64 / gzinflate` wrapping
-   patterns. Common entry-point hooks and their recognizable structure.
+A PHP file is treated as a candidate PolyShell variant when **at least three** of the following hold. Single-trait matches are a triage signal, not an attribution.
 
-4. **Dormant-capability inference rules** — given the observed wrapper +
-   partial deobfuscated source, what can we infer about what the attacker
-   CAN do that they haven't done yet? This is what makes the intent
-   reconstructor produce `inferred` and `likely_next` entries with
-   defensible confidence rather than guesses.
+- **Drop path mimics legitimate Magento media or vendor caches.** Common shapes: `pub/media/*/cache/*.php`, `pub/media/wysiwyg/.system/*.php`, `pub/static/frontend/*/.tmp/*.php`, `vendor/*/cache.php`, `app/code/*/Helper/.cache.php`. Paths that are valid Magento *directories* but should never contain attacker-writable PHP. The `.cache`, `.tmp`, `.system` dotted leaf is a common idiom — it survives most cleanup tooling that filters on `*.php` directly under recognized public roots.
+- **Multi-layer obfuscation.** A small loader (typically 1-3 lines) chained through `eval(gzinflate(base64_decode($s)))` or similar. The encoded blob is the bulk of the file; the entry-point is a few hundred bytes of obfuscation scaffolding.
+- **Variable names are hex-like or mangled.** `$_aB23`, `$o0Ox`, `$_x4f2c1` — generated per drop, never matching project conventions or PSR style. Function-local variables in the decoded payload are similarly mangled to defeat string-grep.
+- **Command interface is parameter-driven.** Decoded payload routes on `$_GET[...]` or `$_POST[...]` keys (single-letter or two-letter param names: `c`, `a`, `f`, `m`, `op`). One handler per key. The same shell answers `?c=...` (command exec) and `?a=...` (file action) without re-routing.
+- **C2 callback on every execution.** The decoded payload makes an outbound HTTP request to a callback URL on every command dispatch, regardless of whether the command requires it. The callback is unconditional — the operator wants beacon-like presence, not just exfil.
+- **Callback domain shape.** APSB25-94-era variants observed against `.top` TLDs with 12-14 character host labels generated from base32 or base36 alphabets. Not all PolyShell uses `.top` — the TLD is a contemporary convenience (cheap, low-friction registration) and rotates as registrars adapt. The shape (random-looking subdomain + cheap-TLD) is more durable than the specific TLD.
+- **URL-evasion routing.** The host's `.htaccess`, web-server config, or a sibling `.php` shim routes requests with image extensions (`.jpg`, `.png`, `.gif`, `.css`, `.svg`) to PHP execution when a particular query parameter is present. The PolyShell file itself is requested as `a.php/banner.jpg?c=id`; the trailing `.jpg` defeats naive log-based detection that filters on file extension.
 
-5. **Variant tree** — how PolyShell variants differ from each other
-   (renamed functions, repacked loaders, family fork points). What shifts
-   the confidence on family attribution.
+A file matching seven or more traits is high-confidence PolyShell variant. Three to four traits is suggestive — possibly a different family using overlapping techniques, possibly a partial deployment.
 
-Scope: ~800-1200 words plus one or two annotated obfuscation examples
-reconstructed from public advisory material only. No content from
-operator's prior non-public incident exposure.
+---
+
+## Standard capability set
+
+A PolyShell loader is a switchboard. The decoded payload typically exposes a fixed set of handlers selected by the request parameter; the operator chooses which to wire on each drop. The default-shipped capability inventory:
+
+**RCE handler** — `?c=<base64-encoded-shell-command>` or `?c=<command>`. Calls `system()` / `passthru()` / `shell_exec()` / backticks against a parameter, often after a `base64_decode` or simple ROT to defeat WAF inspection. Output is returned in the response body, sometimes wrapped in HTML comment markers (`<!--POLY:...-->`).
+
+**File manager** — `?a=read|write|delete|list|chmod`. Reads or writes arbitrary paths the web user can reach; lists directories; sets permissions. The `read` op is often the operator's primary persistence-recovery tool: it lets them re-fetch their own staged files after a partial cleanup.
+
+**Credential harvester** — `?m=cred` or `?op=harvest`. Patches the application's auth flow to log credentials in plaintext to a file the harvester writes to (commonly under the same `.cache` tree as the loader). Harvester is *dormant* on most drops — present in the decoded payload, never invoked. Operator activates it after they've established sufficient persistence to risk the noise.
+
+**C2 callback** — unconditional outbound POST to the configured callback URL on every handler dispatch. Body typically includes: host identifier, the parameter that was requested, a timestamp, and a checksum. Callbacks can be discovered passively via `/var/log/apache2/access.log` egress correlations or active firewall logs (APF, mod_security audit log entries).
+
+**Skimmer injector** — `?m=skim` or as a separate file the loader writes via the file-manager handler. Injects JavaScript into Magento checkout templates that captures card details on form submit and exfiltrates them to a separate callback. Skimmer is the highest-value capability and the slowest to deploy — operators wait for confidence that the host is undetected before injecting, because skimmer activity is detectable to the *customer* (failed payments, fraud-tracking software).
+
+**Lateral movement aids** — read-only-by-default helpers that surface useful targets: shared mount discovery, MySQL credential extraction from `app/etc/env.php`, the SSH `authorized_keys` of the web user. Not always present, not always activated when present.
+
+---
+
+## Obfuscation conventions
+
+The loader-plus-payload structure is consistent enough to script around. The intent reconstructor should walk it explicitly and name what it found at each layer.
+
+**Layer 1 — entry-point eval chain.** A small constant string is decoded and passed to `eval`. Common constructions:
+
+- `<?php eval(gzinflate(base64_decode('...'))); ?>`
+- `<?php $_=create_function('$x', gzinflate(base64_decode('...'))); $_(''); ?>` (older PHP)
+- `<?php $h='ass'.'ert'; @$h(gzinflate(base64_decode($_REQUEST['x']))); ?>` (request-driven loader; payload ships separately)
+- Concatenated chunks reassembled at runtime: `$s = 'AAAA' . 'BBBB' . 'CCCC'; eval(gzinflate(base64_decode($s)));` — defeats naive `base64_decode|gzinflate` greps that look for one large string literal.
+- `chr()` ladders: `$s = chr(72).chr(101).chr(108)...; eval($s);` — one character per `chr()`, sometimes wrapped in `chr(0x48)` or `pack("C*", 72, 101, 108, ...)`.
+
+**Layer 2 — decoded payload.** Once Layer 1 evaluates, the payload is plain PHP with mangled identifiers. Structurally it's a single function or a procedural block that:
+
+1. Defines the C2 callback URL (often as a `chr()`-ladder string or base64'd literal even at this layer).
+2. Defines the request handler dispatch table.
+3. Reads the request parameter.
+4. Dispatches and returns output.
+
+**Layer 3 — capability modules.** Inside the dispatch table, each handler's body is sometimes wrapped in *another* `eval(gzinflate(base64_decode(...)))` — operators pay the size cost to keep capability code separable. Disabling a module by returning a stub function from the dispatch table is faster than re-encoding the whole payload.
+
+**Dead-code commentary as capability inventory.** A reliable signal: PolyShell variants often embed capability markers in comments inside the decoded payload. Operators add `// MOD:RCE`, `// MOD:CRED`, `// MOD:SKIM` annotations to keep their own bookkeeping during multi-host campaigns. The model should look for and parse these — they name capabilities the operator considers present even when the corresponding handler is currently a no-op.
+
+**What's *not* obfuscated.** The C2 callback URL, when reconstructed, is plain. The handler dispatch table is plain. The capability marker comments (when present) are plain. Obfuscation is a transit-and-storage tactic; once the payload runs, the operator wants the runtime cheap.
+
+---
+
+## Dormant-capability inference rules
+
+This is the section the intent reconstructor reads when populating `capability_map.inferred` and `capability_map.likely_next`. The output discipline matches `case-lifecycle.md` § Capability map discipline — `inferred` requires a `basis`, `likely_next` requires a `basis` tying back to `observed` or `inferred`.
+
+**If RCE handler is present in the dispatch table but no log evidence of dispatch:**
+- `inferred`: `remote-php-eval`, basis: dispatch-table entry observed in decoded payload at line N.
+- Confidence floor: 0.7. The handler exists; the question is timing, not capability.
+
+**If file-manager handler is present:**
+- `inferred`: `arbitrary-file-read`, `arbitrary-file-write`, `permission-modification`. Each cites the dispatch table.
+- `likely_next`: `persistence-installation` (writing to cron, rc.local, sshd config) — basis: file-manager handler enables it; this is the standard followthrough on confirmed file-write capability. Rank high.
+
+**If credential-harvester module is present in decoded payload but not invoked:**
+- `inferred`: `credential-harvest-capability-staged`, basis: harvester code present at decoded line N; checked for invocation in handler dispatch — none observed.
+- `likely_next`: `credential-harvest-activation`, basis: staged but inactive. Rank top-3 if `observed` includes `c2-callback` (operator is in confirmation phase) and skimmer is also dormant. Demote if observed includes only one or two recent dispatches (operator is still establishing presence).
+
+**If skimmer module is present in decoded payload but not invoked:**
+- `inferred`: `payment-data-exfil-capability-staged`, basis: skimmer template-rewrite code at decoded line N.
+- `likely_next`: `skimmer-injection-into-checkout` — basis: present but inactive; this is the highest-value capability and operator activates it last. Rank top if other inferred capabilities (cred-harvest) suggest the operator is moving from establishment to exfil. Confidence ceiling: 0.65 without supporting evidence (operator may abandon hosts before activating skimmer).
+
+**If C2 callback is plain in decoded payload (URL extractable):**
+- `observed`: `c2-callback` if any access.log or audit.log entry shows the host making outbound to that domain. Cite the log line.
+- `inferred`: `c2-callback` even without observed log lines if the dispatch table calls the callback unconditionally. Basis: code path is unconditional; absence in logs may reflect log retention rather than absence of activity.
+
+**If the same callback domain appears across multiple hosts:**
+- `observed`: `coordinated-campaign`, evidence: enumerate hosts.
+- `likely_next`: `lateral-target-selection` against shared infrastructure (shared NFS mounts, shared admin credentials, shared CDN config). Rank by infrastructure overlap.
+
+**Anti-patterns to avoid:**
+- Do not infer skimmer capability from the *path* (a webshell in `pub/static` is not automatically a skimmer host).
+- Do not infer lateral movement from a single-host callback. Lateral inference requires either dispatch-table evidence of a lateral helper or multi-host attribution.
+- Do not promote `inferred` to `observed` because the inferred capability "must" have fired. The discipline is what makes the case file defensible — guesses go in `likely_next`, not `observed`.
+
+---
+
+## Variant tree
+
+PolyShell variants differ along axes the model should name when attributing. Differences along the same axis suggest different operator hands; convergence across axes raises confidence the same actor is responsible.
+
+**Loader axis.** The Layer 1 entry point. `eval(gzinflate(base64_decode(...)))` is the most common; `assert($_REQUEST[...])` is a request-driven shape; `chr()` ladders are an anti-grep adaptation. An actor who shifts from one loader to another mid-campaign is rarer than an actor who keeps the loader stable across drops.
+
+**Dispatch table axis.** The set of handler keys (`c`, `a`, `m`, `op`) and their order. Some operators use the same dispatch table across all drops; some randomize key choice per drop to defeat regex matching against the loader output. Stable dispatch table across hosts is strong attribution signal.
+
+**Callback domain axis.** Same domain across hosts: same actor, same campaign. Different domains across hosts within the same TLD pattern: same actor, multiple campaigns or rotation. Different TLD entirely: probably different actor unless other axes line up tightly.
+
+**Drop path convention axis.** Operators have favorite paths. One actor consistently drops to `pub/media/wysiwyg/.system/`, another to `pub/media/catalog/product/.cache/`. Path variety across hosts within a single campaign suggests either multiple operators or deliberate operational variance to slow detection.
+
+**Capability marker style.** Some operators annotate with `// MOD:`, some with `# CAP:`, some not at all. Annotation style is a noisy but real signal — careful operators are consistent, careless operators drift.
+
+**Rule for splitting cases on family-marker divergence:** if two compromised hosts share *zero* axes (different loader, different dispatch table, different callback TLD, different drop path convention), they are almost certainly different actors even if both involve PolyShell-class artifacts. The case engine should split rather than merge — the false economy of a unified case file is paid for in misattribution and bad rule generation downstream.
+
+---
+
+## What this file is *not*
+
+- Not a guide to writing PolyShell. The intent here is purely defensive — the family description exists so the model can recognize and reason about deployments it encounters in evidence.
+- Not a substitute for the public APSB25-94 advisory. See `skills/apsb25-94/indicators.md` for the IOC summary.
+- Not an exhaustive variant taxonomy. New variants appear; the patterns above are durable across the variants observed through Q2 2026.
+
+<!-- public-source authored — extend with operator-specific addenda below -->
