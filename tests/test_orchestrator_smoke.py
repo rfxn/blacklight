@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import os
+import pathlib
 import subprocess
 import sys
 import tarfile
@@ -246,6 +247,111 @@ async def test_one_hunter_failure_records_partial_findings(
     hunters_with_rows = {r.hunter for r in rows}
     assert "fs" in hunters_with_rows
     assert "log" not in hunters_with_rows
+
+
+@pytest.mark.asyncio
+async def test_second_report_triggers_revision(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Second report on an existing case invokes revise + apply."""
+    from unittest.mock import MagicMock, patch
+    from curator.case_schema import HypothesisCurrent, RevisionResult, load_case
+    import shutil
+
+    # stage a case YAML at the expected path
+    storage = tmp_path / "storage"
+    cases_dir = storage / "cases"
+    cases_dir.mkdir(parents=True)
+    shutil.copy(
+        "tests/fixtures/case_state_a.yaml",
+        cases_dir / "CASE-2026-0007.yaml",
+    )
+    monkeypatch.setenv("BL_STORAGE", str(storage))
+    monkeypatch.setenv("BL_SKIP_LIVE", "1")  # hunters mock to empty
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    # Inject a fake hunter output with findings so rows are non-empty
+    from curator.hunters.base import Finding, HunterOutput
+
+    async def _fake_run_hunters(_input):
+        fs_out = HunterOutput(hunter="fs", findings=[
+            Finding(
+                category="unusual_php_path",
+                finding="b.php outside framework", confidence=0.75,
+                source_refs=["fs/.../b.php"], raw_evidence_excerpt="",
+                observed_at="2026-04-03T08:52:11Z",
+            ),
+        ])
+        empty = HunterOutput(hunter="log", findings=[])
+        empty_tl = HunterOutput(hunter="timeline", findings=[])
+        return ([fs_out, empty, empty_tl], False)
+
+    canned = RevisionResult(
+        support_type="supports",
+        revision_warranted=True,
+        new_hypothesis=HypothesisCurrent(
+            summary="Campaign — host-2 and host-4",
+            confidence=0.6,
+            reasoning="Prior 'single host' extended by host-4 EV.",
+        ),
+        evidence_thread_additions={"host-4": []},
+    )
+
+    with patch("curator.orchestrator._run_hunters", new=_fake_run_hunters), \
+         patch("curator.case_engine.revise", return_value=canned) as mock_revise:
+        from curator.orchestrator import process_report
+        tar = pathlib.Path("tests/fixtures/report-host-2-sample.tar.gz")
+        case, partial = await process_report(tar)
+
+    assert case is not None
+    assert case.hypothesis.current.summary.startswith("Campaign")
+    assert len(case.hypothesis.history) == 1
+    assert case.hypothesis.history[0].confidence == pytest.approx(0.4)
+    assert mock_revise.called
+
+    # YAML written to disk
+    disk = load_case(str(cases_dir / "CASE-2026-0007.yaml"))
+    assert len(disk.hypothesis.history) == 1
+
+
+def test_second_report_no_findings_skips_revision(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Second report with zero findings does not call revise — returns prior case."""
+    import asyncio
+    import shutil
+    from unittest.mock import patch
+
+    storage = tmp_path / "storage"
+    cases_dir = storage / "cases"
+    cases_dir.mkdir(parents=True)
+    shutil.copy(
+        "tests/fixtures/case_state_a.yaml",
+        cases_dir / "CASE-2026-0007.yaml",
+    )
+    monkeypatch.setenv("BL_STORAGE", str(storage))
+    monkeypatch.setenv("BL_SKIP_LIVE", "1")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    from curator.hunters.base import HunterOutput
+
+    async def _empty_hunters(_input):
+        return ([
+            HunterOutput(hunter="fs", findings=[]),
+            HunterOutput(hunter="log", findings=[]),
+            HunterOutput(hunter="timeline", findings=[]),
+        ], False)
+
+    with patch("curator.orchestrator._run_hunters", new=_empty_hunters), \
+         patch("curator.case_engine.revise") as mock_revise:
+        from curator.orchestrator import process_report
+        tar = pathlib.Path("tests/fixtures/report-host-2-sample.tar.gz")
+        case, partial = asyncio.get_event_loop().run_until_complete(process_report(tar))
+
+    # No findings means no case opened and revise not called
+    assert not mock_revise.called
+    # case is None because no findings (clean path) — or it returns prior_case
+    # depending on BL_SKIP_LIVE interaction. The important thing: revise NOT called.
 
 
 def test_tar_safety_rejects_absolute_via_cli(

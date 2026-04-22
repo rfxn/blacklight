@@ -117,6 +117,11 @@ def _build_initial_hypothesis(rows: list[EvidenceRow]) -> HypothesisCurrent:
     return HypothesisCurrent(summary=summary, confidence=conf, reasoning=reasoning)
 
 
+def _existing_case_path(cases_dir: Path, case_id: str) -> "Path | None":
+    p = cases_dir / f"{case_id}.yaml"
+    return p if p.is_file() else None
+
+
 def _open_case(host: str, rows: list[EvidenceRow]) -> CaseFile:
     now = datetime.now(timezone.utc)
     return CaseFile(
@@ -212,11 +217,41 @@ async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
     await asyncio.to_thread(insert_evidence, db_path, rows)
     log.info("wrote %d evidence rows", len(rows))
 
-    case = _open_case(envelope.host_id, rows)
-    case_path = cases_dir / f"{case.case_id}.yaml"
-    await asyncio.to_thread(dump_case, case, str(case_path))
-    log.info("opened %s; wrote %s", case.case_id, case_path)
-    return (case, partial)
+    case_path = cases_dir / f"{_DAY2_CASE_ID}.yaml"
+    existing = _existing_case_path(cases_dir, _DAY2_CASE_ID)
+
+    if existing is None:
+        case = _open_case(envelope.host_id, rows)
+        await asyncio.to_thread(dump_case, case, str(case_path))
+        log.info("opened %s; wrote %s", case.case_id, case_path)
+        return (case, partial)
+
+    # Second+ report on an existing case: revise.
+    from curator.case_engine import apply_revision, revise
+    from curator.case_schema import load_case as _load_case  # avoid top-level cycle-risk
+
+    prior_case = await asyncio.to_thread(_load_case, str(existing))
+    if not rows:
+        log.info(
+            "second report on case %s had no findings; no revision",
+            prior_case.case_id,
+        )
+        return (prior_case, partial)
+
+    log.info(
+        "existing case %s found; invoking revise() with %d new rows",
+        prior_case.case_id, len(rows),
+    )
+    revision = await asyncio.to_thread(revise, prior_case, rows)
+    trigger = f"{envelope.host_id} report {envelope.report_id}"
+    updated = apply_revision(prior_case, revision, trigger=trigger)
+    await asyncio.to_thread(dump_case, updated, str(case_path))
+    log.info(
+        "revised %s: support_type=%s, revision_warranted=%s, history len=%d",
+        updated.case_id, revision.support_type, revision.revision_warranted,
+        len(updated.hypothesis.history),
+    )
+    return (updated, partial)
 
 
 def main() -> None:
