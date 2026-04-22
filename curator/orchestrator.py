@@ -16,7 +16,6 @@ import os
 import sys
 import tarfile
 import uuid
-from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,7 +26,6 @@ from curator.case_schema import (
     dump_case,
 )
 from curator.evidence import EvidenceRow, init_db, insert_evidence
-from curator.hunters import base as hunter_base  # noqa: F401 — kept for module-level import consistency
 from curator.hunters.base import HunterInput, HunterOutput
 from curator.hunters import fs_hunter, log_hunter, timeline_hunter
 from curator.report_envelope import parse_envelope, validate_tar_safety
@@ -52,14 +50,17 @@ def _check_preconditions() -> None:
         sys.exit(1)
 
 
-def _extract_tar(tar_path: Path, work_parent: Path) -> tuple[Path, str]:
+def _extract_tar(tar_path: Path, work_parent: Path) -> Path:
     validate_tar_safety(tar_path)
-    report_id = f"rpt-{uuid.uuid4().hex[:8]}"
-    work_root = work_parent / report_id
+    work_dir = f"rpt-{uuid.uuid4().hex[:8]}"
+    work_root = work_parent / work_dir
     work_root.mkdir(parents=True, exist_ok=True)
     with tarfile.open(tar_path, "r:*") as t:
-        t.extractall(work_root)  # noqa: S202 — safety validated by validate_tar_safety above
-    return work_root, report_id
+        # filter="data" silences the Python 3.12 deprecation warning and hardens
+        # extraction against future default changes in 3.14+. validate_tar_safety
+        # runs first as the primary guard.
+        t.extractall(work_root, filter="data")
+    return work_root
 
 
 def _findings_to_rows(
@@ -93,8 +94,14 @@ def _findings_to_rows(
 def _build_initial_hypothesis(rows: list[EvidenceRow]) -> HypothesisCurrent:
     if not rows:
         raise ValueError("cannot build hypothesis from zero evidence rows")
-    by_cat = Counter(r.category for r in rows)
-    top_category = by_cat.most_common(1)[0][0]
+    # spec §5.6: top_category = argmax(per_category_max_confidence). High-confidence
+    # single-row categories must outrank low-confidence many-row categories.
+    per_cat_max: dict[str, float] = {}
+    for r in rows:
+        prev = per_cat_max.get(r.category, 0.0)
+        if r.confidence > prev:
+            per_cat_max[r.category] = r.confidence
+    top_category = max(per_cat_max.items(), key=lambda kv: kv[1])[0]
     hosts = sorted({r.host for r in rows})
     conf = min(max(r.confidence for r in rows), 0.4)
     top3 = sorted(rows, key=lambda r: -r.confidence)[:3]
@@ -182,7 +189,7 @@ async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
     cases_dir.mkdir(parents=True, exist_ok=True)
     init_db(db_path)
 
-    work_root, report_id = _extract_tar(tar_path, work_parent)
+    work_root = _extract_tar(tar_path, work_parent)
     envelope = parse_envelope(work_root)
 
     h_input = HunterInput(
@@ -192,7 +199,7 @@ async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
         skills=[],  # Day 2: empty; _route_skills lands here Day 3+
     )
 
-    log.info("dispatching fs_hunter, log_hunter on %s", envelope.host_id)
+    log.info("dispatching fs_hunter, log_hunter, timeline_hunter on %s", envelope.host_id)
     outputs, partial = await _run_hunters(h_input)
     for o in outputs:
         log.info("%s: %d findings", o.hunter, len(o.findings))

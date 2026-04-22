@@ -14,7 +14,7 @@ CURATOR_URL="${BL_CURATOR_URL:-http://bl-curator:8080}"
 HOST_ID="${BL_HOST_ID:-$(command hostname -s)}"
 REPORT_DIR="${BL_REPORT_DIR:-/var/bl-agent/reports}"
 
-log() { command printf '[bl-report %s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+log() { command printf '[bl-report %s] %s\n' "$(command date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 
 require() {
     local tool
@@ -28,9 +28,9 @@ main() {
 
     command mkdir -p "$REPORT_DIR"
     local ts
-    ts=$(date -u +%Y%m%dT%H%M%SZ)
+    ts=$(command date -u +%Y%m%dT%H%M%SZ)
     local report_id
-    report_id="rpt-$(command printf '%s' "$HOST_ID-$ts" | sha256sum | command cut -c1-8)"
+    report_id="rpt-$(command printf '%s' "$HOST_ID-$ts" | command sha256sum | command cut -c1-8)"
     local tarball="$REPORT_DIR/report-${HOST_ID}-${ts}.tar.gz"
 
     local staging
@@ -74,7 +74,7 @@ main() {
 {
   "report_id": "$report_id",
   "host_id": "$HOST_ID",
-  "collected_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "collected_at": "$(command date -u +%Y-%m-%dT%H:%M:%SZ)",
   "tool_version": "bl-report 0.2.0",
   "path_map": {${path_map_entries}}
 }

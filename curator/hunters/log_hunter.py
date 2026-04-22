@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from curator.hunters.base import Finding, HunterInput, HunterOutput, run_sonnet_hunter
+from curator.hunters.base import HunterInput, HunterOutput, run_sonnet_hunter
 
 _PROMPT_PATH = Path(__file__).parent.parent.parent / "prompts" / "log-hunter.md"
 
