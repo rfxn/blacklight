@@ -39,7 +39,12 @@ services:
     container_name: bl-host-2
     hostname: host-2
     volumes:
-      - ../exhibits/fleet-01/host-2-polyshell:/var/www/html/exhibits:ro
+      # Magento-realistic exhibit placement — mirrors HANDOFF §Day 1 step 4
+      # and EXHIBITS.md:33 canonical path. Per-file mounts preserve the
+      # attacker's chosen directory shape and keep the harness-framing
+      # string `exhibits/` out of the container namespace.
+      - ../exhibits/fleet-01/host-2-polyshell/a.php:/var/www/html/pub/media/catalog/product/.cache/a.php:ro
+      - ../exhibits/fleet-01/host-2-polyshell/access.log:/var/log/apache2/access.log:ro
       - ../bl-agent:/opt/bl-agent:ro
     networks:
       - fleet

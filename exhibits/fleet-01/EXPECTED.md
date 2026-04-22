@@ -8,13 +8,13 @@ Source: reconstructed from public APSB25-94 advisory content; matches `exhibits/
 
 ## host-2
 
-Staged compromise: PolyShell variant at `pub/media/catalog/.cache/a.php`. Compose image: Apache + mod_security + Magento 2.4.x.
+Staged compromise: PolyShell variant at `pub/media/catalog/product/.cache/a.php`. Compose image: Apache + mod_security + Magento 2.4.x.
 
 ### fs_hunter should find
 
 - **Category:** `unusual_php_path`
   **Finding shape:** a PHP file under a media/cache path, outside `vendor/` and `app/code/`
-  **Source ref:** `fs/var/www/html/pub/media/catalog/.cache/a.php`
+  **Source ref:** `fs/var/www/html/pub/media/catalog/product/.cache/a.php`
   **confidence:** 0.7 or higher
 
 - **Category:** `mtime_cluster` (if multiple staged artifacts)
