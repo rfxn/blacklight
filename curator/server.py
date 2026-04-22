@@ -48,6 +48,14 @@ def manifest():
     return send_file(MANIFEST_PATH, mimetype="application/x-yaml")
 
 
+@app.get("/manifest.yaml.sha256")
+def manifest_sha256():
+    sidecar = STORAGE_DIR / "manifest.yaml.sha256"
+    if not sidecar.exists():
+        abort(404, description="manifest sidecar not yet published")
+    return send_file(sidecar, mimetype="text/plain")
+
+
 @app.post("/reports")
 def report_in():
     payload = request.get_data()
