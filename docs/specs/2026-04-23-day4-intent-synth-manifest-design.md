@@ -56,7 +56,7 @@ Without this Day-4 pipeline, the demo at 0:35-1:15 (rule-promotion + "3 Magento 
 - **Full `bl-ctl` CLI** — stays at `cat` + grep wrappers (constraints.md:58).
 - **Mind-change moment / host-5 split-campaign** — Day 5 scope.
 - **Host-1 anticipatory block staging** — Day 5 scope. Day 4 makes the rule available; Day 5 simulator stages the block.
-- **Operator-content skill authorship** — `case-lifecycle.md`, `polyshell.md`, `modsec-patterns.md`, `false-positives/*`, `hosting-stack/*`, `ic-brief-format/*` stay as stubs until operator authorship (constraints.md:95-100).
+- **Operator-content skill authorship** — `polyshell.md`, `modsec-patterns.md`, `false-positives/*`, `hosting-stack/*`, `ic-brief-format/*` stay as stubs until operator authorship (constraints.md:95-100). `case-lifecycle.md` already has mature content as of d00ddd1 and is not re-touched by this spec.
 - **`curator/case_schema.py` edits** — Day-1 lock (constraints.md:85, anti-patterns.md #5).
 - **Apache graceful reload in bl-apply** — Day-5 simulator handles one-time reload for the enforcement beat (Q5 design decision). bl-apply installs the rule; it does not restart Apache.
 - **Magento on host-3** — Apache-vs-Nginx is the entire Day-4 stack-profile beat. No Magento on host-3 (Q6 revised).
@@ -1143,8 +1143,9 @@ docker exec bl-host-2 /opt/bl-agent/bl-apply
 docker exec bl-host-3 /opt/bl-agent/bl-apply
 # expect: exit 0, "stack profile 'nginx' — skipping Apache ruleset"
 
-# Operator-content stubs still stubs
-for f in skills/ir-playbook/case-lifecycle.md skills/webshell-families/polyshell.md skills/defense-synthesis/modsec-patterns.md; do
+# Remaining operator-content stubs still stubs.
+# skills/ir-playbook/case-lifecycle.md has mature content as of d00ddd1 — excluded.
+for f in skills/webshell-families/polyshell.md skills/defense-synthesis/modsec-patterns.md; do
     grep -q 'TODO: operator content' "$f" || echo "STUB VIOLATED: $f"
 done
 # expect: (no output)
