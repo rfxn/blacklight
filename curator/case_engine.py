@@ -78,7 +78,7 @@ def _build_revision_schema() -> dict:
         "type": "object",
         "properties": {
             "summary": {"type": "string"},
-            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "confidence": {"type": "number"},
             "reasoning": {"type": "string"},
         },
         "required": ["summary", "confidence", "reasoning"],
@@ -89,7 +89,7 @@ def _build_revision_schema() -> dict:
         "properties": {
             "cap": {"type": "string"},
             "evidence": {"type": "array", "items": {"type": "string"}},
-            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "confidence": {"type": "number"},
         },
         "required": ["cap"],
         "additionalProperties": False,
@@ -99,7 +99,7 @@ def _build_revision_schema() -> dict:
         "properties": {
             "cap": {"type": "string"},
             "basis": {"type": "string"},
-            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "confidence": {"type": "number"},
         },
         "required": ["cap", "basis", "confidence"],
         "additionalProperties": False,
@@ -109,8 +109,8 @@ def _build_revision_schema() -> dict:
         "properties": {
             "action": {"type": "string"},
             "basis": {"type": "string"},
-            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            "ranked": {"type": "integer", "minimum": 1},
+            "confidence": {"type": "number"},
+            "ranked": {"type": "integer"},
         },
         "required": ["action", "basis", "confidence", "ranked"],
         "additionalProperties": False,
@@ -122,6 +122,7 @@ def _build_revision_schema() -> dict:
             "inferred": {"type": "array", "items": inferred_capability},
             "likely_next": {"type": "array", "items": likely_next},
         },
+        "required": [],
         "additionalProperties": False,
     }
     action_taken = {
@@ -129,8 +130,8 @@ def _build_revision_schema() -> dict:
         "properties": {
             "at": {"type": "string"},
             "action": {"type": "string"},
-            "defense_id": {"type": ["string", "null"]},
-            "category": {"type": ["string", "null"], "enum": [None, "reactive", "predictive", "anticipatory"]},
+            "defense_id": {"type": "string"},
+            "category": {"type": "string", "enum": ["reactive", "predictive", "anticipatory"]},
             "reason": {"type": "string"},
         },
         "required": ["at", "action", "reason"],
@@ -144,12 +145,20 @@ def _build_revision_schema() -> dict:
                 "enum": ["supports", "contradicts", "extends", "unrelated", "ambiguous"],
             },
             "revision_warranted": {"type": "boolean"},
-            "new_hypothesis": {"oneOf": [hypothesis_current, {"type": "null"}]},
+            "new_hypothesis": hypothesis_current,  # omitted when not warranted
             "evidence_thread_additions": {
-                "type": "object",
-                "additionalProperties": {"type": "array", "items": {"type": "string"}},
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "host": {"type": "string"},
+                        "evidence_ids": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["host", "evidence_ids"],
+                    "additionalProperties": False,
+                },
             },
-            "capability_map_updates": {"oneOf": [capability_map, {"type": "null"}]},
+            "capability_map_updates": capability_map,  # omitted when no cap updates
             "open_questions_additions": {"type": "array", "items": {"type": "string"}},
             "proposed_actions": {"type": "array", "items": action_taken},
         },
@@ -255,6 +264,33 @@ def revise(
     text = _extract_json_text(response)
     try:
         payload = json.loads(text)
+        # Convert evidence_thread_additions from array-of-pairs to dict
+        # (API json_schema can't express dict[str, list[str]] — we use an array
+        # shape in the schema and normalize here before pydantic validation).
+        raw_threads = payload.get("evidence_thread_additions", [])
+        if isinstance(raw_threads, list):
+            payload["evidence_thread_additions"] = {
+                item["host"]: item.get("evidence_ids", [])
+                for item in raw_threads
+                if isinstance(item, dict) and "host" in item
+            }
+        # Drop proposed_actions items with non-datetime 'at' fields —
+        # the model occasionally puts host names or plain text in 'at'
+        # rather than an ISO timestamp, causing pydantic datetime parse failures.
+        raw_actions = payload.get("proposed_actions", [])
+        if raw_actions:
+            from datetime import datetime as _dt
+            valid_actions = []
+            for act in raw_actions:
+                try:
+                    _dt.fromisoformat(str(act.get("at", "")).replace("Z", "+00:00"))
+                    valid_actions.append(act)
+                except (ValueError, TypeError):
+                    log.warning(
+                        "proposed_action dropped: 'at' field not a valid datetime: %r",
+                        act.get("at"),
+                    )
+            payload["proposed_actions"] = valid_actions
         return RevisionResult.model_validate(payload)
     except Exception as exc:  # pydantic ValidationError or JSONDecodeError
         raise RevisionParseError(
