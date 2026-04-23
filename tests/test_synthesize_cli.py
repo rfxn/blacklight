@@ -7,10 +7,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-import pytest
 import yaml
 
-from curator.case_schema import CaseFile, CapabilityMap, Hypothesis, HypothesisCurrent
+from curator.case_schema import CaseFile, Hypothesis, HypothesisCurrent
 
 
 def _write_fixture_case(storage_dir: Path, case_id: str = "CASE-2026-0007") -> Path:

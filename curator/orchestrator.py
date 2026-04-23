@@ -301,7 +301,7 @@ async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
     existing_cases = sorted(cases_dir.glob("CASE-*.yaml")) if cases_dir.is_dir() else []
     if existing_cases:
         existing = existing_cases[0]
-        case_id = _CASE_ID_RE.match(existing.name).group(0).removesuffix(".yaml")
+        case_id = existing.stem
         case_path = existing
     else:
         case_id = _allocate_case_id(cases_dir)

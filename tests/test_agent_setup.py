@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,7 +12,6 @@ from curator.agent_setup import (
     create_or_update_agent,
     schema_roundtrip_probe,
 )
-from curator.case_schema import RevisionResult
 
 
 def test_schema_roundtrip_probe_passes_on_current_schema() -> None:

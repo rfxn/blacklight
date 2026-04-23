@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 from curator.hunters.base import Finding, HunterInput, HunterOutput, run_sonnet_hunter

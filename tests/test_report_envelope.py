@@ -5,13 +5,12 @@ from __future__ import annotations
 import io
 import json
 import tarfile
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from curator.report_envelope import ReportEnvelope, parse_envelope, validate_tar_safety
+from curator.report_envelope import parse_envelope, validate_tar_safety
 
 
 def _valid_envelope_dict() -> dict:

@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import json
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-
-import pytest
 
 from curator.evidence import EvidenceRow, fetch_by_case, fetch_by_report, init_db, insert_evidence
 

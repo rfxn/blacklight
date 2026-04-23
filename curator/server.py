@@ -16,9 +16,15 @@ and the session's event-stream consumer that writes manifest updates to disk.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from flask import Flask, abort, jsonify, request, send_file
+
+# Accept only filename-safe characters from the caller-supplied host id.
+# A compromised fleet host is in the threat model; the raw header cannot
+# be trusted for a filesystem path component.
+_HOST_ID_SAFE = re.compile(r"[^A-Za-z0-9._-]")
 
 STORAGE_DIR = Path(os.environ.get("BL_STORAGE", "/app/curator/storage"))
 MANIFEST_PATH = STORAGE_DIR / "manifest.yaml"
@@ -43,7 +49,8 @@ def health():
 @app.get("/manifest.yaml")
 def manifest():
     if not MANIFEST_PATH.exists():
-        # Day-1 empty manifest — synthesizer populates it once Day 4 lands.
+        # Fleet brings up before the first synthesize run — serve an empty
+        # manifest so bl-pull has a 200 to parse on cold start.
         return (EMPTY_MANIFEST, 200, {"Content-Type": "application/x-yaml"})
     return send_file(MANIFEST_PATH, mimetype="application/x-yaml")
 
@@ -61,7 +68,8 @@ def report_in():
     payload = request.get_data()
     if not payload:
         abort(400, description="empty report")
-    host = request.headers.get("X-Host-Id", "unknown")
+    raw_host = request.headers.get("X-Host-Id", "unknown")
+    host = _HOST_ID_SAFE.sub("_", raw_host)[:64] or "unknown"
     # os.urandom for collision-free file naming within a batch of uploads.
     drop = INBOX_DIR / f"{host}-{os.urandom(4).hex()}.tar"
     drop.write_bytes(payload)

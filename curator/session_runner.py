@@ -240,7 +240,7 @@ def _run_session_turn(client: anthropic.Anthropic, sid: str, user_text: str) -> 
             try:
                 candidate = json.loads(joined[start:])
                 return _parse_custom_tool_input(candidate)
-            except (json.JSONDecodeError, Exception):  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 continue
 
     raise SessionProtocolError(

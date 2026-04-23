@@ -46,7 +46,7 @@ def validate_tar_safety(tar_path: Path) -> None:
     with tarfile.open(tar_path, "r:*") as t:
         for member in t.getmembers():
             name = member.name
-            if os.path.isabs(name) or name.startswith("/"):
+            if os.path.isabs(name):
                 raise ValueError(
                     f"tar entry {name!r} is an absolute path — rejecting"
                 )

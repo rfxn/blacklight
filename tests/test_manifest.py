@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-import tempfile
-from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 import yaml
 
 from curator.manifest import Manifest, _canonical_bytes, publish, load
