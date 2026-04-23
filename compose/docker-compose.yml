@@ -96,6 +96,121 @@ services:
     depends_on:
       - curator
 
+  host-1:
+    build:
+      context: ..
+      dockerfile: compose/host-apache.Dockerfile
+    image: blacklight/host-apache:dev
+    container_name: bl-host-1
+    hostname: host-1
+    volumes:
+      - ../exhibits/fleet-01/host-1-anticipatory/access.log:/srv/bl-exhibit/access.log:ro
+      - ../bl-agent:/opt/bl-agent:ro
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        for f in access.log error.log other_vhosts_access.log; do
+          rm -f "/var/log/apache2/$$f"
+          : > "/var/log/apache2/$$f"
+          chown www-data:www-data "/var/log/apache2/$$f"
+        done
+        cp /srv/bl-exhibit/access.log /var/log/apache2/access.log
+        chown www-data:www-data /var/log/apache2/access.log
+        exec apache2-foreground
+    networks:
+      - fleet
+    depends_on:
+      - curator
+
+  host-4:
+    build:
+      context: ..
+      dockerfile: compose/host-apache.Dockerfile
+    image: blacklight/host-apache:dev
+    container_name: bl-host-4
+    hostname: host-4
+    volumes:
+      - ../exhibits/fleet-01/host-4-polyshell-second/a.php:/var/www/html/pub/media/catalog/product/cache/.bin/a.php:ro
+      - ../exhibits/fleet-01/host-4-polyshell-second/access.log:/srv/bl-exhibit/access.log:ro
+      - ../bl-agent:/opt/bl-agent:ro
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        for f in access.log error.log other_vhosts_access.log; do
+          rm -f "/var/log/apache2/$$f"
+          : > "/var/log/apache2/$$f"
+          chown www-data:www-data "/var/log/apache2/$$f"
+        done
+        cp /srv/bl-exhibit/access.log /var/log/apache2/access.log
+        chown www-data:www-data /var/log/apache2/access.log
+        exec apache2-foreground
+    networks:
+      - fleet
+    depends_on:
+      - curator
+
+  host-5:
+    build:
+      context: ..
+      dockerfile: compose/host-apache.Dockerfile
+    image: blacklight/host-apache:dev
+    container_name: bl-host-5
+    hostname: host-5
+    volumes:
+      - ../exhibits/fleet-01/host-5-skimmer/skimmer.php:/var/www/html/pub/media/catalog/product/.cache/skimmer.php:ro
+      - ../exhibits/fleet-01/host-5-skimmer/access.log:/srv/bl-exhibit/access.log:ro
+      - ../bl-agent:/opt/bl-agent:ro
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        for f in access.log error.log other_vhosts_access.log; do
+          rm -f "/var/log/apache2/$$f"
+          : > "/var/log/apache2/$$f"
+          chown www-data:www-data "/var/log/apache2/$$f"
+        done
+        cp /srv/bl-exhibit/access.log /var/log/apache2/access.log
+        chown www-data:www-data /var/log/apache2/access.log
+        exec apache2-foreground
+    networks:
+      - fleet
+    depends_on:
+      - curator
+
+  host-7:
+    build:
+      context: ..
+      dockerfile: compose/host-apache.Dockerfile
+    image: blacklight/host-apache:dev
+    container_name: bl-host-7
+    hostname: host-7
+    volumes:
+      - ../exhibits/fleet-01/host-7-polyshell-third/a.php:/var/www/html/pub/media/import/.tmp/a.php:ro
+      - ../exhibits/fleet-01/host-7-polyshell-third/access.log:/srv/bl-exhibit/access.log:ro
+      - ../bl-agent:/opt/bl-agent:ro
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        for f in access.log error.log other_vhosts_access.log; do
+          rm -f "/var/log/apache2/$$f"
+          : > "/var/log/apache2/$$f"
+          chown www-data:www-data "/var/log/apache2/$$f"
+        done
+        cp /srv/bl-exhibit/access.log /var/log/apache2/access.log
+        chown www-data:www-data /var/log/apache2/access.log
+        exec apache2-foreground
+    networks:
+      - fleet
+    depends_on:
+      - curator
+
 networks:
   fleet:
     driver: bridge
