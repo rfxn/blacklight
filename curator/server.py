@@ -1,16 +1,14 @@
 """Local Flask glue — manifest HTTP endpoint + report inbox.
 
-The Claude-driven investigation loop runs in a Managed Agents session (see
-curator/managed_agents.py). This module is thin local plumbing that the
+The Claude-driven investigation loop runs in a Managed Agents session
+bootstrapped by `curator/agent_setup.py` and driven by
+`curator/session_runner.py`. This module is thin local plumbing that the
 fleet's bl-agent scripts talk to:
 
-- GET /health           — liveness for docker healthcheck
-- GET /manifest.yaml    — current defense manifest (written by the session)
-- POST /reports         — bl-agent uploads land here as files in the inbox
-
-Day 1 scope: enough to satisfy `docker compose up` + curl /health + curl
-/manifest.yaml. Day 4 adds SHA-256 lineage headers, stack-profile filtering,
-and the session's event-stream consumer that writes manifest updates to disk.
+- GET /health                 — liveness for docker healthcheck
+- GET /manifest.yaml          — current defense manifest (written by synthesize)
+- GET /manifest.yaml.sha256   — sidecar for bl-pull verification
+- POST /reports               — bl-agent uploads land here as files in the inbox
 """
 
 from __future__ import annotations

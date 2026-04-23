@@ -184,7 +184,7 @@ If the live run fails mid-recording:
 - **Frame the curator log pane large enough to read.** Keep terminal at ≥14pt for the recording resolution. The `thinking` summary blocks need to be legible on first read.
 - **No `Co-Authored-By` in any visible commit on screen.** No Claude/Anthropic attribution outside the explicit "Why these models" beat.
 - **Audio level uniform.** Compressor on the narration track; no live ambient noise.
-- **`time_compression.py` reads from tarballs, not live host containers.** Host-2 stages the Day-1 on-camera exhibit; hosts 1/3/4/5/7 run in compose for fleet-framing (the `docker compose ps` table judges see) but the time-compression runner replays their reports from `tests/fixtures/sim/*.tar.gz` rather than driving them live. No `docker exec` health probes for those hosts.
+- **`time_compression.py` reads from tarballs, not live host containers.** Host-2 stages the Day-1 on-camera exhibit; hosts 1/4/5/7 have pre-baked report tarballs in `tests/fixtures/sim/` that the time-compression runner replays; host-3 is compose-only fleet framing (Nginx stack profile demo — no replay beat). No `docker exec` health probes for any of those hosts.
 
 ---
 
