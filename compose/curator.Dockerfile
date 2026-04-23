@@ -14,11 +14,14 @@ RUN pip install --no-cache-dir -r /app/requirements.txt \
 
 COPY curator /app/curator
 COPY prompts /app/prompts
+COPY demo /app/demo
+COPY tests/fixtures/sim /app/sim_tars
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     BL_STORAGE=/app/curator/storage \
-    BL_INBOX=/app/inbox
+    BL_INBOX=/app/inbox \
+    BL_SIM_TARS_DIR=/app/sim_tars
 
 EXPOSE 8080
 

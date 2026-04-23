@@ -32,7 +32,9 @@ from pathlib import Path
 log = logging.getLogger("demo")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SIM_DIR = REPO_ROOT / "tests" / "fixtures" / "sim"
+# BL_SIM_TARS_DIR overrides the default host-side path so the curator container
+# (which does not ship tests/) can point at its own bundled copy at /app/sim_tars.
+SIM_DIR = Path(os.environ["BL_SIM_TARS_DIR"]) if os.environ.get("BL_SIM_TARS_DIR") else REPO_ROOT / "tests" / "fixtures" / "sim"
 
 
 @dataclass(frozen=True)
