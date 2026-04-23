@@ -64,7 +64,7 @@ def test_emits_sim_day_captions_in_order(tmp_path: Path,
 
 def test_paced_mode_sleeps_between_beats(tmp_path: Path,
                                          monkeypatch: pytest.MonkeyPatch) -> None:
-    """In paced mode, time.sleep is called once per beat."""
+    """In paced mode, time.sleep is called once per beat with the BEATS dwells."""
     monkeypatch.setenv("BL_STORAGE", str(tmp_path / "storage"))
     monkeypatch.setenv("BL_SKIP_LIVE", "1")
     monkeypatch.setenv("BL_STUB_FINDINGS", "1")
@@ -74,8 +74,14 @@ def test_paced_mode_sleeps_between_beats(tmp_path: Path,
     monkeypatch.setattr(time_compression.time, "sleep",
                         lambda s: sleeps.append(s))
     asyncio.run(time_compression._run(mode="stub", paced=True))
-    assert len(sleeps) == 4
-    assert sum(sleeps) >= 60  # ~66s expected per BEATS table
+    # Pin invocation count + per-beat dwells to the BEATS table itself. The
+    # earlier `sum(sleeps) >= 60` magic-number floor was disconnected from
+    # BEATS (actual 12+14+22+18=66, 6s headroom) — any future sleep_after_sec
+    # tuning below 60s total would silently pass. The 90s recording envelope
+    # belongs in a separate timing test, not this invocation check.
+    expected_total = sum(b.sleep_after_sec for b in time_compression.BEATS)
+    assert len(sleeps) == len(time_compression.BEATS)
+    assert sum(sleeps) == expected_total
 
 
 def test_fast_mode_does_not_sleep(tmp_path: Path,
