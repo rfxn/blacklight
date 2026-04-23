@@ -450,6 +450,57 @@ def _merge_capability_maps(base: CapabilityMap, update: CapabilityMap) -> Capabi
     )
 
 
+def split_case(
+    prior_case: CaseFile,
+    new_rows: list[EvidenceRow],
+    *,
+    host: str,
+    new_case_id: str,
+    updated_by: str = "case_engine.split",
+    clock: Optional[Callable[[], datetime]] = None,
+) -> tuple[CaseFile, CaseFile]:
+    """Split a prior case into prior+new on unrelated-evidence detection.
+
+    Returns (updated_prior, new_case). Prior case gets `new_case_id` appended
+    to `split_into[]`. New case carries `merged_from=[prior_case.case_id]` and
+    a deterministic initial hypothesis (no model call).
+    """
+    if new_case_id == prior_case.case_id:
+        raise ValueError(
+            f"split_case: new_case_id must differ from prior ({new_case_id!r})"
+        )
+    now = (clock or (lambda: datetime.now(timezone.utc)))()
+
+    updated_prior = prior_case.model_copy(deep=True)
+    updated_prior.last_updated_at = now
+    updated_prior.updated_by = updated_by
+    updated_prior.split_into = [*prior_case.split_into, new_case_id]
+
+    summary = (
+        f"Split-off from {prior_case.case_id}: separate actor on {host}; "
+        f"family markers do not match prior hypothesis."
+    )
+    reasoning = (
+        f"Routed via case_engine.split_case after revise() returned support_type=unrelated. "
+        f"{len(new_rows)} new evidence rows from {host} form the seed for {new_case_id}."
+    )
+    new_case = CaseFile(
+        case_id=new_case_id,
+        status="active",
+        opened_at=now,
+        last_updated_at=now,
+        updated_by=updated_by,
+        hypothesis=Hypothesis(current=HypothesisCurrent(
+            summary=summary,
+            confidence=0.4,
+            reasoning=reasoning,
+        )),
+        evidence_threads={host: [r.id for r in new_rows]},
+        merged_from=[prior_case.case_id],
+    )
+    return updated_prior, new_case
+
+
 def merge_capability_map(
     case: CaseFile,
     cap_map: CapabilityMap,
