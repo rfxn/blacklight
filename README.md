@@ -22,10 +22,12 @@ cp .secrets/env.example .secrets/env    # add your ANTHROPIC_API_KEY
 COMPOSE_FILE=compose/docker-compose.yml docker compose up -d --build
 ```
 
-The fleet comes up as three containers: `bl-curator` (the investigator,
-Managed Agent), `bl-host-2` (Apache + ModSec + staged PolyShell from public
-APSB25-94 advisory), and `bl-host-3` (clean Nginx, demonstrates stack-profile
-skip).
+The fleet comes up as seven containers: `bl-curator` (the investigator,
+Managed Agent) plus six hosts. Four Apache + ModSec hosts stage APSB25-94
+PolyShell variants or a skimmer campaign (hosts 2/4/5/7). One clean Apache
+host (`bl-host-1`) is the payoff — never compromised, but defended by rules
+authored from activity on the others. One clean Nginx host (`bl-host-3`)
+demonstrates the stack-profile skip.
 
 ```bash
 # Health
