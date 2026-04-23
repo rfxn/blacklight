@@ -32,7 +32,7 @@ def custom_tool_use(tool_name: str, payload: dict, tool_use_id: str = "tu-stub-1
     return SimpleNamespace(
         type="agent.custom_tool_use",
         name=tool_name,
-        tool_use_id=tool_use_id,
+        id=tool_use_id,
         input=payload,
     )
 

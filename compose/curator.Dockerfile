@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt \
 COPY curator /app/curator
 COPY prompts /app/prompts
 COPY demo /app/demo
+COPY tests /app/tests
 COPY tests/fixtures/sim /app/sim_tars
 
 ENV PYTHONUNBUFFERED=1 \
