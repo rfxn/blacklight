@@ -96,6 +96,23 @@ def _skip_mode_enabled() -> bool:
     return os.environ.get("BL_SKIP_LIVE") == "1"
 
 
+def _stub_finding(prompt_path: Path) -> Finding:
+    """Minimal synthetic finding for BL_STUB_FINDINGS=1 subprocess paths.
+
+    Gives the orchestrator a non-empty row set so cases open and revise()
+    branches execute — required for subprocess-level sim runner tests where
+    unittest.mock.patch cannot reach into the child process.
+    """
+    return Finding(
+        category="unusual_php_path",
+        finding="stub: synthetic finding for sim-runner rehearsal",
+        confidence=0.7,
+        source_refs=[f"stub/{prompt_path.stem}"],
+        raw_evidence_excerpt="",
+        observed_at="2026-04-22T00:00:00Z",
+    )
+
+
 async def run_sonnet_hunter(
     prompt_path: Path,
     user_content: str,
@@ -106,8 +123,15 @@ async def run_sonnet_hunter(
     BL_SKIP_LIVE=1 returns an empty findings list without an API call
     (tests + CI path). Callers that need fixture findings in skip mode
     supply them themselves before invoking this helper.
+
+    BL_STUB_FINDINGS=1 (implies BL_SKIP_LIVE=1) returns one synthetic
+    finding per hunter — used by subprocess-based sim runner tests where
+    patch() cannot reach into the child process.
     """
     if _skip_mode_enabled():
+        if os.environ.get("BL_STUB_FINDINGS") == "1":
+            log.info("BL_STUB_FINDINGS=1 — returning synthetic finding for %s", prompt_path.name)
+            return [_stub_finding(prompt_path)]
         log.info("BL_SKIP_LIVE=1 — skipping live API call for %s", prompt_path.name)
         return []
 

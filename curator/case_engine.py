@@ -190,8 +190,36 @@ def _load_system_prompt() -> str:
     return prompt
 
 
-def _stub_result() -> RevisionResult:
-    """BL_SKIP_LIVE=1 path: return a null-revision RevisionResult."""
+def _stub_result(
+    case: "CaseFile | None" = None,
+    new_rows: "list[EvidenceRow] | None" = None,
+) -> RevisionResult:
+    """BL_SKIP_LIVE=1 path: return a deterministic RevisionResult.
+
+    BL_STUB_UNRELATED_HOST=<host_id> triggers support_type="unrelated" when
+    all new_rows come from that specific host — required for subprocess-based
+    sim runner rehearsal where the Day-14 host-5 skimmer beat must exercise
+    the split branch without a model call.
+    """
+    unrelated_host = os.environ.get("BL_STUB_UNRELATED_HOST", "")
+    if unrelated_host and case is not None and new_rows:
+        new_hosts = {r.host for r in new_rows}
+        if new_hosts == {unrelated_host}:
+            log.info(
+                "BL_SKIP_LIVE=1 stub: host %s matches BL_STUB_UNRELATED_HOST — returning unrelated",
+                unrelated_host,
+            )
+            return RevisionResult(
+                support_type="unrelated",
+                revision_warranted=False,
+                new_hypothesis=None,
+                evidence_thread_additions={},
+                capability_map_updates=None,
+                open_questions_additions=[
+                    f"support_type=unrelated (stub: {unrelated_host} designated unrelated).",
+                ],
+                proposed_actions=[],
+            )
     return RevisionResult(
         support_type="ambiguous",
         revision_warranted=False,
@@ -269,7 +297,7 @@ def revise(
     """
     if os.environ.get("BL_SKIP_LIVE") == "1":
         log.info("BL_SKIP_LIVE=1 — returning null-revision stub")
-        return _stub_result()
+        return _stub_result(case, new_rows)
 
     c = client or anthropic.Anthropic()
     schema = _build_revision_schema()
