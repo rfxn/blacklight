@@ -5,7 +5,6 @@ import pytest
 
 from curator.case_engine import split_case
 from curator.case_schema import (
-    CapabilityMap,
     CaseFile,
     Hypothesis,
     HypothesisCurrent,
