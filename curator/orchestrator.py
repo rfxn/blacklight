@@ -17,16 +17,19 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from curator.case_engine import apply_revision, revise, split_case
 from curator.case_schema import (
     CaseFile,
     Hypothesis,
     HypothesisCurrent,
+    RevisionResult,
     dump_case,
 )
 from curator.evidence import EvidenceRow, init_db, insert_evidence
 from curator.hunters.base import HunterInput, HunterOutput
 from curator.hunters import fs_hunter, log_hunter, timeline_hunter
 from curator.report_envelope import parse_envelope, validate_tar_safety
+from curator.session_runner import revise_via_session
 
 log = logging.getLogger("orchestrator")
 
@@ -224,6 +227,37 @@ async def _run_hunters(input: HunterInput) -> tuple[list[HunterOutput], bool]:
     return outputs, partial
 
 
+async def _revise_direct(prior_case: CaseFile, rows: list[EvidenceRow]) -> RevisionResult:
+    """Direct Opus 4.7 messages.create path (pre-MVW behavior).
+
+    Used when BL_USE_MANAGED_SESSION=0 or when the session path fails and
+    BL_USE_MANAGED_SESSION_FALLBACK=1 (default).
+    """
+    return await asyncio.to_thread(revise, prior_case, rows)
+
+
+async def _revise_via_session(prior_case: CaseFile, rows: list[EvidenceRow]) -> RevisionResult:
+    """Managed Agents session path (MVW default)."""
+    return await asyncio.to_thread(revise_via_session, prior_case, rows)
+
+
+async def _route_revise(prior_case: CaseFile, rows: list[EvidenceRow]) -> RevisionResult:
+    use_session = os.environ.get("BL_USE_MANAGED_SESSION", "1") == "1"
+    fallback = os.environ.get("BL_USE_MANAGED_SESSION_FALLBACK", "1") == "1"
+    if not use_session:
+        return await _revise_direct(prior_case, rows)
+    try:
+        return await _revise_via_session(prior_case, rows)
+    except Exception as exc:  # noqa: BLE001 — SessionProtocolError or transport
+        if fallback:
+            log.warning(
+                "session revise failed (%s) — falling back to direct path",
+                type(exc).__name__,
+            )
+            return await _revise_direct(prior_case, rows)
+        raise
+
+
 async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
     """Process one bl-report tar. Returns (case, had_partial_failure).
 
@@ -282,7 +316,6 @@ async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
         return (case, partial)
 
     # Second+ report on an existing case: revise.
-    from curator.case_engine import apply_revision, revise
     from curator.case_schema import load_case as _load_case  # avoid top-level cycle-risk
 
     prior_case = await asyncio.to_thread(_load_case, str(existing))
@@ -294,17 +327,22 @@ async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
         return (prior_case, partial)
 
     log.info(
-        "existing case %s found; invoking revise() with %d new rows",
+        "existing case %s found; invoking revise path with %d new rows",
         prior_case.case_id, len(rows),
     )
-    revision = await asyncio.to_thread(revise, prior_case, rows)
+    try:
+        revision = await _route_revise(prior_case, rows)
+    except Exception as exc:  # noqa: BLE001 — top-level revise catch
+        log.warning(
+            "revise path failed (%s: %s) — case unchanged",
+            type(exc).__name__, exc,
+        )
+        return (prior_case, True)
+
     trigger = f"{envelope.host_id} report {envelope.report_id}"
 
-    # P35 split branch: revise() flagged unrelated -> allocate a new case_id and
-    # split, instead of folding the new evidence into the prior hypothesis. The
-    # demo's mind-change moment (Variant B Beat 3.5 in demo/script.md) lands here.
+    # P35 split branch (unchanged)
     if revision.support_type == "unrelated" and not revision.revision_warranted:
-        from curator.case_engine import split_case
         new_case_id = _allocate_case_id(cases_dir)
         log.info(
             "support_type=unrelated -> splitting %s -> %s",

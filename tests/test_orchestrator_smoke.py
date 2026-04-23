@@ -274,6 +274,7 @@ async def test_second_report_triggers_revision(
     )
     monkeypatch.setenv("BL_STORAGE", str(storage))
     monkeypatch.setenv("BL_SKIP_LIVE", "1")  # hunters mock to empty
+    monkeypatch.setenv("BL_USE_MANAGED_SESSION", "0")  # pin to direct path; session tests land P5
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     # Inject a fake hunter output with findings so rows are non-empty
@@ -304,7 +305,7 @@ async def test_second_report_triggers_revision(
     )
 
     with patch("curator.orchestrator._run_hunters", new=_fake_run_hunters), \
-         patch("curator.case_engine.revise", return_value=canned) as mock_revise:
+         patch("curator.orchestrator.revise", return_value=canned) as mock_revise:
         from curator.orchestrator import process_report
         tar = pathlib.Path("tests/fixtures/report-host-2-sample.tar.gz")
         case, partial = await process_report(tar)
@@ -337,6 +338,7 @@ def test_second_report_no_findings_skips_revision(
     )
     monkeypatch.setenv("BL_STORAGE", str(storage))
     monkeypatch.setenv("BL_SKIP_LIVE", "1")
+    monkeypatch.setenv("BL_USE_MANAGED_SESSION", "0")  # pin to direct path; session tests land P5
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     from curator.hunters.base import HunterOutput
@@ -349,7 +351,7 @@ def test_second_report_no_findings_skips_revision(
         ], False)
 
     with patch("curator.orchestrator._run_hunters", new=_empty_hunters), \
-         patch("curator.case_engine.revise") as mock_revise:
+         patch("curator.orchestrator.revise") as mock_revise:
         from curator.orchestrator import process_report
         tar = pathlib.Path("tests/fixtures/report-host-2-sample.tar.gz")
         case, partial = asyncio.get_event_loop().run_until_complete(process_report(tar))
@@ -519,6 +521,7 @@ async def test_smoke_split_on_unrelated(
 
     monkeypatch.setenv("BL_STORAGE", str(storage))
     monkeypatch.setenv("BL_SKIP_LIVE", "1")
+    monkeypatch.setenv("BL_USE_MANAGED_SESSION", "0")  # pin to direct path; session tests land P5
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     # Fake hunters: produce one row so the path reaches revise()
@@ -551,7 +554,7 @@ async def test_smoke_split_on_unrelated(
 
     tar_path = _build_minimal_report_tar(tmp_path, host="host-5")
     with patch("curator.orchestrator._run_hunters", new=_fake_run_hunters), \
-         patch("curator.case_engine.revise", side_effect=_fake_revise):
+         patch("curator.orchestrator.revise", side_effect=_fake_revise):
         result_case, partial = await orchestrator.process_report(tar_path)
 
     assert result_case is not None
@@ -595,6 +598,7 @@ async def test_smoke_split_does_not_call_apply_revision(
 
     monkeypatch.setenv("BL_STORAGE", str(storage))
     monkeypatch.setenv("BL_SKIP_LIVE", "1")
+    monkeypatch.setenv("BL_USE_MANAGED_SESSION", "0")  # pin to direct path; session tests land P5
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     async def _fake_run_hunters(_input):
@@ -622,8 +626,8 @@ async def test_smoke_split_does_not_call_apply_revision(
 
     tar_path = _build_minimal_report_tar(tmp_path, host="host-5")
     with patch("curator.orchestrator._run_hunters", new=_fake_run_hunters), \
-         patch("curator.case_engine.revise", side_effect=_fake_revise), \
-         patch("curator.case_engine.apply_revision") as mock_apply:
+         patch("curator.orchestrator.revise", side_effect=_fake_revise), \
+         patch("curator.orchestrator.apply_revision") as mock_apply:
         await orchestrator.process_report(tar_path)
 
     assert not mock_apply.called, "split path must not invoke apply_revision()"
