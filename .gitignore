@@ -13,6 +13,8 @@ curator/storage/evidence.db
 curator/storage/evidence.db-journal
 curator/storage/cases/*.yaml
 curator/storage/work/
+curator/storage/manifest.yaml
+curator/storage/manifest.yaml.sha256
 
 # logs (runtime); exhibits/**/*.log are committed demo fixtures
 *.log
