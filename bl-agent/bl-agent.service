@@ -10,7 +10,8 @@ Environment=BL_CURATOR_URL=http://bl-curator:8080
 ExecStart=/usr/local/sbin/bl-pull
 ExecStart=/usr/local/sbin/bl-apply
 ExecStart=/usr/local/sbin/bl-report
-# Day 4: run on a timer. Day 1 = declarative scaffolding only.
+# Demo drives bl-pull/apply/report via `docker exec`; periodic-pull `.timer`
+# wiring is a roadmap item in FUTURE.md, not shipped in this unit.
 
 [Install]
 WantedBy=multi-user.target

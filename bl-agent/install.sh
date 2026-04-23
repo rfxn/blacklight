@@ -2,9 +2,10 @@
 #
 # bl-agent install — wire bl-pull/bl-apply/bl-report into the host.
 #
-# Installs binaries under /usr/local/sbin and the systemd unit + timer.
-# Day 1 scaffold: declares the layout, does not ship the systemd timer yet.
-# Day 4 populates the timer and hook wiring.
+# Installs binaries under /usr/local/sbin and the oneshot systemd unit.
+# The hackathon demo invokes bl-pull/apply/report via `docker exec`; a
+# systemd `.timer` for periodic pull-apply-report cycles is tracked as a
+# roadmap item in FUTURE.md rather than shipped here.
 
 set -euo pipefail
 
@@ -23,7 +24,8 @@ command install -m 0755 bl-report "$SBIN_DIR/bl-report"
 
 if [[ -d "$SYSTEMD_DIR" ]]; then
     command install -m 0644 bl-agent.service "$SYSTEMD_DIR/bl-agent.service"
-    # TODO(day-4): ship bl-agent.timer too, enable on install.
+    # Periodic-pull `.timer` unit is roadmap (FUTURE.md) — demo drives
+    # bl-pull/apply/report via `docker exec`.
 fi
 
-command printf 'bl-agent installed into %s. Day 1 scaffold — timer unit lands Day 4.\n' "$SBIN_DIR"
+command printf 'bl-agent installed into %s.\n' "$SBIN_DIR"

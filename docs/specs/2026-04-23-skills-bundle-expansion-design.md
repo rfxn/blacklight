@@ -249,7 +249,7 @@ No code dependencies. Docs-only change. Curator load path unchanged (curator rea
 ### 4.8 Dependency Rules
 
 - **Additive-only to INDEX.md.** No existing route is removed, reordered, or semantically altered.
-- **Public-source only.** Every new file cites at least one public source in its first 20 lines. Operator-local grounding data (`~/admin/work/proj/depot/polyshell/`, `/home/sigforge/var/ioc/polyshell_out/`) stays out of new files per CLAUDE.md section Reference data.
+- **Public-source only.** Every new file cites at least one public source in its first 20 lines. Operator-local grounding data (paths listed in CLAUDE.md §Reference data) stays out of new files — no host names, customer tokens, or internal paths are reproduced in any committed file, including this design doc.
 - **Voice lock.** New files match existing scaffold voice (terse, specific, numbered-not-adjective, no hedging) — see Section 6 Conventions.
 - **No churn on no-touch files.** Section 4.5 list is binding.
 
@@ -847,7 +847,10 @@ $ PYTHONPATH=. pytest -q 2>&1 | tail -3
 # expect: "=== X passed ... ===" with no failures
 
 # G9 — no customer data, no internal references
-$ grep -rEi '(liquidweb|liquid[-_]?web|sigforge|depot/polyshell|var/ioc/polyshell_out)' skills/ 2>/dev/null
+#     Run the guard-grep from CLAUDE.md §Reference data (pattern list kept out
+#     of this file so literal operator-local tokens do not ride in a committed
+#     design doc). Expected output: empty.
+$ bash -c 'grep -rEi "$BL_REFDATA_GUARD_PATTERN" skills/ 2>/dev/null'
 # expect: (no output)
 
 # G10 — README claim consistency (forward-check; run after P42)

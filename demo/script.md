@@ -30,14 +30,16 @@ echo "exit $?"    # expect: exit 0
 docker compose -f compose/docker-compose.yml down -v
 rm -rf curator/storage/cases/* curator/storage/evidence.db curator/storage/manifest.yaml*
 
-# Bring up the fleet (host-2 only in compose; time_compression reads tarballs)
+# Bring up the fleet (curator + 6 hosts: 1/2/3/4/5/7; time_compression replays
+# pre-baked tarballs, so host-1/4/5/7 content on disk is framing not live-driven)
 . .secrets/env                                      # ANTHROPIC_API_KEY
+unset BL_CURATOR_SESSION_ID                         # drop any prior-take session id
 docker compose -f compose/docker-compose.yml up -d --build
 
 # Wait for health
-docker exec bl-curator curl -fsS http://localhost:8080/health    # → {"ok": true}
+docker exec bl-curator curl -fsS http://localhost:8080/health    # → {"status": "ok", ...}
 
-# Confirm host-2 exhibit staged (only host in compose)
+# Confirm host-2 exhibit staged (Day-1 on-camera exhibit)
 docker exec bl-host-2 ls /var/www/html/pub/media/catalog/product/.cache/
 ```
 
@@ -182,7 +184,7 @@ If the live run fails mid-recording:
 - **Frame the curator log pane large enough to read.** Keep terminal at ≥14pt for the recording resolution. The `thinking` summary blocks need to be legible on first read.
 - **No `Co-Authored-By` in any visible commit on screen.** No Claude/Anthropic attribution outside the explicit "Why these models" beat.
 - **Audio level uniform.** Compressor on the narration track; no live ambient noise.
-- **`time_compression.py` reads from tarballs, not live host containers.** Only host-2 is in compose; hosts 1/4/5/7 are served from `tests/fixtures/sim/*.tar.gz`. No `docker exec` health probes for those hosts.
+- **`time_compression.py` reads from tarballs, not live host containers.** Host-2 stages the Day-1 on-camera exhibit; hosts 1/3/4/5/7 run in compose for fleet-framing (the `docker compose ps` table judges see) but the time-compression runner replays their reports from `tests/fixtures/sim/*.tar.gz` rather than driving them live. No `docker exec` health probes for those hosts.
 
 ---
 

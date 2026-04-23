@@ -4,7 +4,7 @@ Loaded by the router when the curator is producing an operator-facing or custome
 
 ## Section order (fixed)
 
-A brief has eight sections in this order. Sections never reorder; an empty section is omitted, not reordered.
+A brief has nine sections in this order. Sections never reorder; an empty section is omitted, not reordered.
 
 1. **TL;DR** — three to five sentences. Lead with impact and current status.
 2. **Severity** — single line, named with the operator scale.

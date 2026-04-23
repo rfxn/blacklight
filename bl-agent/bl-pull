@@ -2,9 +2,10 @@
 #
 # bl-pull — pull current defense manifest from curator, verify, store locally.
 #
-# Part of the blacklight thin-agent bundle. Runs on each host in the fleet on
-# an interval (systemd timer). Day 1 is a scaffold; Day 4 populates the
-# hash-verification + version-diffing logic.
+# Part of the blacklight thin-agent bundle. Intended to run on each host on
+# an interval (periodic-pull `.timer` wiring is roadmap — FUTURE.md); the
+# hackathon demo drives it via `docker exec`. SHA-256 sidecar verification +
+# version-diff logic is fully populated.
 
 set -euo pipefail
 

@@ -39,7 +39,7 @@ docker exec bl-curator ls /app/inbox/
 
 # Investigate: dispatches three Sonnet 4.6 hunters in parallel, opens a case
 docker exec -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" bl-curator \
-    bash -c 'python -m curator.orchestrator /app/inbox/*.tar'
+    bash -c 'python -m curator.orchestrator "$(ls -t /app/inbox/*.tar | head -1)"'
 
 # Read the case file
 docker exec bl-curator cat /app/curator/storage/cases/CASE-2026-0007.yaml
@@ -189,12 +189,12 @@ A 3-minute video. Six-host Dockerized fleet. A time-compression simulator
 (`demo/time_compression.py`) that replays a multi-day investigation arc in
 ~90 seconds.
 
-At **1:15**: a host that was never compromised blocks an attack. The
-curator attributed earlier activity on hosts 2, 4, and 7 to a coherent
-APSB25-94 actor, generated a ModSec rule that passed `apachectl configtest`,
-and the rule was deployed to every host in the fleet via the manifest +
-SHA-256 sidecar pull. The host that was never compromised is the one that
-caught the next wave.
+In the **1:15 – 1:55** payoff window: a host that was never compromised
+blocks an attack. The curator attributed earlier activity on hosts 2, 4,
+and 7 to a coherent APSB25-94 actor, generated a ModSec rule that passed
+`apachectl configtest`, and the rule was deployed to every host in the
+fleet via the manifest + SHA-256 sidecar pull. The host that was never
+compromised is the one that caught the next wave.
 
 (Video link lands on submission day.)
 
