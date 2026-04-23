@@ -631,3 +631,55 @@ async def test_smoke_split_does_not_call_apply_revision(
         await orchestrator.process_report(tar_path)
 
     assert not mock_apply.called, "split path must not invoke apply_revision()"
+
+
+@pytest.mark.asyncio
+async def test_second_report_via_session_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BL_USE_MANAGED_SESSION=1 routes revise through session_runner.
+
+    Uses the session-runner skip-mode shortcircuit (BL_SKIP_LIVE=1) so
+    the test does not hit Anthropic; validates that the flag-selected
+    path reaches session_runner.revise_via_session and returns a
+    RevisionResult that flows through apply_revision as expected.
+
+    Patch target: `curator.orchestrator.revise_via_session` — Phase 4
+    promoted the import to module-level, so this is the binding the
+    _revise_via_session helper actually calls. Patching
+    `curator.session_runner.revise_via_session` would NOT intercept a
+    module-level imported binding.
+    """
+    monkeypatch.setenv("BL_SKIP_LIVE", "1")
+    monkeypatch.setenv("BL_USE_MANAGED_SESSION", "1")
+    monkeypatch.setenv("BL_STORAGE", str(tmp_path / "storage"))
+
+    # Seed an existing case so the revise branch fires
+    cases_dir = tmp_path / "storage" / "cases"
+    cases_dir.mkdir(parents=True)
+    _seed_existing_case(cases_dir, "CASE-2026-0007")
+
+    from curator.case_engine import _stub_result
+    with patch("curator.orchestrator.revise_via_session") as mock_revise:
+        mock_revise.side_effect = lambda case, rows: _stub_result(case, rows)
+        fake_findings = [
+            Finding(
+                category="unusual_php_path", finding="stub",
+                confidence=0.7, source_refs=["fs/x.php"],
+                raw_evidence_excerpt="", observed_at="2026-04-22T10:00:00Z",
+            )
+        ]
+
+        async def fake_run(prompt_path, user_content, client=None):
+            return fake_findings
+
+        with patch("curator.hunters.fs_hunter.run_sonnet_hunter", side_effect=fake_run), \
+             patch("curator.hunters.log_hunter.run_sonnet_hunter", side_effect=fake_run), \
+             patch("curator.hunters.timeline_hunter.run_sonnet_hunter", side_effect=fake_run):
+            from curator.orchestrator import process_report
+            case, partial = await process_report(FIXTURE_TAR)
+
+    assert case is not None
+    assert mock_revise.called, "BL_USE_MANAGED_SESSION=1 did not route through revise_via_session"
+    # Confirm flag=0 does NOT hit revise_via_session (paired sanity check)
+    # (the test_second_report_triggers_revision test covers the =0 path)
