@@ -299,6 +299,31 @@ async def process_report(tar_path: Path) -> tuple[CaseFile | None, bool]:
     )
     revision = await asyncio.to_thread(revise, prior_case, rows)
     trigger = f"{envelope.host_id} report {envelope.report_id}"
+
+    # P35 split branch: revise() flagged unrelated -> allocate a new case_id and
+    # split, instead of folding the new evidence into the prior hypothesis. The
+    # demo's mind-change moment (Variant B Beat 3.5 in demo/script.md) lands here.
+    if revision.support_type == "unrelated" and not revision.revision_warranted:
+        from curator.case_engine import split_case
+        new_case_id = _allocate_case_id(cases_dir)
+        log.info(
+            "support_type=unrelated -> splitting %s -> %s",
+            prior_case.case_id, new_case_id,
+        )
+        updated_prior, new_case = split_case(
+            prior_case, rows, host=envelope.host_id, new_case_id=new_case_id,
+        )
+        prior_path = cases_dir / f"{updated_prior.case_id}.yaml"
+        new_path = cases_dir / f"{new_case.case_id}.yaml"
+        await asyncio.to_thread(dump_case, updated_prior, str(prior_path))
+        await asyncio.to_thread(dump_case, new_case, str(new_path))
+        log.info(
+            "split: %s.split_into=%s; %s.merged_from=%s",
+            updated_prior.case_id, updated_prior.split_into,
+            new_case.case_id, new_case.merged_from,
+        )
+        return (new_case, partial)
+
     updated = apply_revision(prior_case, revision, trigger=trigger)
     updated = await _maybe_reconstruct_intent(rows, work_root, updated)
     await asyncio.to_thread(dump_case, updated, str(case_path))

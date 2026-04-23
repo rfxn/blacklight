@@ -453,3 +453,177 @@ async def test_intent_skipped_without_webshell_candidate(tmp_path, monkeypatch):
     updated = await _maybe_reconstruct_intent([row], tmp_path, case)
     # capability_map unchanged (empty observed)
     assert len(updated.capability_map.observed) == 0
+
+
+# === P35: split-on-unrelated branch ===
+
+
+def _seed_existing_case(cases_dir: Path, case_id: str) -> None:
+    """Drop the case_state_a fixture under a chosen case_id for split-path tests."""
+    import shutil
+    src = Path("tests/fixtures/case_state_a.yaml")
+    dst = cases_dir / f"{case_id}.yaml"
+    shutil.copy(src, dst)
+
+
+def _build_minimal_report_tar(tmp_path: Path, host: str) -> Path:
+    """Build a minimal bl-report tar with manifest + one PHP fs entry.
+
+    The tar's hunter chain is bypassed in tests via _run_hunters patch — the
+    PHP body need only be present, not realistic. envelope.host_id flows
+    through to split_case as the new case's evidence_threads key.
+    """
+    import gzip
+    import json
+    out = tmp_path / f"{host}-min.tar.gz"
+    manifest = {
+        "report_id": f"rpt-{host}-min",
+        "host_id": host,
+        "collected_at": "2026-04-22T22:15:01Z",
+        "tool_version": "bl-report 0.2.0",
+        "path_map": {"fs/var/www/html": "/var/www/html"},
+    }
+    manifest_bytes = json.dumps(manifest).encode()
+    php_bytes = b"<?php /* P35 split-path fixture - bypassed by mocked _run_hunters */ ?>"
+    with gzip.open(out, "wb") as gz:
+        with tarfile.open(fileobj=gz, mode="w") as tf:
+            mi = tarfile.TarInfo(name="./manifest.json")
+            mi.size = len(manifest_bytes)
+            tf.addfile(mi, io.BytesIO(manifest_bytes))
+            pi = tarfile.TarInfo(name="./fs/var/www/html/skimmer.php")
+            pi.size = len(php_bytes)
+            tf.addfile(pi, io.BytesIO(php_bytes))
+    return out
+
+
+@pytest.mark.asyncio
+async def test_smoke_split_on_unrelated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Existing case + new report -> revise returns unrelated -> split path.
+
+    Asserts:
+    - returned case is the NEW case (so demo `print(case.case_id)` shows the new id)
+    - new case carries merged_from=[prior]
+    - prior case carries split_into=[new]
+    - both YAMLs land on disk
+    - split deliberately does NOT inherit prior capability_map (different family)
+    """
+    from curator import orchestrator
+    from curator.case_schema import RevisionResult, load_case as _load
+
+    storage = tmp_path / "storage"
+    cases_dir = storage / "cases"
+    cases_dir.mkdir(parents=True)
+    _seed_existing_case(cases_dir, "CASE-2026-0007")
+
+    monkeypatch.setenv("BL_STORAGE", str(storage))
+    monkeypatch.setenv("BL_SKIP_LIVE", "1")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    # Fake hunters: produce one row so the path reaches revise()
+    async def _fake_run_hunters(_input):
+        fs_out = HunterOutput(hunter="fs", findings=[
+            Finding(
+                category="unusual_php_path",
+                finding="skimmer.php — different family than prior PolyShell",
+                confidence=0.7,
+                source_refs=["fs/var/www/html/skimmer.php"],
+                raw_evidence_excerpt="",
+                observed_at="2026-04-22T10:00:00Z",
+            ),
+        ])
+        empty = HunterOutput(hunter="log", findings=[])
+        empty_tl = HunterOutput(hunter="timeline", findings=[])
+        return ([fs_out, empty, empty_tl], False)
+
+    # Patch revise() to return unrelated + revision_warranted=False
+    def _fake_revise(case, rows, **_):
+        return RevisionResult(
+            support_type="unrelated",
+            revision_warranted=False,
+            new_hypothesis=None,
+            evidence_thread_additions={},
+            capability_map_updates=None,
+            open_questions_additions=["new investigation may be warranted"],
+            proposed_actions=[],
+        )
+
+    tar_path = _build_minimal_report_tar(tmp_path, host="host-5")
+    with patch("curator.orchestrator._run_hunters", new=_fake_run_hunters), \
+         patch("curator.case_engine.revise", side_effect=_fake_revise):
+        result_case, partial = await orchestrator.process_report(tar_path)
+
+    assert result_case is not None
+    assert not partial
+    # Returned case is the NEW case so demo stdout shows the new id
+    assert result_case.case_id == "CASE-2026-0008"
+    assert result_case.merged_from == ["CASE-2026-0007"]
+    # Both YAMLs landed on disk
+    assert (cases_dir / "CASE-2026-0007.yaml").exists()
+    assert (cases_dir / "CASE-2026-0008.yaml").exists()
+    # Prior records the split successor
+    prior = _load(str(cases_dir / "CASE-2026-0007.yaml"))
+    assert prior.split_into == ["CASE-2026-0008"]
+    # Prior hypothesis.history is NOT mutated by split (append-only discipline:
+    # split_case only updates split_into/last_updated_at/updated_by; revise()
+    # path is the only writer of history entries — see case-lifecycle skill).
+    assert prior.hypothesis.history == []
+    # Split deliberately does NOT carry prior capability_map (different family).
+    assert result_case.capability_map.observed == []
+    assert result_case.capability_map.inferred == []
+
+
+@pytest.mark.asyncio
+async def test_smoke_split_does_not_call_apply_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sentinel guard: unrelated path must skip apply_revision entirely.
+
+    apply_revision merges capability_map into the prior case — calling it on
+    the unrelated path would smuggle the new evidence into the prior hypothesis,
+    defeating the split. This test fails LOUDLY if a future refactor falls
+    through to the apply branch on unrelated.
+    """
+    from curator import orchestrator
+    from curator.case_schema import RevisionResult
+
+    storage = tmp_path / "storage"
+    cases_dir = storage / "cases"
+    cases_dir.mkdir(parents=True)
+    _seed_existing_case(cases_dir, "CASE-2026-0007")
+
+    monkeypatch.setenv("BL_STORAGE", str(storage))
+    monkeypatch.setenv("BL_SKIP_LIVE", "1")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    async def _fake_run_hunters(_input):
+        return ([
+            HunterOutput(hunter="fs", findings=[
+                Finding(
+                    category="unusual_php_path",
+                    finding="skimmer.php",
+                    confidence=0.7,
+                    source_refs=["fs/x.php"],
+                    raw_evidence_excerpt="",
+                    observed_at="2026-04-22T10:00:00Z",
+                ),
+            ]),
+            HunterOutput(hunter="log", findings=[]),
+            HunterOutput(hunter="timeline", findings=[]),
+        ], False)
+
+    def _fake_revise(case, rows, **_):
+        return RevisionResult(
+            support_type="unrelated",
+            revision_warranted=False,
+            new_hypothesis=None,
+        )
+
+    tar_path = _build_minimal_report_tar(tmp_path, host="host-5")
+    with patch("curator.orchestrator._run_hunters", new=_fake_run_hunters), \
+         patch("curator.case_engine.revise", side_effect=_fake_revise), \
+         patch("curator.case_engine.apply_revision") as mock_apply:
+        await orchestrator.process_report(tar_path)
+
+    assert not mock_apply.called, "split path must not invoke apply_revision()"
