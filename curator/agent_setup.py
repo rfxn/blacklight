@@ -207,7 +207,11 @@ def _agent_params(skill_refs: list[dict] | None = None) -> dict:
         "name": AGENT_NAME,
         "model": MODEL_CURATOR,
         "system": _load_system(),
-        "tools": [build_custom_tool()],
+        # agent_toolset_20260401 enables the read tool (and other built-ins) which
+        # the Managed Agents API requires when skills are attached to an agent.
+        # Without it, session.create raises 400 "skills require the read tool to
+        # be enabled on the session's agent_toolset" (verified 2026-04-23).
+        "tools": [{"type": "agent_toolset_20260401"}, build_custom_tool()],
     }
     if skill_refs:
         params["skills"] = skill_refs

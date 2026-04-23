@@ -199,7 +199,7 @@ def _run_session_turn(client: anthropic.Anthropic, sid: str, user_text: str) -> 
                             session_id=sid,
                             events=[{
                                 "type": "user.custom_tool_result",
-                                "tool_use_id": event.tool_use_id,
+                                "custom_tool_use_id": event.id,
                                 "content": [{"type": "text", "text": f"ERROR: {exc!s}"}],
                                 "is_error": True,
                             }],
@@ -210,7 +210,7 @@ def _run_session_turn(client: anthropic.Anthropic, sid: str, user_text: str) -> 
                         session_id=sid,
                         events=[{
                             "type": "user.custom_tool_result",
-                            "tool_use_id": event.tool_use_id,
+                            "custom_tool_use_id": event.id,
                             "content": [{"type": "text", "text": "revision accepted"}],
                         }],
                     )
