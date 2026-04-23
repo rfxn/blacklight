@@ -12,6 +12,10 @@ Both variants run from the same compose stack and the same `time_compression.py`
 ## Pre-flight (operator runs once, ≤60 minutes before recording)
 
 ```bash
+# Confirm the Managed Agents session is bootstrapped
+test -n "$BL_CURATOR_AGENT_ID" && test -n "$BL_CURATOR_ENV_ID" || \
+    python -m curator.agent_setup --update | tee -a .secrets/env
+
 # Verify sim tarballs are present (P37 fixtures)
 tar tzf tests/fixtures/sim/host-4-day5.tar.gz   | head -3
 tar tzf tests/fixtures/sim/host-7-day7.tar.gz   | head -3
@@ -73,8 +77,9 @@ python -m demo.time_compression --mode=live --paced
 
 ### 0:35 — sim-day 5 caption lands
 
-**Runner prints (verbatim):**
+**Runner prints (verbatim; `[session sid=...]` prefix emitted by `time_compression.py` when `BL_CURATOR_SESSION_ID` is set):**
 ```
+[session sid=sess_abc123de... · reasoning over prior turn]
 [demo sim_day=5]  Two hosts, matching TTPs, shared C2. Revising to 'campaign'. Confidence 0.60.
 ```
 

@@ -122,6 +122,9 @@ async def _play_beat(beat: Beat, mode: str, *, sleep: bool) -> "object | None":
     # split-off case id; other beats are no-ops because the caption has no
     # placeholders).
     caption = beat.caption.format(case_id=(case.case_id if case is not None else "<no-case>"))
+    sid = os.environ.get("BL_CURATOR_SESSION_ID")
+    if sid and beat.sim_day in (5, 7, 14):  # revise beats — session is in play
+        print(f"[session sid={sid[:16]}... · reasoning over prior turn]", flush=True)
     print(f"[demo sim_day={beat.sim_day}] {caption}", flush=True)
     if case is not None:
         log.info("[demo] sim_day=%d → case %s", beat.sim_day, case.case_id)

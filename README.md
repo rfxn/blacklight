@@ -57,21 +57,34 @@ audit trail no dashboard can draw.
 
 ## Why this is a Managed Agent, not a tool loop
 
-- **Persistent state.** The curator's case files and capability maps live in
-  sqlite and YAML and survive every invocation. Opus 4.7 reads the case it
-  wrote yesterday, not a blank slate.
-- **Cross-invocation reasoning.** `hypothesis.history[]` on every case
-  records prior confidence, revision rationale, and evidence IDs. The agent
-  literally contradicts itself when evidence demands and explains why.
-- **Autonomous artifact production.** blacklight writes case files,
-  capability maps, and `apachectl configtest`-validated ModSec rules — all
-  without further operator input after the initial report arrives. The
-  defenses then deploy to every host in the fleet via thin Bash agents
-  (`bl-pull`, `bl-apply`).
+- **Hypothesis revision runs inside a persistent Claude Managed Agents
+  session.** When a second report arrives on an active case, the curator
+  sends the new evidence into a long-running session where the agent has
+  already seen every prior turn. The agent rereads its own earlier
+  revision — from session-native conversation history, not from a YAML
+  we reconstruct — and emits the next revision through a structured
+  `report_case_revision` custom tool call. See
+  [`curator/session_runner.py`](curator/session_runner.py) for the
+  session event loop.
+- **Persistent state crosses sim-days.** One fleet-wide session carries
+  investigation context across the full multi-day arc; `session_id` is
+  persisted alongside agent/environment IDs in operator-local env so the
+  same session survives container restarts.
+- **Cross-invocation reasoning is literal.** `hypothesis.history[]` on
+  every case records prior confidence, revision rationale, and evidence
+  IDs. The agent sees its prior turns in session memory and
+  contradicts itself when evidence demands.
+- **Autonomous artifact production.** The session's revision emits into
+  a pydantic-validated `RevisionResult` which feeds `apply_revision()` +
+  case YAML write. Intent reconstruction and rule synthesis remain
+  direct Opus 4.7 calls — they are bounded one-shots per artifact and
+  benefit from the strict `output_config.format.json_schema` guarantee
+  that the beta Managed Agents SDK does not yet offer. This is a
+  deliberate boundary, not an omission.
 
-The investigation loop runs inside a Claude Managed Agents session
-(`curator/managed_agents.py`); local Flask is plumbing for the manifest
-endpoint and report inbox.
+The investigation loop's revision step runs inside a Claude Managed
+Agents session (`curator/session_runner.py`); local Flask is plumbing
+for the manifest endpoint and report inbox.
 
 ## Why these models
 
