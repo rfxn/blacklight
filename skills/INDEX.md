@@ -1,7 +1,6 @@
 # blacklight skills router
 
-Decision-tree routing per [CrossBeam's pattern](https://github.com/mikeOnBreeze/cc-crossbeam)
-— domain knowledge lives as files; routing loads the relevant subset per call rather
+Domain knowledge lives as files. Routing loads the relevant subset per call rather
 than stuffing the whole bundle into context. This file is itself loaded on every
 major curator call.
 
@@ -75,5 +74,5 @@ Six operator-authored core files carry the domain voice (no ghostwriting):
 The rest (`apsb25-94/`, `modsec-grammar/`, `apf-grammar/`, `magento-attacks/`,
 `linux-forensics/`) are scaffolded from public advisory and reference material.
 
-Current bundle depth: 20 files (12 mature + 8 public-source scaffold vs
-CrossBeam's 28). Depth per file over file count.
+Current bundle depth: 20 files (12 mature + 8 public-source scaffold).
+Depth per file over file count.

@@ -16,6 +16,7 @@ from curator.case_schema import CapabilityMap, CaseFile, Hypothesis, HypothesisC
 from curator.synthesizer import (
     Rule,
     SynthesisResult,
+    _check_banned_actions,
     _split_by_confidence,
     _validate_and_partition,
     synthesize,
@@ -150,6 +151,55 @@ def test_validate_rule_failing():
     passed, stderr = validate_rule(body)
     assert passed is False
     assert stderr  # non-empty
+
+
+def test_check_banned_actions_flags_engine_toggle():
+    body = 'SecRule REQUEST_URI "@beginsWith /ok" "id:900001,phase:1,pass,ctl:ruleEngine=Off"'
+    assert _check_banned_actions(body) == "ctl:ruleEngine toggle"
+
+
+def test_check_banned_actions_flags_detectiononly():
+    body = 'SecRule REQUEST_URI "@beginsWith /ok" "id:900002,phase:1,pass,ctl:ruleEngine=DetectionOnly"'
+    assert _check_banned_actions(body) == "ctl:ruleEngine toggle"
+
+
+def test_check_banned_actions_flags_removebytag():
+    body = "SecRuleRemoveByTag attack-url-evasion"
+    assert _check_banned_actions(body) == "SecRuleRemoveByTag"
+
+
+def test_check_banned_actions_flags_unscoped_removebyid():
+    body = "SecRuleRemoveById 900100"
+    assert _check_banned_actions(body) == "SecRuleRemoveById without path scope"
+
+
+def test_check_banned_actions_allows_scoped_removebyid():
+    body = '<LocationMatch "^/vendor/legit/">\n    SecRuleRemoveById 900100\n</LocationMatch>'
+    assert _check_banned_actions(body) is None
+
+
+def test_check_banned_actions_allows_clean_rule():
+    body = 'SecRule REQUEST_URI "@beginsWith /admin" "id:900003,phase:1,deny,status:403,log,msg:\'blacklight: admin\',tag:\'blacklight/admin\'"'
+    assert _check_banned_actions(body) is None
+
+
+def test_validate_and_partition_demotes_banned_action():
+    banned = Rule(
+        rule_id="BL-banned-001",
+        body='SecRule REQUEST_URI "@beginsWith /x" "id:900004,phase:1,pass,ctl:ruleEngine=Off"',
+        applies_to=["apache"],
+        capability_ref="x",
+        confidence=0.95,
+    )
+    res = SynthesisResult(rules=[banned], suggested_rules=[], exceptions=[])
+    partitioned = _validate_and_partition(res)
+    assert partitioned.rules == []
+    assert len(partitioned.suggested_rules) == 1
+    demoted = partitioned.suggested_rules[0]
+    assert demoted.rule_id == "BL-banned-001"
+    assert demoted.validation_error is not None
+    assert "banned action shape" in demoted.validation_error
+    assert "ctl:ruleEngine" in demoted.validation_error
 
 
 @_REQUIRES_APACHECTL

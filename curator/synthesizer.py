@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -172,11 +173,40 @@ def _split_by_confidence(result: SynthesisResult, threshold: float = _CONFIDENCE
     )
 
 
+_BANNED_ACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"ctl:\s*ruleEngine\s*=\s*(Off|DetectionOnly)", re.IGNORECASE), "ctl:ruleEngine toggle"),
+    (re.compile(r"ctl:\s*auditEngine\s*=\s*Off", re.IGNORECASE), "ctl:auditEngine=Off"),
+    (re.compile(r"ctl:\s*requestBodyAccess\s*=\s*Off", re.IGNORECASE), "ctl:requestBodyAccess=Off"),
+    (re.compile(r"\bSecRuleRemoveByTag\b", re.IGNORECASE), "SecRuleRemoveByTag"),
+)
+_SEC_RULE_REMOVE_BY_ID = re.compile(r"\bSecRuleRemoveById\b", re.IGNORECASE)
+_LOCATION_SCOPE = re.compile(r"<\s*(LocationMatch|Location|FilesMatch|Directory)\b", re.IGNORECASE)
+
+
+def _check_banned_actions(body: str) -> Optional[str]:
+    """Return a banned-action label when body violates synthesizer.md rule 7, else None.
+
+    Enforces the prompt-level ban so that a prompt-bypass (model ignores rule 7)
+    cannot ship an engine-disabling rule to bl-apply. Rules hitting this gate
+    demote to suggested_rules[] with a labeled validation_error for operator review.
+    """
+    for rx, label in _BANNED_ACTION_PATTERNS:
+        if rx.search(body):
+            return label
+    if _SEC_RULE_REMOVE_BY_ID.search(body) and not _LOCATION_SCOPE.search(body):
+        return "SecRuleRemoveById without path scope"
+    return None
+
+
 def _validate_and_partition(result: SynthesisResult) -> SynthesisResult:
-    """Run apachectl -t on every rule in rules[]. Demote failures to suggested_rules[]."""
+    """Banned-action + ASCII + apachectl gates on rules[]. Failures demote to suggested_rules[]."""
     keep: list[Rule] = []
     demote: list[Rule] = []
     for r in result.rules:
+        banned = _check_banned_actions(r.body)
+        if banned:
+            demote.append(r.model_copy(update={"validation_error": f"banned action shape: {banned}"}))
+            continue
         # Reject non-ASCII bodies early (yaml.safe_dump(..., allow_unicode=False) would raise later)
         try:
             r.body.encode("ascii")
