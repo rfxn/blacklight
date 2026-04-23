@@ -14,8 +14,9 @@ curator/storage/evidence.db-journal
 curator/storage/cases/*.yaml
 curator/storage/work/
 
-# logs
+# logs (runtime); exhibits/**/*.log are committed demo fixtures
 *.log
+!exhibits/**/*.log
 
 # editor / OS
 .vscode/
