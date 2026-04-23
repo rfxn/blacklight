@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Iterator, Optional
+from typing import Optional
 
 try:
     import anthropic
@@ -128,23 +128,6 @@ def start_session(
         agent_id=agent_id,
         environment_id=environment_id,
     )
-
-
-def stream_events(
-    session_id: str,
-    *,
-    client: Optional["anthropic.Anthropic"] = None,
-) -> Iterator[dict]:
-    """Yield events from the session's SSE stream as dicts.
-
-    Stream-first: open the stream before sending the kickoff event, or early
-    events arrive in one buffered batch. See shared/managed-agents-events.md
-    §Steering Patterns for reconnection + dedupe guidance.
-    """
-    c = client or _client()
-    with c.beta.sessions.events.stream(session_id=session_id) as stream:
-        for event in stream:
-            yield event.model_dump() if hasattr(event, "model_dump") else dict(event)
 
 
 def first_contact_smoke_test() -> SessionHandle:
