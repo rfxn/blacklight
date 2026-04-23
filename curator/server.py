@@ -34,6 +34,11 @@ EMPTY_MANIFEST = "version: 0\ndefenses: []\n"
 
 app = Flask(__name__)
 
+# Reject oversized report uploads before buffering. bl-report's client-side
+# 50 MiB guard (bl-report:91) does not protect the curator against a
+# compromised host POSTing directly with curl.
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # 64 MiB
+
 
 @app.get("/health")
 def health():

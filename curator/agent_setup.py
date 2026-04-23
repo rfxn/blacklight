@@ -74,7 +74,7 @@ def _strip_ap_recursive(node: object) -> None:
     any JSON-schema that carries additionalProperties — both the boolean
     `false` form and the object form cause HTTP 400. This is distinct from
     /v1/messages output_config.format.json_schema, which accepts both forms.
-    Verified live 2026-04-22 (session-tool-invocation-probe.py).
+    Verified live 2026-04-22 against the beta.agents.create endpoint.
     """
     if isinstance(node, dict):
         node.pop("additionalProperties", None)

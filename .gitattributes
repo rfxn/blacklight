@@ -1,0 +1,33 @@
+# Release-tarball hygiene — mirror .git/info/exclude + workspace CLAUDE.md § Release Packaging.
+# Paths listed here are stripped from `git archive` output (GitHub "Download ZIP").
+
+# Development surface never shipped to judges / downstream consumers
+tests/              export-ignore
+docs/               export-ignore
+audit-output/       export-ignore
+work-output/        export-ignore
+.rdf/               export-ignore
+.github/            export-ignore
+.claude/            export-ignore
+# .secrets/ intentionally NOT export-ignored — env.example is onboarding
+# documentation (README references `cp .secrets/env.example .secrets/env`).
+# The real .secrets/env file is gitignored so it never reaches the archive.
+
+# Working files — match .git/info/exclude
+HANDOFF.md          export-ignore
+RULES.md            export-ignore
+CLAUDE.md           export-ignore
+MEMORY.md           export-ignore
+PLAN*.md            export-ignore
+P[0-9]*.md          export-ignore
+AUDIT.md            export-ignore
+FUTURE.md           export-ignore
+PRD.md              export-ignore
+BRIEF.md            export-ignore
+ALT.md              export-ignore
+EXHIBITS.md         export-ignore
+PROMPTS.md          export-ignore
+VOICE.md            export-ignore
+
+# Git infrastructure
+.gitattributes      export-ignore

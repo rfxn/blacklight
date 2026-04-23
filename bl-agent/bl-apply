@@ -86,6 +86,13 @@ apply_rules() {
         command printf '\n' >> "$tmpdir/rules.conf"
     done
 
+    # Capture prior symlink target so we can restore it if configtest fails
+    # after we replace the live symlink below. Empty string = no prior link.
+    local prev_target=""
+    if [[ -L "$rules_enabled" ]]; then
+        prev_target=$(command readlink "$rules_enabled")
+    fi
+
     command install -D -m 0644 "$tmpdir/rules.conf" "$rules_conf"
     command ln -sf "$rules_conf" "$rules_enabled"
 
@@ -93,7 +100,18 @@ apply_rules() {
         log "apachectl -t PASS for manifest v${version}"
         return 0
     else
-        log "apachectl -t FAIL for manifest v${version}: $(command cat "$tmpdir/configtest.err")"
+        local err_msg
+        err_msg=$(command cat "$tmpdir/configtest.err")
+        # Rollback: remove broken symlink + rules file before configtest diagnostic
+        # can mask a real Apache reload. Restore prior target so the next unrelated
+        # `systemctl reload apache2` sees the last-known-good ruleset, not a broken stub.
+        command rm -f "$rules_enabled"
+        if [[ -n "$prev_target" ]]; then
+            command ln -sf "$prev_target" "$rules_enabled"
+        fi
+        command rm -f "$rules_conf"
+        log "apachectl -t FAIL for manifest v${version}: ${err_msg}"
+        log "rolled back — $rules_enabled restored to prior target: ${prev_target:-<none>}"
         return 3
     fi
 }
