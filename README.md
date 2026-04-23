@@ -19,7 +19,7 @@ git clone https://github.com/rfxn/blacklight.git
 cd blacklight
 cp .secrets/env.example .secrets/env    # add your ANTHROPIC_API_KEY
 . .secrets/env
-docker-compose -f compose/docker-compose.yml up -d --build
+COMPOSE_FILE=compose/docker-compose.yml docker compose up -d --build
 ```
 
 The fleet comes up as three containers: `bl-curator` (the investigator,
@@ -41,6 +41,10 @@ docker exec -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" bl-curator \
 
 # Read the case file
 docker exec bl-curator cat /app/curator/storage/cases/CASE-2026-0007.yaml
+
+# Run the time-compression sim (replays a multi-day arc in ~90 seconds)
+docker exec -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" bl-curator \
+    python -m demo.time_compression --paced
 ```
 
 The first run materializes `CASE-2026-0007` at confidence 0.4. Subsequent
@@ -159,9 +163,10 @@ Three operator-authored core files carry the moat:
 - [`defense-synthesis/modsec-patterns.md`](skills/defense-synthesis/modsec-patterns.md) —
   validated ModSec rule shapes with exception idioms.
 
-Public-source scaffold files cover linux-forensics, magento-attacks,
-modsec-grammar, apf-grammar, hosting-stack, ic-brief-format, and the
-APSB25-94 IOC summary. See `skills/INDEX.md` for the full router.
+20 files total (19 content + INDEX router), covering: linux-forensics,
+magento-attacks, modsec-grammar, apf-grammar, hosting-stack, ic-brief-format,
+false-positive patterns, and the APSB25-94 IOC summary. See `skills/INDEX.md`
+for the full router.
 
 ## What you'll see in the demo
 
