@@ -105,3 +105,41 @@ def test_split_beat_produces_second_case(tmp_path: Path,
     new   = load_case(str(tmp_path / "storage" / "cases" / "CASE-2026-0008.yaml"))
     assert "CASE-2026-0008" in prior.split_into
     assert "CASE-2026-0007" in new.merged_from
+
+
+def test_stub_mode_self_injects_findings_env(tmp_path: Path) -> None:
+    """Regression for P38 sentinel M-01.
+
+    With ONLY BL_STORAGE in the child env (no BL_STUB_FINDINGS, no
+    BL_STUB_UNRELATED_HOST), `--mode=stub` must still produce the full
+    4-beat arc: CASE-2026-0007 opens and splits to CASE-2026-0008 on Day 14.
+    Prior to M-01's fix, _check_preconditions("stub") set only BL_SKIP_LIVE +
+    BL_STUB_UNRELATED_HOST, so hunters returned empty findings and no case
+    materialized. The Day-14 caption degraded to "Splitting to <no-case>."
+    """
+    # Scrub parent-process leakage so the child starts from a clean slate.
+    env = {
+        k: v for k, v in os.environ.items()
+        if k not in ("BL_SKIP_LIVE", "BL_STUB_FINDINGS", "BL_STUB_UNRELATED_HOST")
+    }
+    env["BL_STORAGE"] = str(tmp_path / "storage")
+    result = subprocess.run(
+        [sys.executable, "-m", "demo.time_compression", "--mode=stub", "--fast"],
+        env=env, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, (
+        f"sim failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+    cases_dir = tmp_path / "storage" / "cases"
+    assert (cases_dir / "CASE-2026-0007.yaml").is_file(), (
+        f"CASE-2026-0007.yaml missing — stub self-injection regressed.\n"
+        f"STDOUT:\n{result.stdout}"
+    )
+    assert (cases_dir / "CASE-2026-0008.yaml").is_file(), (
+        f"CASE-2026-0008.yaml missing — split beat produced no second case.\n"
+        f"STDOUT:\n{result.stdout}"
+    )
+    # Day-14 caption must carry the allocator-assigned id, not "<no-case>".
+    assert "Splitting to CASE-2026-0008." in result.stdout, (
+        f"Day-14 caption regressed to <no-case>:\n{result.stdout}"
+    )

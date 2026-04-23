@@ -69,6 +69,11 @@ BEATS: tuple[Beat, ...] = (
 def _check_preconditions(mode: str) -> None:
     if mode == "stub":
         os.environ["BL_SKIP_LIVE"] = "1"
+        # Without BL_STUB_FINDINGS=1 the hunters return empty findings
+        # (curator/hunters/base.py) so no case ever materializes and Day-14
+        # captions degrade to "<no-case>". setdefault lets an operator who
+        # wants the empty-findings path opt out by pre-setting the var to "0".
+        os.environ.setdefault("BL_STUB_FINDINGS", "1")
         # host-5 is the skimmer campaign that should split on Day 14; tell the
         # case engine stub to return support_type="unrelated" for that host so
         # the split branch fires without a model call (rehearsal + CI path).

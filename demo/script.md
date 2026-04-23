@@ -131,7 +131,7 @@ python -m demo.time_compression --mode=live --paced
 **Narration.**
 > "Day 14. Host-5 reports what looks like the same campaign. The intent reconstructor reads the artifacts — but the family markers don't line up. Different loader, different callback pattern. Curator splits the case. Pattern matching would have merged these. Judgment didn't."
 
-Note: in live mode the allocator produces `CASE-2026-0008`; stub mode prints `<no-case>` because no model call is made. The script.md caption hardcodes `CASE-2026-0008` as the expected live allocator id.
+Note: stub mode self-injects `BL_STUB_FINDINGS=1` + `BL_STUB_UNRELATED_HOST=host-5`, so the rehearsal path produces the same 4-beat arc as live and prints `CASE-2026-0008` on Day 14. If the allocator state differs at recording time (prior cases open in `BL_STORAGE`), the id may shift — clear storage before pre-flight.
 
 ---
 
