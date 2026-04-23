@@ -3,9 +3,9 @@
 set -euo pipefail
 cd "$(command dirname "$0")" || exit 1
 # Prefer docker compose (v2 plugin) when available; fall back to docker-compose (v1).
-if docker compose version >/dev/null 2>&1; then
+if docker compose version >/dev/null 2>&1; then  # probe-only; exit code is the signal
     dc() { docker compose "$@"; }
-elif command -v docker-compose >/dev/null 2>&1; then
+elif command -v docker-compose >/dev/null 2>&1; then  # probe-only; exit code is the signal
     dc() { docker-compose "$@"; }
 else
     command echo "neither 'docker compose' nor 'docker-compose' found — skipping" >&2
