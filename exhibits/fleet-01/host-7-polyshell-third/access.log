@@ -1,0 +1,35 @@
+# staged exhibit — APSB25-94 public advisory reconstruction — NOT customer data
+# Apache combined log format. Represents ~30m of traffic on host-7, the third
+# Magento storefront hit by the same actor (shared C2: vagqea4wrlkdg.top).
+# Drop path: /pub/media/import/.tmp/a.php. Three distinct attacker arcs:
+#   198.51.100.45  — pre-compromise recon
+#   198.51.100.91  — APSB25-94 exploitation (REST guest-carts payload)
+#   203.0.113.62   — post-compromise webshell ops, URL-evasion + command POSTs
+# Legitimate user IPs from 192.0.2.0/24 (RFC 5737 TEST-NET-1). Attacker IPs
+# from 198.51.100.0/24 and 203.0.113.0/24 (TEST-NET-2/3). C2 hostname
+# (vagqea4wrlkdg.top) is the same fabricated label as host-2 + host-4.
+192.0.2.70 - - [29/Mar/2026:11:03:01 +0000] "GET / HTTP/1.1" 200 14882 "https://store.example.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+192.0.2.71 - - [29/Mar/2026:11:03:11 +0000] "GET /catalog/category/view/id/8/ HTTP/1.1" 200 18001 "https://store.example.com/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15"
+192.0.2.71 - - [29/Mar/2026:11:03:18 +0000] "GET /catalog/product/view/id/55/ HTTP/1.1" 200 22311 "https://store.example.com/catalog/category/view/id/8/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15"
+192.0.2.72 - - [29/Mar/2026:11:03:33 +0000] "GET /pub/media/catalog/product/cache/4/image/800x/p55-thumb.jpg HTTP/1.1" 200 41020 "https://store.example.com/catalog/product/view/id/55/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15"
+192.0.2.73 - - [29/Mar/2026:11:03:48 +0000] "GET /customer/account/login/ HTTP/1.1" 200 7211 "https://store.example.com/" "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0"
+198.51.100.45 - - [29/Mar/2026:11:04:31 +0000] "GET /magento_version HTTP/1.1" 200 17 "-" "curl/8.4.0"
+198.51.100.45 - - [29/Mar/2026:11:04:32 +0000] "GET /downloader/ HTTP/1.1" 404 512 "-" "curl/8.4.0"
+198.51.100.45 - - [29/Mar/2026:11:04:33 +0000] "GET /app/etc/env.php HTTP/1.1" 404 512 "-" "curl/8.4.0"
+198.51.100.45 - - [29/Mar/2026:11:04:34 +0000] "GET /index.php/rest/V1/guest-carts/test HTTP/1.1" 400 128 "-" "curl/8.4.0"
+198.51.100.45 - - [29/Mar/2026:11:04:35 +0000] "GET /index.php/rest/V1/products HTTP/1.1" 401 87 "-" "curl/8.4.0"
+192.0.2.74 - - [29/Mar/2026:11:05:08 +0000] "POST /customer/section/load/ HTTP/1.1" 200 1204 "https://store.example.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+198.51.100.91 - - [29/Mar/2026:11:06:02 +0000] "POST /index.php/rest/V1/guest-carts/ HTTP/1.1" 200 64 "-" "Go-http-client/1.1"
+198.51.100.91 - - [29/Mar/2026:11:06:04 +0000] "POST /index.php/rest/V1/guest-carts/1/estimate-shipping-methods HTTP/1.1" 400 217 "-" "Go-http-client/1.1"
+198.51.100.91 - - [29/Mar/2026:11:06:08 +0000] "POST /index.php/rest/V1/guest-carts/1/estimate-shipping-methods HTTP/1.1" 500 392 "-" "Go-http-client/1.1"
+198.51.100.91 - - [29/Mar/2026:11:06:13 +0000] "POST /index.php/rest/V1/guest-carts/1/payment-information HTTP/1.1" 200 1024 "-" "Go-http-client/1.1"
+192.0.2.75 - - [29/Mar/2026:11:07:11 +0000] "GET /catalog/product/view/id/91/ HTTP/1.1" 200 21421 "https://store.example.com/" "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1"
+203.0.113.62 - - [29/Mar/2026:11:08:42 +0000] "GET /pub/media/import/.tmp/a.php/banner.jpg HTTP/1.1" 200 88 "-" "curl/7.88.1 (vagqea4wrlkdg.top)"
+203.0.113.62 - - [29/Mar/2026:11:09:01 +0000] "GET /pub/media/import/.tmp/a.php/logo.png HTTP/1.1" 200 88 "-" "curl/7.88.1"
+203.0.113.62 - - [29/Mar/2026:11:09:18 +0000] "GET /pub/media/import/.tmp/a.php/icon.gif HTTP/1.1" 200 88 "-" "curl/7.88.1"
+203.0.113.62 - - [29/Mar/2026:11:09:44 +0000] "POST /pub/media/import/.tmp/a.php HTTP/1.1" 200 412 "-" "curl/7.88.1 (vagqea4wrlkdg.top)"
+203.0.113.62 - - [29/Mar/2026:11:10:11 +0000] "POST /pub/media/import/.tmp/a.php HTTP/1.1" 200 612 "-" "curl/7.88.1"
+203.0.113.62 - - [29/Mar/2026:11:11:33 +0000] "POST /pub/media/import/.tmp/a.php HTTP/1.1" 200 1418 "-" "curl/7.88.1 (vagqea4wrlkdg.top)"
+192.0.2.76 - - [29/Mar/2026:11:12:08 +0000] "GET /catalog/category/view/id/14/ HTTP/1.1" 200 18001 "https://store.example.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+192.0.2.77 - - [29/Mar/2026:11:13:14 +0000] "GET /checkout/cart/ HTTP/1.1" 200 4720 "https://store.example.com/catalog/product/view/id/55/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15"
+192.0.2.78 - - [29/Mar/2026:11:14:28 +0000] "POST /checkout/onepage/saveBilling/ HTTP/1.1" 200 2100 "https://store.example.com/checkout/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"

@@ -1,0 +1,43 @@
+# staged exhibit — public Magecart family taxonomy — NOT customer data
+# Apache combined log format. Represents ~25m of traffic on host-5, a Magento
+# storefront compromised by a SEPARATE actor running a JS-skimmer campaign
+# (Magecart-class). The drop path matches the PolyShell convention
+# (.cache/skimmer.php) so the case initially looks like the same campaign as
+# host-2/4/7. Two distinct signals separate it on inspection:
+#   - C2 hostname is skimmer-c2.example (the host-2/4/7 PolyShell C2 hostname
+#     is intentionally absent from this file — the skimmer family has its own
+#     separate infrastructure with no shared callback target)
+#   - Traffic shape is checkout-page heavy (skimmer needs payment forms),
+#     NOT URL-evasion double-extension (which is PolyShell-specific)
+# Three actor arcs:
+#   198.51.100.55  — pre-compromise recon (lightweight; the dropper was
+#                    placed via a separate vector — likely admin credential
+#                    reuse, not REST API exploitation)
+#   192.0.2.99     — initial dropper placement via authenticated admin
+#                    session (NOTE: this IP is in the legitimate range
+#                    because the admin used a stolen credential, not a fresh
+#                    attacker IP — common skimmer family pattern)
+#   203.0.113.71   — repeated GETs on skimmer.php to confirm placement
+# Legitimate user IPs from 192.0.2.0/24 (RFC 5737 TEST-NET-1). Attacker
+# attribution IPs from 198.51.100.0/24 and 203.0.113.0/24 (TEST-NET-2/3).
+192.0.2.80 - - [02/Apr/2026:13:22:01 +0000] "GET / HTTP/1.1" 200 14821 "https://boutique.example.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+192.0.2.81 - - [02/Apr/2026:13:22:08 +0000] "GET /catalog/category/view/id/5/ HTTP/1.1" 200 18211 "https://boutique.example.com/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15"
+192.0.2.81 - - [02/Apr/2026:13:22:14 +0000] "GET /catalog/product/view/id/200/ HTTP/1.1" 200 22441 "https://boutique.example.com/catalog/category/view/id/5/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15"
+192.0.2.82 - - [02/Apr/2026:13:22:33 +0000] "GET /checkout/cart/ HTTP/1.1" 200 4720 "https://boutique.example.com/catalog/product/view/id/200/" "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0"
+192.0.2.82 - - [02/Apr/2026:13:22:48 +0000] "POST /checkout/onepage/saveBilling/ HTTP/1.1" 200 2100 "https://boutique.example.com/checkout/" "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0"
+192.0.2.82 - - [02/Apr/2026:13:23:02 +0000] "POST /checkout/onepage/savePayment/ HTTP/1.1" 200 1820 "https://boutique.example.com/checkout/" "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0"
+198.51.100.55 - - [02/Apr/2026:13:24:02 +0000] "GET /admin HTTP/1.1" 302 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+198.51.100.55 - - [02/Apr/2026:13:24:03 +0000] "GET /admin/admin/index/index HTTP/1.1" 302 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+198.51.100.55 - - [02/Apr/2026:13:24:08 +0000] "POST /admin/admin/auth/login HTTP/1.1" 302 0 "https://boutique.example.com/admin" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+198.51.100.55 - - [02/Apr/2026:13:24:11 +0000] "GET /admin/cms/page/ HTTP/1.1" 200 41200 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+198.51.100.55 - - [02/Apr/2026:13:24:18 +0000] "POST /admin/admin/system_design_theme/save/ HTTP/1.1" 302 0 "https://boutique.example.com/admin/cms/page/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+192.0.2.83 - - [02/Apr/2026:13:25:02 +0000] "GET /catalog/category/view/id/5/ HTTP/1.1" 200 18211 "https://boutique.example.com/" "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1"
+203.0.113.71 - - [02/Apr/2026:13:26:14 +0000] "GET /pub/media/catalog/product/.cache/skimmer.php HTTP/1.1" 200 88 "-" "curl/8.4.0 (skimmer-c2.example)"
+203.0.113.71 - - [02/Apr/2026:13:26:31 +0000] "GET /pub/media/catalog/product/.cache/skimmer.php HTTP/1.1" 200 88 "-" "curl/8.4.0"
+203.0.113.71 - - [02/Apr/2026:13:27:02 +0000] "GET /pub/media/catalog/product/.cache/skimmer.php HTTP/1.1" 200 88 "-" "curl/8.4.0 (skimmer-c2.example)"
+192.0.2.84 - - [02/Apr/2026:13:28:11 +0000] "GET /catalog/product/view/id/201/ HTTP/1.1" 200 22411 "https://boutique.example.com/catalog/category/view/id/5/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15"
+192.0.2.85 - - [02/Apr/2026:13:29:02 +0000] "GET /checkout/cart/ HTTP/1.1" 200 4720 "https://boutique.example.com/catalog/product/view/id/201/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+192.0.2.85 - - [02/Apr/2026:13:29:14 +0000] "POST /checkout/onepage/saveBilling/ HTTP/1.1" 200 2100 "https://boutique.example.com/checkout/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+192.0.2.85 - - [02/Apr/2026:13:29:28 +0000] "POST /checkout/onepage/savePayment/ HTTP/1.1" 200 1820 "https://boutique.example.com/checkout/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+192.0.2.86 - - [02/Apr/2026:13:30:11 +0000] "GET /catalog/category/view/id/9/ HTTP/1.1" 200 18001 "https://boutique.example.com/" "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0"
+192.0.2.87 - - [02/Apr/2026:13:31:08 +0000] "GET /pub/static/frontend/Magento/luma/en_US/css/styles-l.css HTTP/1.1" 200 112044 "https://boutique.example.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
