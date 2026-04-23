@@ -29,7 +29,8 @@ from curator.evidence import EvidenceRow
 log = logging.getLogger("session_runner")
 
 _SESSION_LOCK = threading.Lock()  # E8: serialize access to the shared session
-_MAX_TOOL_RESULT_RETRIES = 1  # E4
+# E4: on pydantic rejection, send error user.custom_tool_result so the agent can retry within
+# the same turn; retry depth is agent-managed (session manages turn depth, not a client counter).
 _INSTRUCTION_FOOTER = (
     "\n\nReason about whether the new evidence supports, contradicts, "
     "extends, is unrelated to, or is ambiguous with the current hypothesis. "
@@ -193,7 +194,7 @@ def _run_session_turn(client: anthropic.Anthropic, sid: str, user_text: str) -> 
                     try:
                         tool_result = _parse_custom_tool_input(event.input)
                     except Exception as exc:  # noqa: BLE001 — pydantic ValidationError
-                        # E4: send error tool_result so agent can retry
+                        # E4: send error tool_result; agent retries within its turn
                         log.warning("tool payload rejected: %s — sending error result", exc)
                         client.beta.sessions.events.send(
                             session_id=sid,
