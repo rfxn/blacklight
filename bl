@@ -1,0 +1,382 @@
+#!/bin/bash
+#
+# bl — blacklight operator CLI
+#
+# Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
+# Author: Ryan MacDonald <ryan@rfxn.com>
+# License: GNU GPL v2
+#
+# Part of the blacklight project — defensive post-incident Linux forensics
+# on the substrate the defender already owns. See DESIGN.md for architecture,
+# PIVOT-v2.md for strategy, README.md for operator-facing overview.
+#
+# This is a single-file bash wrapper. It is curl-pipeable per DESIGN.md §8.3
+# and must not `source` external helpers.
+
+set -euo pipefail
+
+# ----------------------------------------------------------------------------
+# Version + exit-code constants (from docs/exit-codes.md §1)
+# ----------------------------------------------------------------------------
+
+readonly BL_VERSION="0.1.0"
+
+readonly BL_EX_OK=0
+readonly BL_EX_USAGE=64
+readonly BL_EX_PREFLIGHT_FAIL=65
+readonly BL_EX_WORKSPACE_NOT_SEEDED=66
+# shellcheck disable=SC2034  # consumed by M4+
+readonly BL_EX_SCHEMA_VALIDATION_FAIL=67
+# shellcheck disable=SC2034  # consumed by M4+
+readonly BL_EX_TIER_GATE_DENIED=68
+# shellcheck disable=SC2034  # consumed by M8
+readonly BL_EX_UPSTREAM_ERROR=69
+# shellcheck disable=SC2034  # consumed by M8
+readonly BL_EX_RATE_LIMITED=70
+# shellcheck disable=SC2034  # consumed by M8
+readonly BL_EX_CONFLICT=71
+# shellcheck disable=SC2034  # consumed by M5+
+readonly BL_EX_NOT_FOUND=72
+
+# ----------------------------------------------------------------------------
+# Bash 4.1+ floor check — TOP-LEVEL; must fire before any function definition
+# so `bl --help` and `bl --version` also trip on bash <4.1. See spec G11.
+# ----------------------------------------------------------------------------
+
+if (( BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1] < 401 )); then
+    printf 'blacklight: bash 4.1+ required (got %s.%s)\n' \
+        "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" >&2
+    exit "$BL_EX_PREFLIGHT_FAIL"
+fi
+
+# ----------------------------------------------------------------------------
+# Path constants — BL_VAR_DIR is operator-overridable for test isolation
+# ----------------------------------------------------------------------------
+
+readonly BL_VAR_DIR="${BL_VAR_DIR:-/var/lib/bl}"
+readonly BL_STATE_DIR="$BL_VAR_DIR/state"
+readonly BL_AGENT_ID_FILE="$BL_STATE_DIR/agent-id"
+readonly BL_CASE_CURRENT_FILE="$BL_STATE_DIR/case.current"
+
+# ----------------------------------------------------------------------------
+# Logging helpers — stderr, per-level, $BL_LOG_LEVEL-filtered
+# Order: debug < info < warn < error. Default: info.
+# ----------------------------------------------------------------------------
+
+_bl_log_level_allows() {
+    # $1 = message level (debug|info|warn|error)
+    local msg_level="$1"
+    local cur_level="${BL_LOG_LEVEL:-info}"
+    case "$cur_level" in
+        debug) return 0 ;;
+        info)  [[ "$msg_level" != "debug" ]] ;;
+        warn)  [[ "$msg_level" == "warn" || "$msg_level" == "error" ]] ;;
+        error) [[ "$msg_level" == "error" ]] ;;
+        *)     [[ "$msg_level" != "debug" ]] ;;   # unknown level → info-equivalent
+    esac
+}
+
+bl_debug() { _bl_log_level_allows debug || return 0; printf '[bl] DEBUG: %s\n' "$*" >&2; }
+bl_info()  { _bl_log_level_allows info  || return 0; printf '[bl] INFO: %s\n'  "$*" >&2; }
+bl_warn()  { _bl_log_level_allows warn  || return 0; printf '[bl] WARN: %s\n'  "$*" >&2; }
+bl_error() { printf '[bl] ERROR: %s\n' "$*" >&2; }
+
+bl_error_envelope() {
+    # $1 = phase, $2 = problem, $3 (optional) = remediation
+    local phase="$1"
+    local problem="$2"
+    local remediation="${3:-}"
+    printf 'blacklight: %s: %s\n' "$phase" "$problem" >&2
+    [[ -n "$remediation" ]] && printf '%s\n' "$remediation" >&2
+    return "$BL_EX_OK"
+}
+
+# ----------------------------------------------------------------------------
+# Workdir helpers — $BL_VAR_DIR lazy init and case-current reader
+# bl_init_workdir is consumed by M4-M8 handlers, NOT by bl_preflight.
+# ----------------------------------------------------------------------------
+
+bl_init_workdir() {
+    # Creates 5 subdirs under $BL_VAR_DIR. state/ is preflight's job.
+    # Returns 0 on success, 65 on writability failure.
+    if ! command mkdir -p "$BL_VAR_DIR" 2>/dev/null; then   # RO filesystem / perms
+        bl_error_envelope preflight "$BL_VAR_DIR not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    if ! command touch "$BL_VAR_DIR/.wtest" 2>/dev/null; then   # filesystem mounted RO
+        bl_error_envelope preflight "$BL_VAR_DIR not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    command rm -f "$BL_VAR_DIR/.wtest"
+    local d
+    for d in backups quarantine fp-corpus outbox ledger; do
+        command mkdir -p "$BL_VAR_DIR/$d"
+        bl_debug "bl_init_workdir: ensured $BL_VAR_DIR/$d"
+    done
+    return "$BL_EX_OK"
+}
+
+bl_case_current() {
+    # Reads $BL_CASE_CURRENT_FILE. Prints empty string on miss (not an error).
+    if [[ -r "$BL_CASE_CURRENT_FILE" ]]; then
+        command cat "$BL_CASE_CURRENT_FILE"
+    fi
+    return "$BL_EX_OK"
+}
+
+# ----------------------------------------------------------------------------
+# API helpers — HTTPS wrappers for Anthropic Managed Agents endpoints.
+# bl_poll_pending is a skeleton; M5 drops in real read/write against
+# bl-case/<case-id>/pending/.
+# ----------------------------------------------------------------------------
+
+bl_api_call() {
+    # Usage: bl_api_call <method> <url-suffix> [body-file]
+    # Returns: 0 on 2xx; 65 on 401/403/other 4xx; 69 on 5xx (after retry); 70 on 429 (after retry)
+    local method="$1"
+    local url_suffix="$2"
+    local body_file="${3:-}"
+    local attempt=0
+    local backoffs=(2 5 10 30)
+    local resp http_status body body_args=()
+
+    [[ -n "$body_file" ]] && body_args=(--data-binary "@$body_file")
+
+    while (( attempt < 4 )); do
+        resp=$(curl -sS --max-time 30 -w '\n%{http_code}' -X "$method" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "anthropic-beta: managed-agents-2026-04-01" \
+            -H "content-type: application/json" \
+            "${body_args[@]}" \
+            "https://api.anthropic.com${url_suffix}" 2>&1) || true   # retry handles curl exit
+        http_status="${resp##*$'\n'}"
+        body="${resp%$'\n'*}"
+        case "$http_status" in
+            2??)
+                printf '%s' "$body"
+                return "$BL_EX_OK"
+                ;;
+            401|403)
+                bl_error_envelope api "authentication failed (HTTP $http_status)"
+                bl_debug "bl_api_call: body=$body"
+                return "$BL_EX_PREFLIGHT_FAIL"
+                ;;
+            429)
+                attempt=$((attempt + 1))
+                (( attempt >= 4 )) && { bl_error_envelope api "rate limited (HTTP 429) after retries"; return "$BL_EX_RATE_LIMITED"; }
+                bl_debug "bl_api_call: 429, backing off ${backoffs[attempt-1]}s"
+                sleep "${backoffs[attempt-1]}"
+                ;;
+            5??)
+                attempt=$((attempt + 1))
+                (( attempt >= 4 )) && { bl_error_envelope api "upstream error (HTTP $http_status) after retries"; return "$BL_EX_UPSTREAM_ERROR"; }
+                bl_debug "bl_api_call: ${http_status}, backing off ${backoffs[attempt-1]}s"
+                sleep "${backoffs[attempt-1]}"
+                ;;
+            4??)
+                bl_error_envelope api "client error (HTTP $http_status)"
+                bl_debug "bl_api_call: body=$body"
+                return "$BL_EX_PREFLIGHT_FAIL"
+                ;;
+            *)
+                attempt=$((attempt + 1))
+                (( attempt >= 4 )) && { bl_error_envelope api "unexpected response (HTTP ${http_status:-?}) after retries"; return "$BL_EX_UPSTREAM_ERROR"; }
+                bl_debug "bl_api_call: unexpected status ${http_status:-?}, retrying"
+                sleep "${backoffs[attempt-1]}"
+                ;;
+        esac
+    done
+    return "$BL_EX_UPSTREAM_ERROR"
+}
+
+bl_poll_pending() {
+    # Skeleton: 2s sleep-loop probing bl-case/<case-id>/pending/. M5 consumes.
+    # $1 = case-id
+    local case_id="$1"
+    local cycles=0
+    # shellcheck disable=SC2034  # consumed by M5
+    local empty_cycles=0
+    while (( cycles < 1 )); do   # M1: single-cycle skeleton; M5 widens to while true
+        bl_debug "bl_poll_pending: probing case=$case_id (cycle=$cycles)"
+        # M5 drops in: read bl-case/<case_id>/pending/ via bl_api_call;
+        # for each new step, emit to stdout; on empty-pending-3-cycles or end_turn, break.
+        empty_cycles=$((empty_cycles + 1))
+        cycles=$((cycles + 1))
+        sleep 0
+    done
+    return "$BL_EX_OK"
+}
+
+# ----------------------------------------------------------------------------
+# Preflight — DESIGN.md §8.1 contract:
+# 1. Verify ANTHROPIC_API_KEY set + non-empty
+# 2. Verify curl + jq available
+# 3. Create state/ directly (NOT via bl_init_workdir)
+# 4. Read cached agent-id; if present, return 0
+# 5. Else probe GET /v1/agents?name=bl-curator; populated → cache; empty → 66
+# ----------------------------------------------------------------------------
+
+bl_preflight() {
+    # 1. API key
+    if [[ -z "${ANTHROPIC_API_KEY+set}" ]]; then
+        bl_error_envelope preflight "ANTHROPIC_API_KEY not set"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    if [[ -z "$ANTHROPIC_API_KEY" ]]; then
+        bl_error_envelope preflight "ANTHROPIC_API_KEY empty"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+
+    # 2. Required tools
+    if ! command -v curl >/dev/null 2>&1; then   # curl is load-bearing
+        bl_error_envelope preflight "curl not found (required for API calls)"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    if ! command -v jq >/dev/null 2>&1; then   # jq is load-bearing for response parsing
+        bl_error_envelope preflight "jq not found (required for JSON parsing)"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+
+    # 3. state/ dir — directly, NOT via bl_init_workdir
+    if ! command mkdir -p "$BL_STATE_DIR" 2>/dev/null; then   # RO filesystem / perms
+        bl_error_envelope preflight "$BL_VAR_DIR not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+
+    # 4. Cached agent-id?
+    if [[ -r "$BL_AGENT_ID_FILE" ]]; then
+        BL_AGENT_ID="$(command cat "$BL_AGENT_ID_FILE")"
+        if [[ -n "$BL_AGENT_ID" ]]; then
+            bl_debug "bl_preflight: using cached agent-id $BL_AGENT_ID"
+            return "$BL_EX_OK"
+        fi
+        bl_debug "bl_preflight: cached agent-id empty, re-probing"
+    fi
+
+    # 5. Probe GET /v1/agents?name=bl-curator
+    local resp
+    resp=$(bl_api_call GET "/v1/agents?name=bl-curator") || return $?
+    BL_AGENT_ID="$(printf '%s\n' "$resp" | jq -r '.data[0].id // empty')"
+
+    if [[ -z "$BL_AGENT_ID" ]]; then
+        command cat >&2 <<'BOOTSTRAP_EOF'
+blacklight: this Anthropic workspace has not been seeded.
+
+Run one of the following (one-time per workspace):
+
+  # Local clone:
+  bl setup
+
+  # Direct from OSS repo:
+  curl -fsSL https://raw.githubusercontent.com/rfxn/blacklight/main/bl | bash -s setup
+
+After setup completes the first host's worth of provisioning,
+every subsequent host running 'bl' against the same API key
+finds the workspace pre-seeded and skips this step.
+BOOTSTRAP_EOF
+        return "$BL_EX_WORKSPACE_NOT_SEEDED"
+    fi
+
+    printf '%s' "$BL_AGENT_ID" > "$BL_AGENT_ID_FILE"
+    bl_debug "bl_preflight: seeded agent-id $BL_AGENT_ID cached to $BL_AGENT_ID_FILE"
+    return "$BL_EX_OK"
+}
+
+# ----------------------------------------------------------------------------
+# Usage / version surfaces — bypass preflight (help should work unseeded)
+# ----------------------------------------------------------------------------
+
+bl_usage() {
+    command cat <<'USAGE_EOF'
+bl — blacklight operator CLI
+
+Usage: bl <command> [options]
+
+Commands:
+  observe   Read-only evidence extraction (logs, fs, crons, htaccess)  [M4]
+  consult   Open / attach to an investigation case                      [M5]
+  run       Execute an agent-prescribed step                            [M5]
+  case      Inspect, log, close, reopen cases                           [M5]
+  defend    Apply agent-authored defensive payload (ModSec, FW, sig)    [M6]
+  clean     Apply agent-prescribed remediation (diff-confirmed)         [M7]
+  setup     Provision or sync the Anthropic workspace                   [M8]
+
+Options:
+  -h, --help       show this message
+  -v, --version    show bl version
+
+Environment:
+  ANTHROPIC_API_KEY  (required)  your Anthropic workspace API key
+  BL_LOG_LEVEL       (optional)  one of {debug,info,warn,error} — default info
+  BL_REPO_URL        (optional)  alternate git repo for skill content
+
+Exit codes: docs/exit-codes.md
+Design spec: DESIGN.md
+USAGE_EOF
+}
+
+bl_version() {
+    printf 'bl %s\n' "$BL_VERSION"
+}
+
+# ----------------------------------------------------------------------------
+# Handler stubs — one per namespace. All return 64 (USAGE).
+# Real implementations land in M4 (observe), M5 (consult/run/case),
+# M6 (defend), M7 (clean), M8 (setup).
+# ----------------------------------------------------------------------------
+
+bl_case()    { bl_error_envelope case    "not yet implemented (M5)"; return "$BL_EX_USAGE"; }
+bl_clean()   { bl_error_envelope clean   "not yet implemented (M7)"; return "$BL_EX_USAGE"; }
+bl_consult() { bl_error_envelope consult "not yet implemented (M5)"; return "$BL_EX_USAGE"; }
+bl_defend()  { bl_error_envelope defend  "not yet implemented (M6)"; return "$BL_EX_USAGE"; }
+bl_observe() { bl_error_envelope observe "not yet implemented (M4)"; return "$BL_EX_USAGE"; }
+bl_run()     { bl_error_envelope run     "not yet implemented (M5)"; return "$BL_EX_USAGE"; }
+bl_setup()   { bl_error_envelope setup   "not yet implemented (M8)"; return "$BL_EX_USAGE"; }
+
+# ----------------------------------------------------------------------------
+# Main dispatcher — flag-sniff first (help/version/setup bypass preflight),
+# else preflight → verb-case → handler.
+# ----------------------------------------------------------------------------
+
+main() {
+    # Pre-case flag sniff: help, version, setup all bypass preflight.
+    if (( $# == 0 )); then
+        bl_error_envelope usage "no command (use \`bl --help\` for a list)"
+        return "$BL_EX_USAGE"
+    fi
+
+    case "$1" in
+        -h|--help|help)
+            bl_usage
+            return "$BL_EX_OK"
+            ;;
+        -v|--version)
+            bl_version
+            return "$BL_EX_OK"
+            ;;
+        setup)
+            shift
+            bl_setup "$@"
+            return $?
+            ;;
+    esac
+
+    # Non-bypassed verbs → preflight first
+    bl_preflight || return $?
+
+    case "$1" in
+        observe)  shift; bl_observe  "$@"; return $? ;;
+        consult)  shift; bl_consult  "$@"; return $? ;;
+        run)      shift; bl_run      "$@"; return $? ;;
+        defend)   shift; bl_defend   "$@"; return $? ;;
+        clean)    shift; bl_clean    "$@"; return $? ;;
+        case)     shift; bl_case     "$@"; return $? ;;
+        *)
+            bl_error_envelope usage "unknown command: $1" "(use \`bl --help\` for a list of commands)"
+            return "$BL_EX_USAGE"
+            ;;
+    esac
+}
+
+main "$@"
