@@ -1,6 +1,6 @@
 # apf-grammar — Advanced Policy Firewall configuration reference
 
-Loaded by the router on every synthesizer call that targets APF. APF is an iptables/netfilter front-end with a configuration model built around stateful trust lists, port catalogs, and a daily reactive cycle. This file is the directive and rules-file reference; pair with `defense-synthesis/modsec-patterns.md` for the network-layer companion to ModSec rule synthesis. Upstream project: https://github.com/rfxn/advanced-policy-firewall (GPL v2).
+Loaded by the router on every `bl consult --synthesize-defense` call that targets APF. APF is an iptables/netfilter front-end with a configuration model built around stateful trust lists, port catalogs, and a daily reactive cycle. This file is the directive and rules-file reference; pair with `defense-synthesis/modsec-patterns.md` for the network-layer companion to ModSec rule synthesis. Upstream project: https://github.com/rfxn/advanced-policy-firewall (GPL v2).
 
 ## conf.apf — the top-level configuration
 
@@ -65,10 +65,10 @@ The four tags carry operational metadata:
 
 - `desc:` — free-text description; what this entry is for.
 - `d:` — date inserted (ISO-8601).
-- `s:` — source of the insertion (`LFD`, `manual`, `<hunter-name>`, customer ticket id).
+- `s:` — source of the insertion (`LFD`, `manual`, `<curator-verb-name>` such as `observe.log_apache`, customer ticket id).
 - `e:` — expiration date. APF does not auto-prune on this tag; an operator cron walks the file and removes expired entries. Without the cron, the tag is documentation only.
 
-These tags are convention, not parsed by APF itself, but downstream tooling (case engine, audit reports) keys on them. Synthesizer-emitted entries should always carry all four.
+These tags are convention, not parsed by APF itself, but downstream tooling (curator reasoning, audit reports) keys on them. Synthesis-emitted entries should always carry all four.
 
 ## Trust-system commands (ad-hoc inserts)
 
@@ -78,7 +78,7 @@ Three commands handle live trust changes without editing files by hand:
 - `apf -d <ip-or-cidr> [comment]` — add to deny_hosts.rules. Persists across restarts.
 - `apf -u <ip-or-cidr>` — remove a matching entry from either list.
 
-The `-a`/`-d`/`-u` commands write into the rules files at runtime; concurrent edits by hand can lose changes if the file is being rewritten. Synthesizer-generated additions should always go through `apf -a`/`apf -d` rather than direct file writes.
+The `-a`/`-d`/`-u` commands write into the rules files at runtime; concurrent edits by hand can lose changes if the file is being rewritten. Synthesis-generated additions should always go through `apf -a`/`apf -d` rather than direct file writes.
 
 For temporary blocks driven by reactive triggers (rate-limit hits, brute-force detection):
 
@@ -117,7 +117,7 @@ For LFD specifically:
 - LFD calls APF to insert the block; APF logs the insertion with `s:LFD` if the integration is configured to tag it.
 - The `RAB_TIMER` setting determines how long an LFD-inserted block lives. A short timer (300s) is useful for noisy false positives; a long timer (86400s) is appropriate for high-confidence detections.
 
-For custom hunter-driven blocks (the synthesizer pattern), the integration shape is the same: emit `apf -d <ip> "{tag block}"` with a descriptive comment and rely on APF's persistence to keep the block across restarts.
+For custom curator-driven blocks (the `bl defend firewall` step path), the integration shape is the same: emit `apf -d <ip> "{tag block}"` with a descriptive comment and rely on APF's persistence to keep the block across restarts.
 
 ## import directive
 
@@ -140,10 +140,10 @@ APF, ModSec, and direct iptables/nftables are not interchangeable; each has the 
 A typical layered defense for a webshell-class incident:
 
 1. APF deny on known-bad source IPs (cheap, drops at the network layer).
-2. ModSec rule on the URL evasion pattern (catches the next attacker IP that hits the same vulnerability).
+2. ModSec rule on the URL evasion pattern (catches the next adversary IP that hits the same vulnerability).
 3. APF egress filter blocking the C2 callback destination (defense-in-depth if the ModSec rule misses).
 
-Generating the right defense at the right layer is the synthesizer's responsibility; this file gives the grammar so the rule is syntactically valid when emitted.
+Generating the right defense at the right layer is the synthesis call's responsibility; this file gives the grammar so the rule is syntactically valid when emitted.
 
 ## /etc/apf/postroute.rules and preroute.rules
 
@@ -157,12 +157,12 @@ Two escape hatches for rules that APF's directives do not express directly. Both
 
 `preroute.rules` runs before APF builds the standard set; useful for inserting rules that need to short-circuit APF's own logging or block decisions. `postroute.rules` runs after; useful for layering additional restrictions on top of APF's decisions.
 
-Synthesizer-emitted rules should prefer the directive layer (`conf.apf`, `allow_hosts.rules`, `deny_hosts.rules`) when expressible there, and fall back to `postroute.rules` only when the rule cannot be written in APF's native grammar.
+Synthesis-emitted rules should prefer the directive layer (`conf.apf`, `allow_hosts.rules`, `deny_hosts.rules`) when expressible there, and fall back to `postroute.rules` only when the rule cannot be written in APF's native grammar.
 
 ## Validation
 
 `apf -s` reloads the configuration without applying. `apf -r` restarts (apply). `apf -f` flushes all rules (returns the host to no-firewall state — never use during incident response).
 
-The synthesizer should treat `apf -s` as the equivalent of `apachectl configtest` for ModSec: a successful syntax check before commit, an emit-as-`suggested_rules`-only on failure with the parse error captured for operator review.
+The synthesis call should treat `apf -s` as the equivalent of `apachectl configtest` for ModSec: a successful syntax check before commit, an emit-as-`suggested_rules`-only on failure with the parse error captured for operator review.
 
 <!-- public-source authored — extend with operator-specific addenda below -->

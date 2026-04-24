@@ -1,6 +1,6 @@
 # linux-forensics — outbound network patterns after web-shell access
 
-Loaded by the router when access.log or auth.log shows suspicious outbound callbacks. Pairs with `webshell-families/polyshell.md` (which describes the C2-callback capability shape) and `defense-synthesis/modsec-patterns.md` (which describes the rule shapes that block callbacks at the edge). This file is the lookup of *what callback evidence looks like in logs* and *which patterns separate attacker outbound from legitimate egress*.
+Loaded by the router when access.log or auth.log shows suspicious outbound callbacks. Pairs with `webshell-families/polyshell.md` (which describes the C2-callback capability shape) and `defense-synthesis/modsec-patterns.md` (which describes the rule shapes that block callbacks at the edge). This file is the lookup of *what callback evidence looks like in logs* and *which patterns separate adversary outbound from legitimate egress*.
 
 ## Where outbound evidence lands
 
@@ -12,7 +12,7 @@ Web-shell callbacks leave traces in five log surfaces. Check each; do not stop a
 - **System auth.log / secure** — sshd outbound (the host being used as a pivot) lands here; sudo to run a network command also.
 - **Firewall + EDR logs** — `iptables`/`nftables` LOG-target rules, APF dynamic block log (`/var/log/apf_log.log`), conntrack audit, any host-EDR egress capture. These are the only logs that catch outbound that the application stack does not.
 
-DNS resolution evidence often sits separately: `/var/log/named/` if the host runs its own resolver, or via systemd-resolved (`journalctl -u systemd-resolved`). DNS queries to attacker infrastructure precede the HTTP callback by milliseconds — a DNS query is sometimes the only signal when the HTTP callback was rejected by an upstream firewall.
+DNS resolution evidence often sits separately: `/var/log/named/` if the host runs its own resolver, or via systemd-resolved (`journalctl -u systemd-resolved`). DNS queries to adversary infrastructure precede the HTTP callback by milliseconds — a DNS query is sometimes the only signal when the HTTP callback was rejected by an upstream firewall.
 
 ## Callback request shapes
 
@@ -25,12 +25,12 @@ Web-shell callbacks have a small set of recognizable request shapes. The shape i
 
 ## Domain and IP signatures
 
-Attacker infrastructure shape varies, but the patterns below recur enough to anchor on.
+Adversary infrastructure shape varies, but the patterns below recur enough to anchor on.
 
 - **Cheap-TLD callbacks.** `.top`, `.xyz`, `.click`, `.icu`, `.cyou`, `.cfd`, `.bond` — registrars are inexpensive, registration friction is low, takedown response is slow. The TLD itself is not malicious; the *combination* of cheap TLD + random-looking subdomain + recent registration is the signal.
-- **DGA-style hostnames.** Random-looking 10-16 character labels (`vagqea4wrlkdg.top`, `k3qmz8wpt7fdx.top`) generated from base32/base36 alphabets. A single-host visit to such a hostname is a near-certain attacker callback.
+- **DGA-style hostnames.** Random-looking 10-16 character labels (`vagqea4wrlkdg.top`, `k3qmz8wpt7fdx.top`) generated from base32/base36 alphabets. A single-host visit to such a hostname is a near-certain adversary callback.
 - **Free DNS infrastructure.** Subdomains under `*.duckdns.org`, `*.no-ip.com`, `*.dynu.net`, `*.freedns.afraid.org`, `*.serveo.net` — operator-controlled namespaces hosted on free dynamic DNS. Common in low-budget operations.
-- **Tunneling endpoints.** `*.ngrok.io`, `*.serveo.net`, `*.localtunnel.me`, `*.lhr.life`, Cloudflare Tunnel `*.trycloudflare.com` — public reverse-tunnel endpoints used to expose attacker-side localhost services. Outbound traffic to these from a customer host is rarely legitimate.
+- **Tunneling endpoints.** `*.ngrok.io`, `*.serveo.net`, `*.localtunnel.me`, `*.lhr.life`, Cloudflare Tunnel `*.trycloudflare.com` — public reverse-tunnel endpoints used to expose adversary-side localhost services. Outbound traffic to these from a customer host is rarely legitimate.
 - **Pastebin-class data drops.** `pastebin.com`, `paste.ee`, `hastebin.com`, `0x0.st`, `transfer.sh`, `gist.github.com`/raw — used as both payload retrieval (POST→download) and small exfil targets. A web-server process making a request to a pastebin is suspicious by category.
 - **Known-good domains used as exfil.** Telegram bot API (`api.telegram.org`), Discord webhooks (`discord.com/api/webhooks/`), Slack webhooks, Microsoft Teams incoming webhooks, GitHub raw content. These are the hardest to filter because the destination is a category the host might legitimately need to reach. The signal here is *the process making the request* — a web-server worker has no business POSTing to a Discord webhook, even if the host's admin sometimes does.
 
@@ -38,31 +38,31 @@ IP-only callbacks (no DNS) are rarer in modern operations because they are trivi
 
 ## DNS exfil and tunneling shapes
 
-When HTTP egress is filtered, attackers fall back to DNS for both callback and exfil. DNS-only attacks are noisier per byte transferred but bypass most layer-7 filters.
+When HTTP egress is filtered, adversaries fall back to DNS for both callback and exfil. DNS-only channels are noisier per byte transferred but bypass most layer-7 filters.
 
-- **Long subdomain queries.** Exfil-via-DNS encodes data into subdomain labels: `<base32-encoded-payload>.<attacker-domain>`. Queries with subdomain labels longer than ~32 characters, especially when many such queries land in succession, are the pattern.
+- **Long subdomain queries.** Exfil-via-DNS encodes data into subdomain labels: `<base32-encoded-payload>.<adversary-domain>`. Queries with subdomain labels longer than ~32 characters, especially when many such queries land in succession, are the pattern.
 - **High-volume TXT queries.** TXT-record retrieval is the standard DNS-channel callback shape — operator stages commands as TXT records, host queries them on a schedule, runs the response. A host making many TXT queries to a single domain over a short window is suspicious.
-- **NULL or unusual record types.** `NULL`, `KEY`, `PRIVATE` record-type queries to non-DNSSEC contexts are uncommon outside attacker tools (`iodine`, `dnscat2`).
+- **NULL or unusual record types.** `NULL`, `KEY`, `PRIVATE` record-type queries to non-DNSSEC contexts are uncommon outside adversary tools (`iodine`, `dnscat2`).
 
-DNS evidence is captured in resolver logs when the host runs its own; via `tcpdump port 53` or eBPF-based captures otherwise. Most fleets do not capture DNS by default — its absence is the operational gap to surface in the case file's `open_questions`.
+DNS evidence is captured in resolver logs when the host runs its own; via `tcpdump port 53` or eBPF-based captures otherwise. Most fleets do not capture DNS by default — its absence is the operational gap to surface in `bl-case/CASE-<id>/open-questions.md`.
 
 ## ICMP tunneling
 
 ICMP echo-payload tunneling (`ptunnel`, custom variants) is rare but high-impact. Detection requires either a host-side packet capture or upstream NetFlow/sFlow analysis showing high-volume ICMP traffic to a single destination. ICMP echo requests from a web-server host to an external destination at any sustained rate are abnormal — `ping` from production web hosts is uncommon and `ping` to the same external destination at packet rates above 1/s for any duration warrants explanation.
 
-## Distinguishing attacker outbound from legitimate egress
+## Distinguishing adversary outbound from legitimate egress
 
-The hard part of outbound triage: web hosts make legitimate outbound for package updates, vendor APIs, license checks, monitoring, log shipping. The shape signals below help separate attacker from legitimate.
+The hard part of outbound triage: web hosts make legitimate outbound for package updates, vendor APIs, license checks, monitoring, log shipping. The shape signals below help separate adversary-driven egress from legitimate egress.
 
 - **Process attribution.** Legitimate outbound has a recognizable parent: `apt`/`yum`/`dnf` against package-mirror hostnames; vendor monitoring agent against vendor-controlled FQDNs; log shipper against the central log host. PHP worker processes (`php-fpm`, `apache2` with mod_php) reaching arbitrary external hosts is the alarm — production PHP rarely needs egress beyond payment processors and vendor APIs already in the application's connection allowlist.
-- **Time-of-day patterns.** Legitimate outbound is spread across business hours and follows update cadences (nightly cron windows, weekly maintenance windows). Attacker outbound is spread across all hours, with bursts that don't align to maintenance windows.
+- **Time-of-day patterns.** Legitimate outbound is spread across business hours and follows update cadences (nightly cron windows, weekly maintenance windows). Adversary-driven outbound is spread across all hours, with bursts that don't align to maintenance windows.
 - **Volume cadence.** Sustained low-rate small-POST traffic (under 1 KB, every few seconds) is beaconing. Bursts of KB-to-MB POSTs separated by quiet periods is exfil. Legitimate egress is bursty around maintenance windows, low otherwise.
-- **TLS fingerprints.** Where JA3 / JA4 capture is available: the TLS client fingerprint of `curl` invoked from PHP differs from the fingerprint of a real browser, and from the fingerprint of vendor agents. Mismatch between expected fingerprint and observed fingerprint on egress to a vendor-API hostname is a man-in-the-middle or attacker-tunnel signal.
+- **TLS fingerprints.** Where JA3 / JA4 capture is available: the TLS client fingerprint of `curl` invoked from PHP differs from the fingerprint of a real browser, and from the fingerprint of vendor agents. Mismatch between expected fingerprint and observed fingerprint on egress to a vendor-API hostname is a man-in-the-middle or adversary-tunnel signal.
 
-## What to capture into evidence rows
+## What to capture into evidence records
 
-When triage finds an outbound callback, the evidence row should record: the source process if attribution is available; the destination hostname AND IP (DNS resolution may rotate); the request method, URI, and Content-Length; the User-Agent; the timestamp; and the request body if captured (modsec_audit.log is the usual source). Hostnames go into evidence storage with the same defanged-vs-clear discipline as `ic-brief-format/template.md` describes — clear in evidence rows, defanged in any prose that crosses team boundaries.
+When triage finds an outbound callback, the evidence record under `bl-case/CASE-<id>/evidence/evid-*.md` should record: the source process if attribution is available; the destination hostname AND IP (DNS resolution may rotate); the request method, URI, and Content-Length; the User-Agent; the timestamp; and the request body if captured (modsec_audit.log is the usual source). Hostnames go into evidence storage with the same defanged-vs-clear discipline as `ic-brief-format/template.md` describes — clear in evidence records, defanged in any prose that crosses team boundaries.
 
-The C2 host pattern across cases is what enables the synthesizer's anticipatory-block rules. Two evidence rows from different hosts citing the same callback hostname is the seed for an `@pmFromFile` block list shipped via the manifest (see `defense-synthesis/modsec-patterns.md` § anticipatory-block pattern).
+The C2 host pattern across cases is what enables anticipatory-block rule synthesis (via `bl consult --synthesize-defense`). Two evidence records from different hosts citing the same callback hostname is the seed for an `@pmFromFile` block list shipped via the manifest (see `defense-synthesis/modsec-patterns.md` § anticipatory-block pattern).
 
 <!-- public-source authored — extend with operator-specific addenda below -->

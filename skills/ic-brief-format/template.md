@@ -20,7 +20,7 @@ The brief is read top-down by people who skim. The TL;DR carries the load if not
 
 ## TL;DR — three to five sentences
 
-The lead sentence names the impact and status: what was hit, how many customers, are we still being hit. Sentences two through four cover the attack class, the entry vector, and the current containment state. The last sentence names the next gating moment — when the next status will land or what unlocks resolved.
+The lead sentence names the impact and status: what was hit, how many customers, are we still being hit. Sentences two through four cover the evidence-pattern class, the intrusion vector, and the current containment state. The last sentence names the next gating moment — when the next status will land or what unlocks resolved.
 
 Voice anchors:
 
@@ -28,27 +28,26 @@ Voice anchors:
 - Present continuous for in-flight ("Triage is ongoing across 4 additional hosts").
 - Never future-perfect ("we will have completed by 06:00 UTC" — say "expected complete by 06:00 UTC" instead).
 
-A bad TL;DR opens with attack-class jargon and buries the impact: "An unauthenticated remote code execution vulnerability in Adobe Commerce was exploited..." A good TL;DR opens with what happened to whom: "Twelve customer Magento storefronts were compromised between 02:00 and 03:30 UTC via the APSB25-94 vulnerability; nine are contained, three are in active cleanup."
+A bad TL;DR opens with technical jargon and buries the impact: "An unauthenticated remote code execution vulnerability in Adobe Commerce was exploited..." A good TL;DR opens with what happened to whom: "Twelve customer Magento storefronts were compromised between 02:00 and 03:30 UTC via the APSB25-94 vulnerability; nine are contained, three are in active cleanup."
 
 ## Severity — operator scale
 
-Severity uses the operator's scale, named explicitly:
+Severity is a single line naming both the level and the trigger:
 
-- **P1** — customer-impacting active compromise. Active data flow, active C2, active customer-visible service degradation. Pages on-call.
-- **P2** — customer-impacting suspected compromise. Strong signal but no confirmed exfiltration or service degradation. Pages on-call during business hours, escalates to P1 on confirmation.
-- **P3** — internal-impacting. System-side issue (a server compromised but no tenant data implicated; a misconfigured rule blocking legitimate traffic). Notify channel; no page.
-- **P4** — informational. Notable finding for the record; no action required. Posted to the incident channel for awareness.
-
-The severity line names both the level and the trigger: `Severity: P1 — active C2 callbacks observed from compromised hosts to externally-controlled infrastructure.`
+```
+Severity: P1 — active C2 callbacks observed from compromised hosts to externally-controlled infrastructure.
+```
 
 Severity can be downgraded across the lifetime of the brief (P1 → P2 → P3) as containment lands. Each downgrade is a timeline entry naming the trigger. Severity does not get downgraded silently in the header; the trigger is recorded.
+
+See `skills/ic-brief-format/severity-vocab.md` for the P0-P4 class→severity table, downgrade triggers, and notification matrix — that file is the detail authority; this file owns only the section-shape + revision rule.
 
 ## Timeline — UTC ISO-8601, append-only
 
 Every entry is a single line: timestamp, then a one-line description of what happened or what was done.
 
 ```
-2026-04-22T02:14:33Z — Hunter `webshell-php` flagged 3 PHP files under /home/c1234/public_html/pub/media/.cache on host-7
+2026-04-22T02:14:33Z — Curator `observe.file` verb flagged 3 PHP files under /home/c1234/public_html/pub/media/.cache on host-7
 2026-04-22T02:18:01Z — Engineer J on-call paged via P1 trigger
 2026-04-22T02:31:14Z — Containment hold placed on host-7 (httpd stop, account suspend)
 2026-04-22T02:47:55Z — Cross-host correlation identified hosts 2, 4, 9 sharing callback domain
@@ -61,41 +60,14 @@ Conventions:
 - Timestamps are absolute, never relative. "At 03:14 UTC" not "this morning" or "ten minutes ago" — relative timing breaks the moment the brief is read in a different timezone or hours later.
 - ISO-8601 with `Z` suffix. Local-time conversion is the reader's responsibility.
 - Append-only across brief revisions. A wrong entry is corrected with a follow-up entry naming the correction, not by editing the original.
-- Each entry names the actor when it matters: "Engineer J", "Hunter `webshell-php`", "Customer support agent K". Anonymous actions ("a block was deployed") obscure the audit trail.
+- Each entry names the actor when it matters: "Engineer J", "Curator `observe.file` verb", "Customer support agent K". Anonymous actions ("a block was deployed") obscure the audit trail.
 - Sub-minute precision is appropriate for high-cadence sequences; minute precision is fine for slower work.
 
 ## Indicators of Compromise — fenced code block
 
-The IOC block is structured for copy-paste into a SIEM, a threat-intel platform, or a downstream block list. Prose interspersed with IOCs forces the reader to parse; a clean block does not.
+The IOC block is a fenced code block — structured for copy-paste into a SIEM, a threat-intel platform, or a downstream block list. Prose interspersed with IOCs forces the reader to parse; a clean block does not. Placement: after Timeline, before Affected scope.
 
-```
-## File-system indicators
-/home/<user>/public_html/pub/media/.cache/<random>.php
-/home/<user>/public_html/.htaccess  (modified, auto_prepend_file directive added)
-/home/<user>/.config/systemd/user/<random>.service
-
-## Hashes (SHA-256)
-3f4a7c... <random>.php variant 1
-8c1d9e... <random>.php variant 2
-b22f5a... loader.php (auto_prepend_file target)
-
-## Network indicators
-198.51.100.42  (initial-access source IP)
-203.0.113.17   (C2 callback destination)
-malicious[.]example[.]top  (C2 hostname; defanged in non-machine-readable contexts)
-
-## URL patterns
-POST /rest/V1/<endpoint>  (initial access vector, request body length > 8192)
-GET /pub/media/.cache/<random>.php  (post-exploitation access)
-```
-
-IOC discipline:
-
-- File paths use generic placeholders (`<user>`, `<random>`) when the brief is shared outside the responding team; full paths only inside the originating team's own brief.
-- Hashes are SHA-256, full length, with a one-line label naming what the hash represents.
-- Network indicators include source IPs, destination IPs, hostnames, and observed user-agent strings if relevant.
-- Hostnames and URLs use defanged notation (`.` → `[.]`) when the brief crosses organizational boundaries to prevent click-fishing in chat clients.
-- URL patterns include the request method and any body-length or header signature that distinguishes the malicious request from a legitimate one of the same shape.
+See `skills/ic-brief-format/ioc-categorization.md` for the 8-category mandatory order (file-system, hashes, network, URL patterns, process, registry, account, persistence), the per-category field discipline, and defanging rules. That file is the detail authority for what goes inside the fenced block; this file owns only the placement and fenced-code-discipline rule.
 
 ## Affected scope
 
@@ -128,10 +100,10 @@ What is not yet known, what is not yet contained, what could still emerge. Each 
 - Cleanup of dropped files on hosts 2, 4 is in progress; complete by 06:00 UTC.
 - Forensic image capture for host-7 in progress for post-incident review; complete by 12:00 UTC.
 - Customer-database integrity audit pending for 9 implicated accounts; preliminary results by 18:00 UTC.
-- Open question: whether attacker established persistence beyond the visible droppers; under investigation, no signal yet either way.
+- Open question: whether the adversary established persistence beyond the visible droppers; under investigation, no signal yet either way.
 ```
 
-The "open question" framing maps directly onto the case engine's `open_questions_additions` field — the brief's open items are the case's open questions in prose form.
+The "open question" framing maps directly onto the curator's `bl-case/CASE-<id>/open-questions.md` — the brief's open items are the case's open questions in prose form.
 
 ## Defensive measures deployed
 
@@ -141,7 +113,7 @@ Distinct from containment. Defensive measures are the lasting changes that preve
 - ModSec rule 100501 deployed across fleet blocking the URL-evasion request shape (image-extension URI with PHP handler).
 - APF deny added for 203.0.113.17 across fleet via shared `/etc/apf/import/incident-2026-04-22.rules`.
 - Magento 2.4.7-p4 upgrade scheduled for affected accounts, communicated to customers, target completion 2026-04-23.
-- Hunter signature `webshell-polyshell-v2` updated with the obfuscation variant observed in this incident.
+- Scanner signature `webshell-polyshell-v2` (LMD/YARA) updated with the obfuscation variant observed in this incident.
 ```
 
 Each measure is a deliverable: rule id, manifest entry, ticket reference, signature update. Vague entries ("hardened the firewall") are not measures; specific entries are.
@@ -157,14 +129,16 @@ The lessons-learned format is two to five bullets, each one sentence:
 - One process change that follows from the gap, with an owner and a target date.
 
 ```
-- The cross-host correlation hunter caught the campaign shape within 33 minutes of the first single-host alert; that latency is acceptable.
+- The cross-host correlation signal (curator `observe.fs_mtime_cluster` across hosts) caught the campaign shape within 33 minutes of the first single-host alert; that latency is acceptable.
 - The initial APF deploy was manual per-host; deploying via the shared import file would have cut deployment time from 18 minutes to under 2.
 - Process change: incident-response runbook updated with shared-import deploy pattern. Owner: J. Target: 2026-04-29.
 ```
 
-Lessons learned are specific or they are nothing. "We need better tooling" is not a lesson. "The cross-host correlation hunter caught the campaign within 33 minutes; the per-host deploy took 18 minutes that the import-file deploy would have cut to 2" is.
+Lessons learned are specific or they are nothing. "We need better tooling" is not a lesson. "The cross-host correlation signal caught the campaign within 33 minutes; the per-host deploy took 18 minutes that the import-file deploy would have cut to 2" is.
 
 ## Voice rules across the whole brief
+
+For the Executive Summary §1 specifically, see `skills/ic-brief-format/executive-summary-voice.md` — its Forbidden constructions list and Use/Avoid table extend the rules below.
 
 - Absolute timestamps, never relative.
 - Past tense for completed actions, present continuous for in-flight, neutral future for scheduled work ("expected complete by", not "will have been completed by").
@@ -172,7 +146,7 @@ Lessons learned are specific or they are nothing. "We need better tooling" is no
 - IOC blocks as fenced code, never as inline prose.
 - Numbers, not adjectives. "Twelve customers affected" not "several customers"; "33-minute correlation latency" not "fast correlation".
 - No "we believe", "appears to", "may have" hedging on confirmed facts. Reserve hedging for genuinely uncertain calls and pair with a confidence number.
-- Defensive framing throughout: "the URL-evasion request shape was blocked", not "we exploited the rule we wrote".
+- Defensive framing throughout: "the URL-evasion request shape was blocked", not red-team narration. Avoid offensive-security vocabulary ("attack", "TTP", "kill chain" as a verb) in favor of post-incident forensic phrasing ("observed capability", "evidence pattern", "intrusion vector", "attribution signature").
 
 ## Brief revision lifecycle
 

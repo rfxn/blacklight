@@ -1,6 +1,8 @@
 # modsec-grammar — SecRule reference for synthesized defenses
 
-Loaded by the router on every synthesizer call that targets ModSecurity. This is the grammar floor — variables, operators, actions, phases, and chaining — that the synthesizer must respect to produce rules that actually parse and load. Pair with `defense-synthesis/modsec-patterns.md` for the operator-validated rule shapes; this file is the language reference, that one is the idiom catalog.
+Loaded by the router on every `bl consult --synthesize-defense` call that targets ModSecurity. This is the grammar floor — variables, operators, actions, phases, and chaining — that the synthesis call must respect to produce rules that actually parse and load. Pair with `defense-synthesis/modsec-patterns.md` for the operator-validated rule shapes; this file is the language reference, that one is the idiom catalog.
+
+Note: ModSec `tag:'application-attack'` strings in this file are rule-engine grammar literals (OWASP CRS convention) — preserved verbatim for tool compatibility.
 
 ## SecRule directive shape
 
@@ -16,7 +18,7 @@ SecRule VARIABLES OPERATOR ACTIONS
 
 The directive must be on logical line. Continuation uses `\` at end of line.
 
-ModSec v3 (`libmodsecurity` + connector) and ModSec v2 (`mod_security2`) share the same `SecRule` syntax. Differences are in available operators (v3 adds `@inspectFile`, drops some legacy operators), variable scope, and the configuration directives outside `SecRule` itself. Rules written to v2 grammar generally load on v3; the inverse is not always true.
+ModSec v3 (`libmodsecurity` + connector) and ModSec v2 (`mod_security2`) share the same `SecRule` syntax. Differences are in available operators (v3 adds `@inspectFile`, drops some legacy operators), variable scope, and the configuration directives outside `SecRule` itself. Rules written to v2 grammar generally load on v3; the inverse is not always true. The synthesis call must target v2.9+ as the floor unless the case's manifest is explicitly v3-tagged.
 
 ## Phases — and which to use for what
 
@@ -112,7 +114,7 @@ Transformations (apply to the variable before the operator runs, left-to-right):
 - `t:removeNulls` — strip `\0` bytes.
 - `t:normalizePath` — collapse `..` and `//` in paths.
 
-Chain transformations to defeat known evasions: `t:none,t:urlDecodeUni,t:lowercase,t:compressWhitespace`.
+Chain transformations to defeat known evasion patterns: `t:none,t:urlDecodeUni,t:lowercase,t:compressWhitespace`.
 
 ## Chained rules
 
@@ -234,6 +236,6 @@ Pick a numeric range and document it. A common convention: `100000-199999` for s
 
 ## OWASP Core Rule Set
 
-Most production deployments load the OWASP CRS (`https://github.com/coreruleset/coreruleset`) as a baseline. Site-local rules should layer on top, not replicate CRS coverage. When generating a new rule, check whether the attack class is already covered by a CRS rule (the `crs-setup.conf` and `rules/REQUEST-*.conf` files are the index) and prefer tuning CRS via `ctl:ruleRemoveById` and `crs-setup.conf` variables over writing a parallel rule.
+Most production deployments load the OWASP CRS (`https://github.com/coreruleset/coreruleset`) as a baseline. Site-local rules should layer on top, not replicate CRS coverage. When generating a new rule, check whether the evidence-pattern class is already covered by a CRS rule (the `crs-setup.conf` and `rules/REQUEST-*.conf` files are the index) and prefer tuning CRS via `ctl:ruleRemoveById` and `crs-setup.conf` variables over writing a parallel rule.
 
 <!-- public-source authored — extend with operator-specific addenda below -->

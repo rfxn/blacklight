@@ -1,6 +1,6 @@
 # false-positives — backup and archive artifact patterns
 
-Loaded alongside `vendor-tree-allowlist.md` when a flagged file is suspected to be a backup or archive rather than an attacker artifact. This file is the lookup of *which filename + path + owner signatures mark a file as benign backup content* and *what properties distinguish a legitimate backup from an attacker using backup-looking filenames for cover*.
+Loaded alongside `vendor-tree-allowlist.md` when a flagged file is suspected to be a backup or archive rather than an adversary artifact. This file is the lookup of *which filename + path + owner signatures mark a file as benign backup content* and *what properties distinguish a legitimate backup from an adversary using backup-looking filenames for cover*.
 
 Authoritative references: cPanel Backup documentation (`docs.cpanel.net/cpanel/files/backup/`); UpdraftPlus user documentation (`updraftplus.com/documentation/`); BackupBuddy plugin documentation (`ithemes.com/docs/backupbuddy`); `logrotate(8)` and `mysqldump(1)` man pages from the util-linux and mysql-client source trees. Every pattern below traces back to one of these sources; operator-specific addenda belong below the footer.
 
@@ -18,7 +18,7 @@ Editor and system conventions produce a small, closed vocabulary of backup-suffi
 - `*.tmp` — half-written copy; produced by atomic-write patterns that rename `<file>.tmp` to `<file>` on completion.
 - `*-old`, `*-backup`, `*-YYYYMMDD` — operator-added stems. No format standard; grep the parent directory for siblings.
 
-Suffix alone is not conclusive. A file named `wp-config.php.bak` in a docroot still reads as a credential leak if its contents match the live `wp-config.php`; the allowlist applies to the hunter, not to the access-control posture.
+Suffix alone is not conclusive. A file named `wp-config.php.bak` in a docroot still reads as a credential leak if its contents match the live `wp-config.php`; the allowlist applies to the `observe.*` verb that flagged it, not to the access-control posture.
 
 ---
 
@@ -36,7 +36,7 @@ File ownership signatures:
 - `/home/<user>/backup-*.tar.gz` — owned by `<user>:<user>` because cPanel drops the file as the account user.
 - `/backup/**/*.tar.gz` — owned by `root:root` because the scheduled backup runs as root.
 
-An attacker using backup-like naming typically drops into a writable subdir (`pub/media/`, `wp-content/uploads/`) with the web-user ownership, not into `/home/<user>/` at the tenant root. Ownership + parent directory are the two load-bearing tells.
+An adversary using backup-like naming typically drops into a writable subdir (`pub/media/`, `wp-content/uploads/`) with the web-user ownership, not into `/home/<user>/` at the tenant root. Ownership + parent directory are the two load-bearing tells.
 
 ---
 
@@ -70,7 +70,7 @@ File naming is operator-driven — `mysqldump` writes to stdout by default. Comm
 - `db-backup-YYYYMMDD.sql` from cron-driven maintenance scripts.
 - `.sql.gz` compressed variants from `mysqldump | gzip > <file>.sql.gz` idiom.
 
-Content-based FP resolution: the header above is load-bearing. A file ending in `.sql` that lacks the `-- MySQL dump` header is not a `mysqldump` output and deserves review — attackers sometimes use `.sql` extension on webshell-containing text to bypass extension-based blocks.
+Content-based FP resolution: the header above is load-bearing. A file ending in `.sql` that lacks the `-- MySQL dump` header is not a `mysqldump` output and deserves review — adversaries sometimes use `.sql` extension on webshell-containing text to bypass extension-based blocks.
 
 Size signal: a real dump of a medium Magento store runs hundreds of MB to low GB; a 4 KB file named `dump-<date>.sql` is either a stub or not what it claims to be.
 

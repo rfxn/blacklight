@@ -12,8 +12,8 @@ The ladder is staged to the incident classes blacklight exercises in demo and in
 
 Five levels. Each level names a named trigger (who is affected, what is in motion) and a named pager behavior.
 
-- **P0 — system-level active compromise.** Root-or-equivalent execution on shared platform; attacker-controlled code runs outside any single tenant's blast radius. Pager fires unconditionally, all hours. Examples: webshell written under `/usr/local/cpanel/`, credential harvester exfiltrating platform operator credentials, skimmer injected into a shared template affecting multiple tenants' checkouts.
-- **P1 — tenant-level active compromise.** Single-tenant compromise with confirmed attacker-controlled execution and ongoing blast inside that tenant. Pager fires immediately, all hours. Examples: webshell in `/home/<user>/public_html/` with confirmed `POST` hits during the current incident window, active C2 callbacks observed in the access log.
+- **P0 — system-level active compromise.** Root-or-equivalent execution on shared platform; adversary-controlled code runs outside any single tenant's blast radius. Pager fires unconditionally, all hours. Examples: webshell written under `/usr/local/cpanel/`, credential harvester exfiltrating platform operator credentials, skimmer injected into a shared template affecting multiple tenants' checkouts.
+- **P1 — tenant-level active compromise.** Single-tenant compromise with confirmed adversary-controlled execution and ongoing blast inside that tenant. Pager fires immediately, all hours. Examples: webshell in `/home/<user>/public_html/` with confirmed `POST` hits during the current incident window, active C2 callbacks observed in the access log.
 - **P2 — tenant-level suspected compromise.** Strong signal but one load-bearing element not yet confirmed (no execution proof, no active callback, no verified downstream impact). Pager fires during business hours; escalates to P1 on confirmation. Example: PolyShell-family file discovered in a tenant docroot with no corresponding access-log hit in the last 7 days.
 - **P3 — internal or low-blast issue.** System-side issue that does not implicate tenant data; or a tenant-side finding confirmed as false-positive with no lateral exposure. Notify the channel; no page. Examples: a ModSec rule blocking legitimate admin traffic; a flagged file resolved to a composer-installed vendor artifact per `false-positives/vendor-tree-allowlist.md`.
 - **P4 — informational.** Notable for the record, no action required. Channel post for awareness. Examples: reconnaissance activity with no exploitation signal (admin-path wordlist probes from one source IP, all returning 404).
@@ -28,7 +28,7 @@ The defaults are the starting point. Every brief names the trigger on the severi
 
 | Incident class | Default severity | Load-bearing trigger |
 |---|---|---|
-| Webshell on shared platform (`/usr/local/cpanel/`, `/usr/local/`, system-owned paths) | P0 | Non-tenant path; attacker reached outside any single `/home/<user>/` subtree |
+| Webshell on shared platform (`/usr/local/cpanel/`, `/usr/local/`, system-owned paths) | P0 | Non-tenant path; adversary reached outside any single `/home/<user>/` subtree |
 | Webshell in single tenant (`/home/<user>/public_html/`) with confirmed dispatch | P1 | Access-log hit on the file during incident window OR `.htaccess` change enabling handler routing |
 | Webshell in single tenant, no dispatch evidence | P2 | File present, no log hit in retained window; needs confirmation pass |
 | Credential harvester present AND active (any scope) | P0 | Harvester code path invoked per `webshell-families/polyshell.md:82-84` dormant-capability rule; exfil channel observed |
@@ -39,7 +39,7 @@ The defaults are the starting point. Every brief names the trigger on the severi
 | False-positive confirmed, no blast | P3 | Triaged per `false-positives/` trees, no anomaly remaining |
 | Recon only (wordlists, admin-path probes, 404 bursts, no exploitation) | P4 | No post-recon action observed; raise to P3 if recon source IP lands on an active block list |
 
-Rows collapse across two axes: **functional impact** (what the attacker can do right now) and **scope** (how many tenants or systems are affected). A class moves up when scope widens (single-tenant → shared platform, single-host → fleet) or when functional impact lands (dormant capability → active capability).
+Rows collapse across two axes: **functional impact** (what the adversary can do right now) and **scope** (how many tenants or systems are affected). A class moves up when scope widens (single-tenant → shared platform, single-host → fleet) or when functional impact lands (dormant capability → active capability).
 
 ---
 
@@ -49,7 +49,7 @@ Severity is not static across a brief's lifetime. Downgrades are triggered by co
 
 P0 → P1 triggers:
 - Platform-scope containment in place; blast confined to a single tenant. Example: shared template restored from backup, per-tenant isolation confirmed, platform-scope callback blocked at the edge.
-- System-level write path closed; no further attacker-controlled execution outside the affected tenant.
+- System-level write path closed; no further adversary-controlled execution outside the affected tenant.
 
 P1 → P2 triggers:
 - Tenant account suspended via `whmapi1 suspendacct` (`hosting-stack/cpanel-anatomy.md:104-109`); no new access-log hits since suspension.

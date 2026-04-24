@@ -1,6 +1,6 @@
 # hosting-stack — cPanel layout for forensic context
 
-Loaded by the router when the host stack is identified as cPanel-managed shared hosting. The case engine and intent reconstructor key on tenant-vs-system distinctions to attribute compromise correctly: a webshell in `/home/<user>/public_html/` is a tenant-scoped finding; the same shell pattern under `/usr/local/cpanel/` is a system-level breach with very different blast radius. This file is the layout reference that lets that distinction land cleanly.
+Loaded by the router when the host stack is identified as cPanel-managed shared hosting. The curator keys on tenant-vs-system distinctions to attribute compromise correctly: a webshell in `/home/<user>/public_html/` is a tenant-scoped finding; the same shell pattern under `/usr/local/cpanel/` is a system-level intrusion with very different blast radius. This file is the layout reference that lets that distinction land cleanly.
 
 ## Document roots and tenant filesystem
 
@@ -18,7 +18,7 @@ Per-account filesystem subtree:
 - `/home/<user>/tmp/` — per-user tmp.
 - `/home/<user>/.trash/` — files moved via the cPanel File Manager "trash" feature.
 
-Tenant attacker reach: full read/write inside `/home/<user>/`, plus what their PHP processes can reach under suEXEC or PHP-FPM (the per-user pool runs as the user). The tenant cannot write to `/etc/`, `/usr/`, `/var/cpanel/`, or other accounts' `/home/` subtrees.
+Tenant-scoped adversary reach: full read/write inside `/home/<user>/`, plus what their PHP processes can reach under suEXEC or PHP-FPM (the per-user pool runs as the user). The tenant cannot write to `/etc/`, `/usr/`, `/var/cpanel/`, or other accounts' `/home/` subtrees.
 
 ## EasyApache profile detection
 
@@ -50,7 +50,7 @@ Apache reads `.htaccess` files from the docroot down to the requested resource, 
 
 Tenant abuse vectors via `.htaccess`:
 
-- `php_value auto_prepend_file /home/<user>/.cache/loader.php` — load attacker code on every request, even after the visible dropper is deleted.
+- `php_value auto_prepend_file /home/<user>/.cache/loader.php` — load adversary-controlled code on every request, even after the visible dropper is deleted.
 - `RewriteRule ^(.+)\.(jpg|png|gif)$ $1.php [L]` — route image requests to PHP, defeating "block .php uploads" controls.
 - `AddHandler application/x-httpd-php .jpg .png` — register PHP handler for image extensions.
 - `Options +ExecCGI` plus `AddHandler cgi-script .pl .py` — enable CGI execution where it was off.
@@ -169,6 +169,6 @@ When a finding lands, classify it before reasoning further:
 - **File ownership `root:root` outside a package-owned location** → written by a root-equivalent process; investigate privilege path immediately.
 - **File ownership `apache:apache` or `nobody:nogroup`** → DSO-mode PHP or web server itself wrote it; tenant attribution requires correlating with vhost access logs.
 
-This classification belongs in the case-engine evidence row; the intent reconstructor and synthesizer treat tenant findings and system findings differently downstream.
+This classification belongs in the evidence record under `bl-case/CASE-<id>/evidence/evid-*.md`; the curator (and the adjacent intent-reconstruction / defense-synthesis calls invoked from `bl consult`) treat tenant findings and system findings differently downstream.
 
 <!-- public-source authored — extend with operator-specific addenda below -->

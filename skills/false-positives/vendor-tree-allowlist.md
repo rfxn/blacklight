@@ -1,6 +1,6 @@
 # false-positives — vendor-tree allowlist patterns
 
-Loaded by the router when a flagged file lands inside a tree that is composer-managed, plugin-vendored, or otherwise upstream-owned. Pairs with `backup-artifact-patterns.md` for the non-vendor false-positive class. This file is the lookup of *what benign vendor content looks like* and *which properties separate a legitimate vendor file from an attacker-planted one in the same tree*.
+Loaded by the router when a flagged file lands inside a tree that is composer-managed, plugin-vendored, or otherwise upstream-owned. Pairs with `backup-artifact-patterns.md` for the non-vendor false-positive class. This file is the lookup of *what benign vendor content looks like* and *which properties separate a legitimate vendor file from an adversary-planted one in the same tree*.
 
 Authoritative references: Adobe Commerce Developer Docs file layout (`experienceleague.adobe.com/docs/commerce-operations`); Composer spec for PSR-4 autoload and `composer.lock` integrity (`getcomposer.org/doc/04-schema.md`); WordPress Plugin Directory README conventions (`developer.wordpress.org/plugins/wordpress-org/`). The allowlist patterns here derive from these sources — any entry the responder adds from operator context belongs below the footer marker, not here.
 
@@ -19,7 +19,7 @@ A pristine Magento 2.4 install drops roughly 30 000 files under `vendor/`. The l
 
 The Composer-managed invariant: every file under `vendor/` is either (a) named in `composer.lock` under a package's `dist.shasum` hash, or (b) regenerated deterministically from sources (e.g., `vendor/composer/autoload_*.php`). A file matching neither case inside `vendor/` is not upstream content.
 
-Concrete benign-path examples the hunters flag and then resolve via the allowlist:
+Concrete benign-path examples the curator's `observe.file` and `observe.fs_mtime_cluster` verbs flag and then resolve via the allowlist:
 
 - `vendor/magento/framework/View/Element/Template.php` — template rendering primitive. Present on every install, ~2 KB.
 - `vendor/magento/module-backend/Controller/Adminhtml/Index/Index.php` — admin dashboard controller entry.
@@ -40,9 +40,9 @@ WordPress false-positive territory follows similar rules with a looser upstream 
 - `wp-content/mu-plugins/` — must-use plugins. Files here load on every request without appearing in the plugin list. Legitimate use is rare; the directory is a persistence-favorite. Flag every file here for review; resolve as FP only against an explicit operator allowlist.
 - `wp-content/themes/<theme>/` — theme root. Minified `.js`, `.css`, and occasional `.php` template files. Modifications via the WordPress admin theme editor leave files with the web-user owner and a mtime unrelated to any deploy window.
 
-Plugin-content false-positive hits on webshell hunters typically resolve through three signals: plugin slug matches a directory-registered plugin; the file is part of a plugin archive pulled from a known source; the file hash matches the archive hash.
+Plugin-content false-positive hits on webshell-flagging `observe.file` findings typically resolve through three signals: plugin slug matches a directory-registered plugin; the file is part of a plugin archive pulled from a known source; the file hash matches the archive hash.
 
-Theme-tree false-positive shapes the responder meets repeatedly: minified jQuery copies under `wp-content/themes/<theme>/assets/js/vendor/`, page-builder cached templates under `wp-content/uploads/<builder>-cache/`, and translation `.mo` / `.po` pairs under `wp-content/languages/`. Minified files trigger entropy-based hunters; the fix is hash-against-upstream rather than threshold tuning.
+Theme-tree false-positive shapes the responder meets repeatedly: minified jQuery copies under `wp-content/themes/<theme>/assets/js/vendor/`, page-builder cached templates under `wp-content/uploads/<builder>-cache/`, and translation `.mo` / `.po` pairs under `wp-content/languages/`. Minified files trigger entropy-based `observe.file` heuristics; the fix is hash-against-upstream rather than threshold tuning.
 
 ---
 
@@ -51,7 +51,7 @@ Theme-tree false-positive shapes the responder meets repeatedly: minified jQuery
 Four signals, in order of load-bearing strength:
 
 1. **File ownership matches the vendor-install baseline.** On a cPanel host with suEXEC or PHP-FPM per-user pools, every file under `vendor/` is owned by `<user>:<user>`. A file owned by `root:root` or `apache:apache` inside `/home/<user>/public_html/vendor/` is not composer-installed — see `hosting-stack/cpanel-anatomy.md:40-45` for the UID-attribution rules.
-2. **File is named in composer.lock with a matching hash.** `composer install --dry-run` from a fresh checkout of the same `composer.lock` regenerates an identical tree. Any file on disk not present in the fresh install is attacker-planted; any file present in both but with a different hash is modified.
+2. **File is named in composer.lock with a matching hash.** `composer install --dry-run` from a fresh checkout of the same `composer.lock` regenerates an identical tree. Any file on disk not present in the fresh install is adversary-planted; any file present in both but with a different hash is modified.
 3. **File mtime falls within a deploy window.** Composer operations timestamp-stamp every file they touch. A `git log` of `composer.lock` gives the deploy windows; files with mtime in these windows match baseline. Files with mtime outside every deploy window are candidates for review.
 4. **File content matches the package archive.** Adobe Commerce packages and Composer registry packages ship with declared `dist.shasum` (SHA-1, and SHA-256 in Composer 2). The per-file hash is not in the lock file — pulling the archive separately is the final resort when the other three signals conflict.
 
@@ -61,11 +61,11 @@ If all four signals align on "benign", the finding closes as FP. If signals 1-3 
 
 ## When the allowlist does not apply
 
-Attackers know `vendor/` is the first place a responder stops looking. Three concrete abuse patterns:
+Adversaries know `vendor/` is the first place a responder stops looking. Three concrete abuse patterns:
 
-- **Drop inside a real package directory.** An attacker writes `vendor/magento/framework/Filesystem/<random>.php` or `vendor/symfony/console/Helper/.shell.php`. Casual review treats the directory as trusted and skips the file. The composer.lock diff (signal 2) catches this immediately — the file is not in the package's file list. The countermove is routine: compare on-disk tree against fresh install, flag any extras.
-- **Modify an existing package file.** An attacker patches `vendor/magento/framework/App/Bootstrap.php` to include a prepended loader. File path and ownership match baseline; only the hash (signal 4) diverges. The countermove is hash-diff against the package archive, which requires pulling the archive separately because per-file hashes are not in the lock.
-- **Bury inside mu-plugins or an obscure plugin vendor tree.** An attacker drops `wp-content/mu-plugins/.system.php` or `wp-content/plugins/<real-plugin>/vendor/.cache/helper.php`. Plugin-vendor trees lack the strict Composer invariant Magento enjoys, so the hash-diff avenue is weaker. Rely on mtime + ownership + path anomaly (a `.cache` directory inside a plugin vendor tree is not standard).
+- **Drop inside a real package directory.** An adversary writes `vendor/magento/framework/Filesystem/<random>.php` or `vendor/symfony/console/Helper/.shell.php`. Casual review treats the directory as trusted and skips the file. The composer.lock diff (signal 2) catches this immediately — the file is not in the package's file list. The countermove is routine: compare on-disk tree against fresh install, flag any extras.
+- **Modify an existing package file.** An adversary patches `vendor/magento/framework/App/Bootstrap.php` to include a prepended loader. File path and ownership match baseline; only the hash (signal 4) diverges. The countermove is hash-diff against the package archive, which requires pulling the archive separately because per-file hashes are not in the lock.
+- **Bury inside mu-plugins or an obscure plugin vendor tree.** An adversary drops `wp-content/mu-plugins/.system.php` or `wp-content/plugins/<real-plugin>/vendor/.cache/helper.php`. Plugin-vendor trees lack the strict Composer invariant Magento enjoys, so the hash-diff avenue is weaker. Rely on mtime + ownership + path anomaly (a `.cache` directory inside a plugin vendor tree is not standard).
 
 For PolyShell-family drops specifically, see `webshell-families/polyshell.md:13` — the `.cache`, `.tmp`, `.system` dotted-leaf idiom survives most cleanup tooling that filters on `*.php` directly under recognized public roots.
 
@@ -81,6 +81,6 @@ For a flagged file under a vendor tree:
 4. If steps 1-3 all report benign, pull the package archive from the registry (Packagist for Composer, Plugin Directory for WordPress) and hash-compare the file.
 5. On any divergence, treat the finding as modified-package and escalate per `skills/ir-playbook/case-lifecycle.md`.
 
-Every step produces an evidence row; the case-engine reasoner reads the aggregated rows, not the file content itself.
+Every step produces an evidence row (stored under `bl-case/CASE-<id>/evidence/evid-*.md`); the curator reasons against the aggregated rows, not the file content itself.
 
 <!-- public-source authored — extend with operator-specific addenda below -->

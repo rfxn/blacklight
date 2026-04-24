@@ -1,23 +1,23 @@
 # linux-forensics — persistence patterns after web-shell access
 
-Loaded by the router when cron, systemd, or shell-init artifacts have moved inside the investigation window. The web-shell itself is the entry; persistence is what survives a reboot, a `php-fpm` restart, or a customer-side cleanup pass that only deletes the visible dropper. This file is the lookup of where to check, what shape attacker insertion takes versus legitimate sysadmin work, and the time-stamp signals that separate the two.
+Loaded by the router when cron, systemd, or shell-init artifacts have moved inside the investigation window. The web-shell itself is the intrusion vector; persistence is what survives a reboot, a `php-fpm` restart, or a customer-side cleanup pass that only deletes the visible dropper. This file is the lookup of where to check, what shape adversary insertion takes versus legitimate sysadmin work, and the time-stamp signals that separate the two.
 
 ## Cron — the low-effort default
 
-Attacker cron entries land in five places. Check all five; do not stop after the first hit.
+Adversary cron entries land in five places. Check all five; do not stop after the first hit.
 
 - `/etc/crontab` — system-wide, runs as the user named in column six. A new line with `root` in column six and a non-package path in column seven is load-bearing.
 - `/etc/cron.d/*` — drop-in directory, same five-field-plus-user-plus-command grammar as `/etc/crontab`. Filenames matter: `0logrotate`, `awstats`, `php` are common mimicry. A drop-in owned by a non-root user, or one with no matching package owner (`rpm -qf` / `dpkg -S` returns "not owned"), is the tell.
 - `/etc/cron.{hourly,daily,weekly,monthly}/*` — script-style, no schedule field. Run as root by `run-parts`. Same package-ownership check applies.
-- `/var/spool/cron/{crontabs/}*` — per-user crontabs. Path varies: `/var/spool/cron/<user>` on RHEL-family, `/var/spool/cron/crontabs/<user>` on Debian-family. The `<user>` filename must match an existing UID; orphan files (user removed, crontab survived) are common attacker drops because they execute under the original UID until the file is found.
-- `/var/spool/anacron/` and `/etc/anacrontab` — anacron entries fire on machines that aren't on 24/7. Less common as an attacker vector but worth checking on workstations and dev hosts.
+- `/var/spool/cron/{crontabs/}*` — per-user crontabs. Path varies: `/var/spool/cron/<user>` on RHEL-family, `/var/spool/cron/crontabs/<user>` on Debian-family. The `<user>` filename must match an existing UID; orphan files (user removed, crontab survived) are common adversary drops because they execute under the original UID until the file is found.
+- `/var/spool/anacron/` and `/etc/anacrontab` — anacron entries fire on machines that aren't on 24/7. Less common as an adversary vector but worth checking on workstations and dev hosts.
 
-Distinguishing attacker insertion from sysadmin work:
+Distinguishing adversary insertion from sysadmin work:
 
-- **Comment density.** Sysadmin cron entries usually carry a one-line comment naming the purpose; attacker entries are bare.
-- **Command shape.** Sysadmin work calls a script in `/usr/local/bin`, `/opt/<vendor>`, or a package-owned path. Attacker entries call `curl|sh`, `wget -O- | bash`, base64-decoded one-liners, or a script under `/tmp`, `/var/tmp`, `/dev/shm`, `/home/<user>/.cache`.
-- **Schedule shape.** Hourly-or-faster schedules (`*/5 * * * *`, `@reboot`) on an unowned script are an attacker tell. Sysadmin cron is usually daily-or-slower.
-- **mtime/ctime divergence.** Legitimate cron files have mtime and ctime within seconds of each other (created once, edited once). An attacker who used `touch -r` to copy a reference timestamp leaves mtime matching the reference but ctime at the actual write moment. `stat -c '%Y %Z %n'` makes the divergence visible — any cron file where ctime is significantly later than mtime warrants explanation.
+- **Comment density.** Sysadmin cron entries usually carry a one-line comment naming the purpose; adversary entries are bare.
+- **Command shape.** Sysadmin work calls a script in `/usr/local/bin`, `/opt/<vendor>`, or a package-owned path. Adversary entries call `curl|sh`, `wget -O- | bash`, base64-decoded one-liners, or a script under `/tmp`, `/var/tmp`, `/dev/shm`, `/home/<user>/.cache`.
+- **Schedule shape.** Hourly-or-faster schedules (`*/5 * * * *`, `@reboot`) on an unowned script are an adversary tell. Sysadmin cron is usually daily-or-slower.
+- **mtime/ctime divergence.** Legitimate cron files have mtime and ctime within seconds of each other (created once, edited once). An adversary who used `touch -r` to copy a reference timestamp leaves mtime matching the reference but ctime at the actual write moment. `stat -c '%Y %Z %n'` makes the divergence visible — any cron file where ctime is significantly later than mtime warrants explanation.
 
 ## systemd units
 
@@ -28,7 +28,7 @@ Persistence via systemd is more durable than cron and harder for a customer-side
 - `/usr/lib/systemd/system/*` — package-owned units. New files here without a package owner are a tampering signal.
 - `~/.config/systemd/user/*` — per-user units. Run by the user's `systemd --user` instance. Easy to miss because most fleet inventories only check system-level units. Combined with `loginctl enable-linger <user>`, a per-user unit runs even when the user is not logged in.
 
-Distinguishing markers for attacker units:
+Distinguishing markers for adversary units:
 
 - `Description=` field is generic, missing, or copied from a real package (mimicry).
 - `ExecStart=` invokes a shell or interpreter against a script in a writable directory (`/tmp`, `/var/tmp`, `/home/<user>/.cache`, `/dev/shm`) or against a base64-decoded inline payload.
@@ -39,15 +39,15 @@ Distinguishing markers for attacker units:
 
 `/etc/rc.local` is deprecated on systemd distros but still executed by `rc-local.service` when present, which is shipped on most stock images. A non-empty `/etc/rc.local` with anything other than the distro's stock comment-only template is worth a read.
 
-`/etc/init.d/*` survives on legacy hosts (CentOS 6, Slackware, older Gentoo) and is occasionally still used as an attacker drop on systemd hosts because `systemd-sysv-generator` will execute SysV scripts at boot.
+`/etc/init.d/*` survives on legacy hosts (CentOS 6, Slackware, older Gentoo) and is occasionally still used as an adversary drop on systemd hosts because `systemd-sysv-generator` will execute SysV scripts at boot.
 
-`/etc/profile.d/*.sh` runs at login for every user. A new script here that touches the network or writes to a non-standard path is rare in sysadmin work and common in attacker persistence.
+`/etc/profile.d/*.sh` runs at login for every user. A new script here that touches the network or writes to a non-standard path is rare in sysadmin work and common in adversary persistence.
 
 ## Shell-init hijacks
 
 Per-user shell init files are the lowest-blast-radius persistence — only fires when that specific user logs in, but invisible to a `systemctl`-centric audit.
 
-- `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` — bash startup chain. New `alias` definitions that wrap `ls`, `cat`, `ps`, or `netstat` to filter attacker artifacts are a known pattern. Function definitions named after common commands (`function ls() { ... }`) override the binary in PATH for that user.
+- `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` — bash startup chain. New `alias` definitions that wrap `ls`, `cat`, `ps`, or `netstat` to filter adversary artifacts are a known pattern. Function definitions named after common commands (`function ls() { ... }`) override the binary in PATH for that user.
 - `~/.zshrc`, `~/.zprofile`, `~/.zshenv` — zsh equivalents. `~/.zshenv` is loaded for every zsh invocation including non-interactive, which makes it the highest-leverage zsh init file.
 - `~/.bash_logout` — runs at logout. Used for "leave-no-trace" cleanup that wipes session history.
 - `/etc/profile`, `/etc/profile.d/`, `/etc/bash.bashrc` — system-wide shell init. Modifications here affect every user.
@@ -72,12 +72,12 @@ Same shape rule as cron drops: new script, no package owner, references a networ
 
 ## Package-manager hooks
 
-Both `dpkg` and `rpm` support per-transaction hooks that run with elevated privilege. These are uncommon attacker territory but high-impact when they appear.
+Both `dpkg` and `rpm` support per-transaction hooks that run with elevated privilege. These are uncommon adversary territory but high-impact when they appear.
 
 - Debian: `/etc/apt/apt.conf.d/*` lines beginning with `DPkg::Pre-Invoke`, `DPkg::Post-Invoke`, `APT::Update::Pre-Invoke`. Also `/etc/dpkg/dpkg.cfg.d/*`.
 - RHEL-family: `/etc/yum/pluginconf.d/*` and the corresponding plugin python files in `/usr/lib/yum-plugins/`. On dnf-based systems, `/etc/dnf/plugins/*` and `/usr/lib/python*/site-packages/dnf-plugins/`.
 
-A drop here means the attacker fires their payload every time the operator runs a package operation — including the cleanup operation. Worth checking before running any post-incident `apt update` or `dnf update`.
+A drop here means the adversary fires their payload every time the operator runs a package operation — including the cleanup operation. Worth checking before running any post-incident `apt update` or `dnf update`.
 
 ## Web-server includes — auto_prepend_file and pool overrides
 
@@ -85,7 +85,7 @@ The web-server execution context is its own persistence surface, separate from s
 
 - `.htaccess` directives `php_value auto_prepend_file` and `php_value auto_append_file` cause an arbitrary PHP file to load before/after every request handled by the directory. A `.htaccess` in a customer document root that names an `auto_prepend_file` outside the document root (or to a hidden file inside) is a webshell loader pattern.
 - PHP-FPM pool overrides under `/etc/php/<ver>/fpm/pool.d/` or `/etc/php-fpm.d/`. A new pool, or a `php_admin_value[auto_prepend_file]` line in an existing pool, achieves the same loading without touching the customer's `.htaccess`.
-- Apache `Include` directives under `/etc/httpd/conf.d/` or `/etc/apache2/conf-enabled/` that pull in attacker-controlled snippets. Look for include targets that resolve to writable directories.
+- Apache `Include` directives under `/etc/httpd/conf.d/` or `/etc/apache2/conf-enabled/` that pull in adversary-controlled snippets. Look for include targets that resolve to writable directories.
 - nginx `include` directives in server blocks pulling from `/etc/nginx/conf.d/` — same shape, different web server.
 
 The auto_prepend_file pattern is especially load-bearing because it survives the deletion of the visible dropper: cleanup removes `shell.php` from the document root, but the `.htaccess` directive points at a backup loader the operator never saw, and the loader re-creates the dropper on the next request.
@@ -100,12 +100,12 @@ Persistence triage hinges on three timestamps and the relationships between them
 
 Decision shapes:
 
-- ctime later than mtime by minutes or more on a file claimed to be old is the `touch -r` signal — the attacker reset mtime to mimic neighbors but could not touch ctime.
-- A cluster of unrelated files across `/etc/`, `/var/spool/cron/`, `/etc/systemd/system/`, and a document root all sharing an mtime within a few-minute window is a deployment cadence — the attacker scripted the persistence in one batch.
+- ctime later than mtime by minutes or more on a file claimed to be old is the `touch -r` signal — the adversary reset mtime to mimic neighbors but could not touch ctime.
+- A cluster of unrelated files across `/etc/`, `/var/spool/cron/`, `/etc/systemd/system/`, and a document root all sharing an mtime within a few-minute window is a deployment cadence — the adversary scripted the persistence in one batch.
 - Compare suspect file mtimes against the `rpm -V` / `debsums` baseline. Stock package files that have been modified out-of-band are the highest-confidence persistence signal short of catching the payload firing.
 
 ## What to capture, not just check
 
-When triage finds a persistence artifact, the evidence row should record: full path, owner+group, mode, mtime, ctime, package owner (or `unowned`), the exact command line or `ExecStart` value, and the SHA-256 of the artifact. The artifact itself goes into evidence storage by hash so the case file can cite it across hosts and the synthesizer can pattern-match across cases.
+When triage finds a persistence artifact, the evidence record under `bl-case/CASE-<id>/evidence/evid-*.md` should record: full path, owner+group, mode, mtime, ctime, package owner (or `unowned`), the exact command line or `ExecStart` value, and the SHA-256 of the artifact. The artifact itself goes into evidence storage by hash so the case file can cite it across hosts and the defense-synthesis call (`bl consult --synthesize-defense`) can pattern-match across cases.
 
 <!-- public-source authored — extend with operator-specific addenda below -->

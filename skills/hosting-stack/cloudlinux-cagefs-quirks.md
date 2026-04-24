@@ -63,9 +63,9 @@ For a suspected SQL-injection or credential-exfil incident, governor logs answer
 
 ---
 
-## The attacker view from inside the cage
+## The adversary view from inside the cage
 
-An attacker who lands RCE inside a cage sees a restricted namespace:
+An adversary who lands RCE inside a cage sees a restricted namespace:
 
 - `/proc/` shows only the tenant's own processes. Other tenants are invisible; system processes are invisible.
 - `/etc/passwd` shows only the tenant and a small allowlist of system accounts (root, nobody, and a few cPanel helpers). The other tenants' `/etc/passwd` entries are not present.
@@ -87,7 +87,7 @@ When the host is confirmed CloudLinux:
 4. **Baseline the cage.** `cagefsctl --list-users` enumerates which accounts have active cages. `cagefsctl --display-user-mode <user>` reports whether the tenant is in CageFS (`Enabled`) or not (`Disabled`). A tenant running outside the cage on a CloudLinux host is a misconfiguration that widens blast radius — flag this before proceeding.
 5. **Pull governor records for the suspect MySQL user.** `/var/lve/dbgovernor-store/<user>.log` gives the per-tenant query profile. Anomalies here corroborate or refute credential-harvest and injection claims.
 
-The case-engine evidence row should cite `/var/log/messages` LVE-fault lines by byte offset, `lveinfo` output as a captured JSON blob, and the `cagefsctl --display-user-mode` result as a one-line attribution. See `ir-playbook/case-lifecycle.md` on evidence-row discipline.
+The evidence record under `bl-case/CASE-<id>/evidence/evid-*.md` should cite `/var/log/messages` LVE-fault lines by byte offset, `lveinfo` output as a captured JSON blob, and the `cagefsctl --display-user-mode` result as a one-line attribution. See `ir-playbook/case-lifecycle.md` on evidence-record discipline.
 
 ---
 
@@ -96,7 +96,7 @@ The case-engine evidence row should cite `/var/log/messages` LVE-fault lines by 
 Two partial-deployment states change the reading:
 
 - **CloudLinux kernel installed but CageFS disabled for some accounts.** `cagefsctl --display-user-mode <user>` reports `Disabled`. These accounts run in the stock cPanel posture — no cage isolation — and `/home/<other-user>/` trees are visible to their PHP processes if POSIX perms allow. Lateral-movement risk is higher for these accounts.
-- **CloudLinux installed but LVE limits set to zero or unlimited.** `lvectl list` shows `CPU=0 IO=0 MEM=0` for some tenants (meaning unlimited on this platform). LVE faults do not surface even under sustained abuse. The case engine must not rely on LVE-fault absence as evidence of benign activity for these accounts.
+- **CloudLinux installed but LVE limits set to zero or unlimited.** `lvectl list` shows `CPU=0 IO=0 MEM=0` for some tenants (meaning unlimited on this platform). LVE faults do not surface even under sustained abuse. The curator must not rely on LVE-fault absence as evidence of benign activity for these accounts.
 
 Both conditions are operator-owned misconfigurations rather than forensic anomalies per se, but they change what evidence is available. The triage checklist above should record the deployment posture as a preliminary observation before reading per-tenant evidence.
 

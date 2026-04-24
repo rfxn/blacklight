@@ -64,7 +64,7 @@ path mishandles the content. The log-line signature of the initial access is
 a `POST` from an unauthenticated source IP with non-trivial body length and
 a `200` or `500` response against a path that would not normally respond to
 unauthenticated traffic. See `apsb25-94/exploit-chain.md` for the full
-attack flow and `magento-attacks/admin-paths.md` for the REST endpoint
+intrusion chain and `magento-attacks/admin-paths.md` for the REST endpoint
 surface partition.
 
 ### Post-exploitation artifacts (publicly reported)
@@ -85,9 +85,10 @@ Publicly reported APSB25-94-era callbacks target `.top` TLD domains with
 12-14-character host labels drawn from base32 or base36 alphabets
 (random-looking subdomain + cheap TLD). TLD choice rotates per variant; the
 *shape* — random subdomain, short-lived domain, cheap TLD — is more durable
-than the specific TLD and is what the C2-callback hunter keys on. See
-`webshell-families/polyshell.md:35` for the PolyShell callback-body
-structure (small `POST`, host-id + dispatch param + timestamp + checksum).
+than the specific TLD and is what the curator's C2-callback `observe.*`
+verbs key on. See `webshell-families/polyshell.md:35` for the PolyShell
+callback-body structure (small `POST`, host-id + dispatch param + timestamp
++ checksum).
 
 ## Timing
 
@@ -110,9 +111,10 @@ Loaded by the router when:
   filesystem mtime observed on a host (i.e., the compromise plausibly
   exploits this advisory).
 
-Drives: intent reconstructor's dormant-capability inference for APSB25-94-class
-PolyShell deployments; synthesizer's reactive rule shaping for URL-evasion
-blocks.
+Drives: the intent-reconstruction call (`bl consult --reconstruct-intent`) for
+dormant-capability inference on APSB25-94-class PolyShell deployments; the
+defense-synthesis call (`bl consult --synthesize-defense`) for reactive rule
+shaping for URL-evasion blocks.
 
 ## Operator note
 Operator led incident response for APSB25-94 at scale in late March 2026.

@@ -1,0 +1,195 @@
+# ModSecurity Audit Log Format
+
+**Source authority:** ModSecurity Reference Manual (v2.x)
+<https://github.com/owasp-modsecurity/ModSecurity/wiki/Reference-Manual-(v2.x)>
+and ModSecurity Handbook Chapter 4 (Feistyduck)
+<https://www.feistyduck.com/library/modsecurity-handbook-free/online/ch04-logging.html>. The curator reads this skill when `observe.log_modsec` evidence batches land — the audit log Parts taxonomy and visibility gaps drive what is and is not recoverable from a given deployment.
+
+---
+
+## Parts taxonomy — A through Z
+
+ModSec writes each transaction as a sequence of sections (called "parts") separated by boundary markers. Each letter designates a specific content type:
+
+| Part | Contents |
+|---|---|
+| `A` | Audit log header: timestamp, unique-id, client IP/port, server IP/port |
+| `B` | Request headers |
+| `C` | Request body (only written when `SecRequestBodyAccess On`) |
+| `D` | Reserved / intermediate response headers (rarely used) |
+| `E` | Intermediate response body (rarely used) |
+| `F` | Final response headers as sent to the client |
+| `G` | Reserved — final response body (not currently implemented) |
+| `H` | Audit log trailer: `Message:`, `Apache-Error:`, `Stopwatch:`, `Producer:`, `Server:`, `Action:` lines |
+| `I` | Compact request body alternative (multipart-parsed form only, no raw body) |
+| `J` | Uploaded files metadata (filenames, sizes) |
+| `K` | Matched rules, one per line, in match order |
+| `Z` | Final boundary terminating the transaction record |
+
+Default `SecAuditLogParts` value is **`ABCFHZ`**. Note what is absent by default:
+
+- No `E` — no response body capture
+- No `K` — no per-rule match list on many stock configurations (CRS default includes `K`; bare ModSec does not)
+
+A production deployment without `K` loses the rule-match trail entirely — `H:Message:` lines summarize matches but drop action-level detail.
+
+---
+
+## Boundary format
+
+Each section is introduced by a boundary line of the form:
+
+```
+--<hex>-<LETTER>--
+```
+
+The `<hex>` prefix is a per-transaction 8-character identifier (e.g., `a1b2c3d4`). Every section within one transaction shares the same hex prefix. The section letter differs per boundary. Example:
+
+```
+--a1b2c3d4-A--
+[timestamp] unique-id client-ip client-port server-ip server-port
+--a1b2c3d4-B--
+POST /custom_options/ HTTP/1.1
+Host: store.example.com
+...
+--a1b2c3d4-Z--
+```
+
+**Parser rule:** key on the full boundary pattern `^--[0-9a-f]{8}-[A-Z]--$`, not on the letter alone. The hex prefix is the transaction key — use it to group sections. A parser that matches `-A--` anywhere in the line body will false-positive on legitimate POST bodies that happen to contain that substring.
+
+---
+
+## Section A — header anatomy
+
+```
+[23/Apr/2026:14:02:17 +0000] Zw4k8n8AAAEAAG0ABCDE@ 203.0.113.10 54321 10.0.0.5 443
+```
+
+Fields in order:
+
+1. Timestamp with timezone offset
+2. Unique transaction ID (alphanumeric, 24 characters, Apache `mod_unique_id` generated)
+3. Client IP
+4. Client source port
+5. Server IP
+6. Server port (443 for HTTPS, 80 for plaintext)
+
+**The unique ID is the join key** that ties this audit record to the same request's line in the Apache transfer log (when `LogFormat` includes `%{UNIQUE_ID}e`). Without `%{UNIQUE_ID}e` in the transfer log, falling back to `(client_ip, timestamp, request_line)` works, but under NAT or burst load the unique ID is the only unambiguous link.
+
+---
+
+## Section H — trailer anatomy
+
+The trailer carries the forensic summary. Representative content:
+
+```
+Message: Warning. Matched phrase "union select" at ARGS:id. [file "REQUEST-942-APPLICATION-ATTACK-SQLI.conf"] [line "68"] [id "942100"] [rev ""] [msg "SQL Injection Attack Detected via libinjection"] [severity "CRITICAL"]
+Apache-Error: [file "apache2_util.c"] [line 274] [level 3] [client 203.0.113.10] ModSecurity: Warning. ...
+Stopwatch: 1745415737123456 12345 (1234* 2345- 3456)
+Producer: ModSecurity for Apache/2.9.7; OWASP_CRS/3.3.5.
+Server: Apache
+Action: Intercepted (phase 2)
+```
+
+Key lines:
+
+- `Message:` — one per rule match, with file/line/id/severity/msg. **This is the forensic payload of the audit log.** Rule ID is the cross-reference handle into CRS or custom rule files.
+- `Apache-Error:` — the error-log mirror of the event.
+- `Stopwatch:` — transaction duration in microseconds and per-phase breakdown. Spikes here indicate a rule that's heavy on regex backtracking.
+- `Producer:` — ModSec version and rule-set version. Always record this when triaging — a rule-id only means something against a specific CRS version.
+- `Action:` — final disposition (`Intercepted`, `Passed`, `Allowed`). `Intercepted` means the transaction was blocked; `Passed` means rules matched but `pass` action was the final decision.
+
+---
+
+## Section K — rule matches
+
+When present, section K lists every rule that matched during the transaction, one per line, in match order. Format is the full rule directive (`SecRule ...`) with variables substituted.
+
+**Non-obvious:** `K` includes rules that matched with `pass` action — those may NOT appear in the `H:Message:` lines depending on the action-logging configuration. If an investigator concludes "only rule 942100 fired" based on `H` alone and missed three passed matches that would have shown intent, the conclusion is wrong. Always read `K` when it's present; and when it isn't, note that the list of fired-but-passed rules is not available for this transaction.
+
+---
+
+## Visibility gap #1 — `SecAuditLogRelevantStatus`
+
+Stock ModSecurity+CRS configuration:
+
+```
+SecAuditLogRelevantStatus "^(?:5|4\d[^4])"
+```
+
+This regex says: audit-log transactions where the response status is 5xx, or 4xx except 404. A successful 200 POST that drops a webshell and responds with an ack is **not audit-logged** under this config unless a ModSec rule fires independently and triggers audit via its own action.
+
+**The trap:** an investigator reading the audit log and finding no record of a 200 POST concludes the request wasn't seen. It was seen; it just wasn't deemed relevant. Verify by:
+
+- Reading `SecAuditEngine` and `SecAuditLogRelevantStatus` from the site's ModSec config
+- If `SecAuditEngine On` (not the default `RelevantOnly`), every transaction is audit-logged regardless of status
+- If `SecAuditEngine RelevantOnly` (typical), only transactions matching the status regex or a rule with `auditlog` action are recorded
+
+Cross-reference the transfer log for 200s — they won't be in the audit log under stock config.
+
+---
+
+## Visibility gap #2 — `SecRequestBodyAccess Off`
+
+When `SecRequestBodyAccess Off`, ModSecurity does not read the request body into its internal buffer. Consequences:
+
+- No `C` section in the audit log (no body to record)
+- No body-inspection rules fire (everything under `REQUEST_BODY` is dead)
+- No replay possible — the POST payload that dropped a shell is not recoverable from this log
+
+**Non-retroactive:** enabling `SecRequestBodyAccess On` after the incident does nothing for existing records. The rule for the investigator is: if you need audit-log forensic replay on PolyShell-era intrusions, `SecRequestBodyAccess On` must be set ahead of time. It is not retroactive.
+
+Check the config; if `Off`, the audit log cannot answer "what was in the POST body" and the question must be routed to other sources (WAF request-buffering proxy, TLS-terminator tap, or accept that replay is unavailable — record this explicitly in `open-questions.md`).
+
+---
+
+## Rule-ID cross-reference workflow
+
+Given an `H:Message:` or section-K line with rule id `942100`:
+
+```bash
+grep -Rn '^\s*SecRule' /etc/modsecurity/ /etc/httpd/modsecurity.d/ /etc/nginx/modsec/ 2>/dev/null \
+  | grep -E 'id:\s*"?942100"?'
+```
+
+The matching line gives the rule body, the `msg`, and the file+line. From there:
+
+1. Read the full rule and its chained rules (ModSec `chain` action links multiple SecRule directives).
+2. Identify the rule's `phase` — phase 1 (headers), phase 2 (body), phase 3 (response headers), phase 4 (response body), phase 5 (logging).
+3. Confirm what input variable triggered (`ARGS`, `REQUEST_URI`, `REQUEST_HEADERS`, etc.) by reading `Message:` — the match location is recorded.
+4. Correlate to the request line in section `B` — the rule fires against something in headers/URI/body; identify the specific token.
+
+---
+
+## Concurrent vs serial logging
+
+ModSec supports two audit-log back-ends:
+
+- **Serial** (`SecAuditLogType Serial`) — one file, all transactions appended. Simple but contended under load; high-traffic hosts drop events under lock contention.
+- **Concurrent** (`SecAuditLogType Concurrent`) — one file per transaction, organized in a date-based directory tree. No contention; storage cost is high (one inode per transaction).
+
+**Operator-voice rule:** Concurrent for forensic use, always. Serial is a demo-config that should never ship. A site running Serial at any non-trivial request rate has an audit log with dropped entries, and the investigator cannot tell which entries are missing.
+
+---
+
+## Triage checklist
+
+- [ ] Identify the audit log path (`SecAuditLog` directive in ModSec config)
+- [ ] Verify `SecAuditEngine` mode (`On` vs `RelevantOnly`) and `SecAuditLogRelevantStatus` regex
+- [ ] Verify `SecRequestBodyAccess` setting — `Off` means no body replay is possible from this log
+- [ ] Verify `SecAuditLogParts` — note whether `K` is included
+- [ ] Confirm `SecAuditLogType` — if Serial on a busy host, assume the log has gaps
+- [ ] Parse the boundary pattern `^--[0-9a-f]{8}-[A-Z]--$` and group by hex prefix
+- [ ] For each relevant transaction: extract unique ID from section A, cross-reference to the transfer log
+- [ ] Read section H `Message:` lines and section K when present for rule-match trail
+- [ ] Resolve rule IDs against the deployed rule-set (CRS version per `Producer:` line)
+
+---
+
+## See also
+
+- [apache-transfer-log.md](apache-transfer-log.md) — cross-reference audit-log unique IDs to transfer-log lines
+- [post-to-shell-correlation.md](post-to-shell-correlation.md) — status-code decision rules that work on the transfer log when audit is silent
+- [maldet-session-log.md](maldet-session-log.md) — confirm the on-disk artifact that ModSec may have missed
+
+<!-- adapted from beacon/skills/log-forensics/modsec-audit-format.md (2026-04-23) — v2-reconciled -->

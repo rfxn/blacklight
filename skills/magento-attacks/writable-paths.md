@@ -1,6 +1,6 @@
 # magento-attacks — writable paths and drop-zone analysis
 
-Loaded alongside `admin-paths.md` when the host stack includes Magento 2.x. Pairs with that file for the admin-surface side of the picture; this file covers the writable-directory side — where attacker drops land and how to separate legitimate writable-directory content from planted artifacts.
+Loaded alongside `admin-paths.md` when the host stack includes Magento 2.x. Pairs with that file for the admin-surface side of the picture; this file covers the writable-directory side — where adversary drops land and how to separate legitimate writable-directory content from planted artifacts.
 
 Authoritative references: Adobe Commerce Developer Docs file layout and permissions (`experienceleague.adobe.com/docs/commerce-operations/installation-guide/prerequisites/file-system/overview.html`); Adobe Commerce deployment docs for `generated/` and `pub/static/` semantics (`experienceleague.adobe.com/docs/commerce-operations/configuration-guide/cli/set-mode.html`); Apache `mod_rewrite` documentation for `.htaccess` directive scope (`httpd.apache.org/docs/current/mod/mod_rewrite.html`). Cross-reference `admin-paths.md:49-56` for the vendor-hiding discussion and `admin-paths.md:62-69` for the `composer.lock` baseline pattern — this file does not duplicate, it extends.
 
@@ -38,7 +38,7 @@ The PolyShell family (`webshell-families/polyshell.md:13`) favors `pub/media/wys
 
 ## .htaccess override vectors
 
-`admin-paths.md:49-56` covers the tenant abuse vectors; the writable-path view adds placement strategy. An attacker who has write to `pub/media/` but does not yet have PHP execution writes an `.htaccess` first, then drops a dual-extension file.
+`admin-paths.md:49-56` covers the tenant abuse vectors; the writable-path view adds placement strategy. An adversary who has write to `pub/media/` but does not yet have PHP execution writes an `.htaccess` first, then drops a dual-extension file.
 
 Common directive patterns:
 
@@ -49,7 +49,7 @@ RewriteRule ^(.+)\.(jpg|png|gif|webp)$ $1.php [L]
 # Register PHP handler for image extensions — same outcome, shorter
 AddHandler application/x-httpd-php .jpg .png .gif
 
-# Prepend attacker loader to every PHP request in this tree
+# Prepend adversary loader to every PHP request in this tree
 php_value auto_prepend_file /home/<user>/public_html/pub/media/.cache/loader.php
 
 # Enable CGI execution where it was off
@@ -76,7 +76,7 @@ For each writable directory, the responder needs a one-question triage test:
 - `generated/` — "Is the file under `generated/code/` or `generated/metadata/`, and does its mtime fall inside a known deploy window?" Both conditions required for benign; either failure is a review flag.
 - `pub/static/` — "Does the file appear in `pub/static/deployed_version.txt`'s generation manifest?" A file not in the manifest is not from the deploy run.
 
-These heuristics produce evidence rows. The case engine reads the row's yes/no answer plus the citation (`source_refs`), not the file content.
+These heuristics produce evidence records in `bl-case/CASE-<id>/evidence/evid-*.md`. The curator reads the record's yes/no answer plus the citation (`source_refs`), not the file content.
 
 ---
 
@@ -96,17 +96,17 @@ The comparison is defensive — never touch the live site with `composer install
 
 ---
 
-## What to capture into evidence rows
+## What to capture into evidence records
 
-Every writable-path finding produces at least one evidence row. The row's `source_refs` cite:
+Every writable-path finding produces at least one evidence record under `bl-case/CASE-<id>/evidence/evid-*.md`. The record's `source_refs` cite:
 
 - **path** — full path from docroot root, normalized (no trailing slashes, no `..` segments).
 - **mtime** — ISO-8601 UTC from `stat -c '%y' <file>`. Mtime drives windowing in later correlation.
 - **owner** — `stat -c '%U:%G' <file>`. Tenant attribution per `hosting-stack/cpanel-anatomy.md:40-45`.
-- **composer-baseline result** — one of `present-in-lock-matching-hash`, `present-in-lock-modified-hash`, `not-in-lock`. The three-way split is what the reasoner reads.
+- **composer-baseline result** — one of `present-in-lock-matching-hash`, `present-in-lock-modified-hash`, `not-in-lock`. The three-way split is what the curator reads.
 - **governing `.htaccess` chain** — list of `.htaccess` files from docroot down to the path's parent directory, each with its mtime and a one-line summary of handler-affecting directives.
 - **request-log correlation** — any access-log line hitting the file in the last 90 days. Format: `<timestamp> <method> <uri> <status> <bytes> <user-agent>`.
 
-The evidence row format itself is defined by `ir-playbook/case-lifecycle.md`; this file only names which fields a writable-path finding must populate.
+The evidence-record format itself is defined by `ir-playbook/case-lifecycle.md`; this file only names which fields a writable-path finding must populate.
 
 <!-- public-source authored — extend with operator-specific addenda below -->

@@ -1,14 +1,16 @@
 # modsec-grammar — transformation cookbook for evasion shapes
 
-Loaded on every synthesizer call when the attack class shows evasion signals (transformation-laden payload, double-encoding, base64-wrapped body). Pairs with `rules-101.md` for the grammar floor; this file is the recipe catalog of *which transformation chains counter which evasion shapes* and *what the cost of each chain is at scale*.
+Loaded on every `bl consult --synthesize-defense` call when the evidence-pattern class shows evasion signals (transformation-laden payload, double-encoding, base64-wrapped body). Pairs with `rules-101.md` for the grammar floor; this file is the recipe catalog of *which transformation chains counter which evasion shapes* and *what the cost of each chain is at scale*.
 
-Authoritative references: ModSecurity Reference Manual v3 on GitHub (`github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual-(v3.x)`) for the transformation catalog and evaluation semantics; OWASP Core Rule Set `REQUEST-901-INITIALIZATION.conf` and `REQUEST-942-APPLICATION-ATTACK-SQLI.conf` for the transformation-chain idioms the CRS applies globally; OWASP Evasion cheat-sheet for the attack-side shapes the chains counter. `rules-101.md:101-115` already enumerates the transformation list; this file composes them into recipes.
+Authoritative references: ModSecurity Reference Manual v3 on GitHub (`github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual-(v3.x)`) for the transformation catalog and evaluation semantics; OWASP Core Rule Set `REQUEST-901-INITIALIZATION.conf` and `REQUEST-942-APPLICATION-ATTACK-SQLI.conf` for the transformation-chain idioms the CRS applies globally; OWASP Evasion cheat-sheet for the adversary-side shapes the chains counter. `rules-101.md:101-115` already enumerates the transformation list; this file composes them into recipes.
+
+Note: `tag:'application-attack'` and `tag:'sqli'` strings are ModSec rule-engine grammar literals (OWASP CRS convention) — preserved verbatim for tool compatibility.
 
 ---
 
 ## Why transformations matter
 
-A request arrives at the server encoded per the HTTP wire format: URL-encoded in the path and query string, form-urlencoded or multipart in `POST` bodies, occasionally base64-wrapped by intermediate tooling. An attacker leans on encoding to make a malicious payload look syntactically different from a naive signature until the moment the application decodes it. The transformation chain is how ModSec re-aligns the inspected value to the shape the application will execute.
+A request arrives at the server encoded per the HTTP wire format: URL-encoded in the path and query string, form-urlencoded or multipart in `POST` bodies, occasionally base64-wrapped by intermediate tooling. An adversary leans on encoding to make a malicious payload look syntactically different from a naive signature until the moment the application decodes it. The transformation chain is how ModSec re-aligns the inspected value to the shape the application will execute.
 
 Two invariants from the Reference Manual (transformations chapter):
 
@@ -27,7 +29,7 @@ Recap of the load-bearing transformations from `rules-101.md:101-115`, with the 
 - `t:urlDecodeUni` — decodes `%xx` and `%uXXXX`. Adds IIS-style `%u0075` Unicode sequences. Broader than `t:urlDecode`; use as the default unless the body is known ASCII.
 - `t:htmlEntityDecode` — decodes `&#65;`, `&amp;`, `&lt;`, etc. Counters HTML-entity-wrapped payloads in XSS contexts.
 - `t:base64Decode` — decodes base64 from a variable value. Counters payloads smuggled as base64 strings (common in `POST` bodies wrapped for transport).
-- `t:removeNulls` — strips `\0` bytes. Counters null-byte truncation attacks against backends that C-string the value.
+- `t:removeNulls` — strips `\0` bytes. Counters null-byte truncation patterns against backends that C-string the value.
 - `t:lowercase` — case-fold. Counters `UnIoN sElEcT` case-randomization.
 - `t:compressWhitespace` — collapse runs of whitespace to a single space. Counters `union/**/select` and `union  select` noise injection.
 - `t:replaceComments` — replace `/* ... */` sequences with a single space. Counters `union/*anything*/select`.
@@ -62,7 +64,7 @@ The chain composes for most phase:2 rules. Phase:1 rules against `REQUEST_URI` u
 
 ## Recipe — double-encoded
 
-An attacker double-encodes (`%2575%256e%2569%256f%256e` → URL-decoded once → `%75%6e%69%6f%6e` → URL-decoded twice → `union`) to bypass one-pass rules.
+An adversary double-encodes (`%2575%256e%2569%256f%256e` → URL-decoded once → `%75%6e%69%6f%6e` → URL-decoded twice → `union`) to bypass one-pass rules.
 
 Two approaches:
 
@@ -75,7 +77,7 @@ The second pattern appears in OWASP CRS `REQUEST-901-INITIALIZATION.conf` — th
 
 ## Recipe — base64-wrapped body
 
-A `POST` body of `cmd=ZWNobyAic2hlbGwi` (base64 of `echo "shell"`) hides from a signature that looks for literal `echo` in `ARGS`.
+A `POST` body of `cmd=ZWNobyAic2hlbGwi` (base64 of `echo "shell"`) evades a signature that looks for literal `echo` in `ARGS`.
 
 ```
 SecRule ARGS:cmd "@rx (?:echo|system|passthru|shell_exec|eval)\s*[(\"'`]" \
@@ -87,7 +89,7 @@ SecRule ARGS:cmd "@rx (?:echo|system|passthru|shell_exec|eval)\s*[(\"'`]" \
 
 `t:base64Decode` runs first because the variable value is the base64 string; lowercasing it before decode would produce a case-corrupted base64 string that decodes to garbage (`A` and `a` are different base64 code points). Decode, then lowercase the result, then match.
 
-For a whole-body base64 wrap (an attacker uses `Content-Encoding: base64` or an API that treats the body as a base64-encoded inner payload), apply the transformation to `REQUEST_BODY`:
+For a whole-body base64 wrap (an adversary uses `Content-Encoding: base64` or an API that treats the body as a base64-encoded inner payload), apply the transformation to `REQUEST_BODY`:
 
 ```
 SecRule REQUEST_BODY "@rx ..." \
@@ -100,7 +102,7 @@ Cost on whole-body base64: one decode per request, bounded by `SecRequestBodyLim
 
 ## Recipe — Unicode normalization tricks
 
-Attackers substitute visually-identical Unicode code points for ASCII characters (`admin` with a Cyrillic `а` U+0430 for the `a`). A strict `@streq admin` fails to match.
+Adversaries substitute visually-identical Unicode code points for ASCII characters (`admin` with a Cyrillic `а` U+0430 for the `a`). A strict `@streq admin` fails to match.
 
 ```
 SecRule REQUEST_URI "@rx /admin/" \
@@ -117,7 +119,7 @@ Unicode Technical Report 36 ("Unicode Security Considerations") catalogs the con
 
 ## Recipe — whitespace and comment insertion
 
-SQLi signatures face `UNION/**/SELECT` and `UNION + tab + tab + SELECT` evasions. The chain:
+SQLi signatures face `UNION/**/SELECT` and `UNION + tab + tab + SELECT` evasion patterns. The chain:
 
 ```
 SecRule ARGS "@rx (?:union\s+select|select.+from)" \
@@ -138,7 +140,7 @@ OWASP CRS `REQUEST-942-APPLICATION-ATTACK-SQLI.conf` applies this chain to every
 Every transformation runs per variable per request. Four cost-reduction patterns:
 
 1. **Place rules in the earliest phase where the variables exist.** A URL-evasion rule in phase:1 against `REQUEST_URI` avoids the body parse entirely. `rules-101.md:21-29` frames this as the phase-cost rule of thumb.
-2. **Restrict the variable target.** `ARGS:cmd` inspects one parameter; `ARGS` inspects every parameter. Rule writers reach for `ARGS` by default; the synthesizer should prefer the narrow target when the attack class has a known parameter name.
+2. **Restrict the variable target.** `ARGS:cmd` inspects one parameter; `ARGS` inspects every parameter. Rule writers reach for `ARGS` by default; the synthesis call should prefer the narrow target when the evidence-pattern class has a known parameter name.
 3. **Scope by path or content-type.** Wrap expensive phase:2 rules in a `<LocationMatch>` or use an earlier chained rule to set a transaction flag. A base64-body rule that only applies to `/api/data` is cheaper than the same rule fleet-wide.
 4. **Cache transformation results in `TX:` variables.** A phase:1 rule computes `TX:decoded_uri = %{REQUEST_URI}` after the chain runs; later phase:2 rules reference `TX:decoded_uri` directly. Avoids repeated transformation of the same value across a chain of rules inspecting the same variable.
 
@@ -148,9 +150,9 @@ Measured cost at scale is environment-dependent, but the ordering matters: a tig
 
 ## Chain composition reference
 
-Quick-reference table for synthesizer emission. Each row names the attack shape, the chain, and the minimum rule-side scoping to keep cost bounded.
+Quick-reference table for synthesis-call emission. Each row names the evasion shape, the chain, and the minimum rule-side scoping to keep cost bounded.
 
-| Attack shape | Chain | Minimum scoping |
+| Evasion shape | Chain | Minimum scoping |
 |---|---|---|
 | URL-encoded SQLi | `t:none,t:urlDecodeUni,t:lowercase,t:compressWhitespace` | `ARGS:<named-param>` or phase:1 against `REQUEST_URI` |
 | Double-encoded SQLi | `t:none,t:urlDecodeUni,t:urlDecodeUni,t:lowercase` | narrow variable target; phase:1 if inspecting URI |
@@ -161,6 +163,6 @@ Quick-reference table for synthesizer emission. Each row names the attack shape,
 | Null-byte truncation | `t:none,t:removeNulls,t:lowercase` | depends on variable; phase:1 against `REQUEST_URI` for path-truncation shapes |
 | Path-traversal obfuscation | `t:none,t:urlDecodeUni,t:lowercase,t:normalizePath` | phase:1 against `REQUEST_URI` or `REQUEST_FILENAME` |
 
-The synthesizer selects a row by attack class from the capability map and emits the chain plus the minimum-scoping directive. On operator review the chain can be tightened further (narrower variable target, tighter path scope) without changing the match semantics.
+The synthesis call selects a row by evidence-pattern class from the capability map and emits the chain plus the minimum-scoping directive. On operator review the chain can be tightened further (narrower variable target, tighter path scope) without changing the match semantics.
 
 <!-- public-source authored — extend with operator-specific addenda below -->

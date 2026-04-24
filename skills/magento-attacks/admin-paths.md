@@ -1,6 +1,6 @@
 # magento-attacks — admin surface and post-auth paths
 
-Loaded by the router when the host stack includes Magento 2.x. Magento's admin surface, REST API, and module-loader conventions are the entry-and-pivot territory for the attack classes that show up in shared-hosting IR — credential brute force, post-auth extension upload, the APSB25-94 unauthenticated REST chain, and the writable-cache drop pattern. This file is the field reference for what each surface looks like in logs and on disk.
+Loaded by the router when the host stack includes Magento 2.x. Magento's admin surface, REST API, and module-loader conventions are the entry-and-pivot territory for the intrusion classes that show up in shared-hosting IR — credential brute force, post-auth extension upload, the APSB25-94 unauthenticated REST chain, and the writable-cache drop pattern. This file is the field reference for what each surface looks like in logs and on disk.
 
 ## Admin URL discovery
 
@@ -9,7 +9,7 @@ Magento 2 ships with a default admin path of `/admin`, but the install wizard pr
 - `app/etc/env.php` — `'backend' => ['frontName' => '<path>']`. This is the source of truth at runtime.
 - The `setup-config:set --backend-frontname=` value persisted at install time, mirrored into env.php.
 
-Defaults and common operator values: `/admin`, `/admin_<random>`, `/backend`, `/manage`, `/dashboard`. Attacker enumeration probes the default first, then walks a wordlist; the access log shape is hundreds of `404` responses against single-word paths from one source IP within a tight window, all `GET /` against the candidate path.
+Defaults and common operator values: `/admin`, `/admin_<random>`, `/backend`, `/manage`, `/dashboard`. Adversary enumeration probes the default first, then walks a wordlist; the access log shape is hundreds of `404` responses against single-word paths from one source IP within a tight window, all `GET /` against the candidate path.
 
 Once the path is known, the login form sits at `/<frontName>/admin/auth/login` with the canonical full route `/index.php/<frontName>/admin/auth/login`. Both forms work because Magento accepts the rewritten and unrewritten variants.
 
@@ -18,11 +18,11 @@ Once the path is known, the login form sits at `/<frontName>/admin/auth/login` w
 Magento 2 returns identical error text for "user not found" and "wrong password" on the login form, which blocks naive enumeration through the UI. Two side channels remain:
 
 - **Forgot-password endpoint** at `/<frontName>/admin/auth/forgotpassword`. Older Magento 2 versions (pre-2.4) returned distinguishable success/failure responses depending on whether the email was associated with an admin user. Adobe addressed the timing aspect across multiple advisories; check the installed version against the security release notes.
-- **Direct database access** if the attacker has SQL injection or a stolen DB credential — the `admin_user` table holds usernames, email, and a bcrypt-hashed password.
+- **Direct database access** if the adversary has SQL injection or a stolen DB credential — the `admin_user` table holds usernames, email, and a bcrypt-hashed password.
 
 In access.log, brute force shows up as repeated `POST /<frontName>/admin/auth/login` from one or a small set of IPs, response codes mostly `200` (the form renders with an error) interspersed with `302` on success. Valid-credential success is a single `POST` returning `302` to `/<frontName>/admin/admin/dashboard/`. The cookie set on success names `admin` in the cookie path: `Set-Cookie: admin=<sessionid>; path=/<frontName>/admin/`.
 
-## REST API attack surface
+## REST API intrusion surface
 
 Magento 2 exposes a REST API at `/rest/V1/`, `/rest/<store>/V1/`, and `/rest/all/V1/`. Endpoints are partitioned by authorization:
 
@@ -49,19 +49,11 @@ Extensions installed through Magento Marketplace go through `composer require` a
 
 ## Writable cache and media as drop paths
 
-Magento's writable directories are the default landing zones for post-auth file drops because they are guaranteed writable by the web user.
-
-- `pub/media/` — uploaded product images, customer uploads. Writable. Served by the web server. Subdirectories `pub/media/wysiwyg/`, `pub/media/catalog/product/`, `pub/media/.cache/` (some versions).
-- `var/cache/` — runtime cache. Writable. Not normally served, but a rewrite rule or `.htaccess` flip can change that.
-- `var/tmp/`, `var/log/`, `var/session/` — runtime working directories. Writable by the PHP process.
-- `pub/static/` — generated static assets. Writable during deploy; a `.htaccess` permitting PHP execution here is anomalous.
-- `generated/` — DI-generated PHP. Writable. PHP execution is expected here as part of normal Magento operation, which makes it a high-quality hiding ground.
-
-The drop pattern: attacker lands a `.php` file (or a `.jpg`/`.png` masquerade with a `.htaccess` rewriting the extension to PHP) in one of the writable trees. Subsequent access loads the file under the web user's PHP process. Cleanup that only checks `app/code/` and `vendor/` misses these paths.
+Writable directories are the default landing zone for post-auth drops — see `skills/magento-attacks/writable-paths.md` for the directory map and expected/anomalous rules per directory.
 
 ## vendor/ tree as hiding ground
 
-The `vendor/` tree is composer-managed and large. A typical Magento 2.4 install ships ~30k files under `vendor/`. Attacker hiding strategy is to drop a `.php` file inside an existing legitimate package directory — `vendor/magento/framework/Filesystem/<random>.php`, `vendor/symfony/console/<random>.php` — where casual review skips it as part of the framework.
+The `vendor/` tree is composer-managed and large. A typical Magento 2.4 install ships ~30k files under `vendor/`. Adversary hiding strategy is to drop a `.php` file inside an existing legitimate package directory — `vendor/magento/framework/Filesystem/<random>.php`, `vendor/symfony/console/<random>.php` — where casual review skips it as part of the framework.
 
 Triage approach:
 
@@ -96,13 +88,13 @@ For Magento-specific evidence:
 - `var/log/exception.log` — uncaught exceptions, often the noisiest indicator that something is misbehaving.
 - `var/log/system.log` — `info`/`notice` level events, including admin login success and failure when configured.
 - `var/log/debug.log` — only populated when debug mode is on; usually off in production.
-- `var/report/<id>` — error reports referenced from the user-facing error page. The report ID format is documented; an attacker with the ID can pull stack traces.
+- `var/report/<id>` — error reports referenced from the user-facing error page. The report ID format is documented; an adversary with the ID can pull stack traces.
 
 For web-server evidence corroborating Magento findings:
 
 - Apache access log — usually `/var/log/apache2/<vhost>-access.log`, `/var/log/httpd/access_log`, or per-tenant `/home/<user>/logs/<vhost>-bytes_log` on cPanel.
 - nginx access log — `/var/log/nginx/access.log` or vhost-specific.
 
-`source_refs` in evidence rows should cite the specific log line or file path; the case engine reads citations, not raw log content.
+`source_refs` in evidence records should cite the specific log line or file path; the curator reads citations from `bl-case/CASE-<id>/evidence/evid-*.md`, not raw log content.
 
 <!-- public-source authored — extend with operator-specific addenda below -->

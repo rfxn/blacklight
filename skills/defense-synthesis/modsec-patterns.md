@@ -1,8 +1,8 @@
 # defense-synthesis — ModSec rule patterns
 
-Loaded by the router on every `synthesizer.generate()` call. The synthesizer's job is to take a `CapabilityMap` from the intent reconstructor and emit one or more `SecRule` directives plus an exception list and a validation test, all of which must pass `apachectl configtest` before they're written to the manifest.
+Loaded by the router whenever the curator needs to synthesize ModSec rules (via `bl consult --synthesize-defense`, the adjacent Opus 4.7 call invoked per `prompts/curator-agent.md §8`). The synthesis call takes the curator's capability map from `bl-case/CASE-<id>/attribution.md` and emits one or more `SecRule` directives plus an exception list and a validation test, all of which must pass `apachectl configtest` before they're written into `actions/pending/<act-id>.yaml` for operator approval.
 
-This file is the *grammatical* and *operational* constraint the model writes against. The grammar is enforceable by `configtest`; the operational discipline is enforceable only by convention. Both matter — a syntactically valid rule that 503s legitimate traffic costs more than the attack it prevents.
+This file is the *grammatical* and *operational* constraint the model writes against. The grammar is enforceable by `configtest`; the operational discipline is enforceable only by convention. Both matter — a syntactically valid rule that 503s legitimate traffic costs more than the evidence pattern it was meant to block.
 
 ---
 
@@ -10,55 +10,29 @@ This file is the *grammatical* and *operational* constraint the model writes aga
 
 Every emitted rule is gated through three checks before it's accepted into the manifest:
 
-1. **Syntactic validity.** `apachectl configtest` parses the rule against the host's actual ModSec build. Different ModSec major versions (v2 vs v3 / libmodsecurity) reject different syntax. The synthesizer targets v2.9+ as the floor; v3-only operators (`@detectXSS`, transformation chains in v3-specific positions) are out of scope unless the manifest is v3-tagged.
-2. **No-FP smoke against a baseline.** Every rule ships with a `validation_test` block of N HTTP requests that should NOT match (legitimate traffic shapes pulled from the host's own access.log when available) and M requests that SHOULD match (the attack shapes the rule is targeting). The smoke runs against the host's actual Apache + ModSec stack in audit-only mode before promotion to block mode.
+1. **Syntactic validity.** `apachectl configtest` parses the rule against the host's actual ModSec build. Different ModSec major versions (v2 vs v3 / libmodsecurity) reject different syntax. The synthesis call targets v2.9+ as the floor; v3-only operators (`@detectXSS`, transformation chains in v3-specific positions) are out of scope unless the manifest is v3-tagged.
+2. **No-FP smoke against a baseline.** Every rule ships with a `validation_test` block of N HTTP requests that should NOT match (legitimate traffic shapes pulled from the host's own access.log when available) and M requests that SHOULD match (the evidence patterns the rule is targeting). The smoke runs against the host's actual Apache + ModSec stack in audit-only mode before promotion to block mode.
 3. **Idempotent reapply.** Re-applying the manifest must not duplicate rules. Rule IDs are stable across regenerations of the same case, drawn from the case's reserved range (`9NNN` for case-derived rules; see § Rule ID allocation).
 
 Rules that fail any of these go to `suggested_rules` in the manifest — they do not auto-apply. The operator reviews them.
 
 ---
 
-## SecRule anatomy
+## Grammar floor
 
-```
-SecRule VARIABLES "OPERATOR" "ACTIONS"
-```
-
-**Variables** name what to inspect: `REQUEST_URI`, `ARGS`, `ARGS:foo`, `REQUEST_HEADERS:User-Agent`, `REQUEST_BODY`, `FILES_NAMES`, `FILES_TMP_CONTENT`, `RESPONSE_BODY`, `REMOTE_ADDR`, `REQUEST_METHOD`. Multiple variables join with `|`. Negation: `!ARGS:safe_param`. Selector: `ARGS_NAMES`, `ARGS_GET`, `ARGS_POST`.
-
-**Operators** start with `@` and define the match: `@rx <regex>`, `@beginsWith <str>`, `@contains <str>`, `@endsWith <str>`, `@streq <str>`, `@eq <int>`, `@ge <int>`, `@ipMatch <cidr>`, `@pmFromFile <path>` (parallel match, fast for many tokens), `@detectXSS`, `@detectSQLi`, `@validateByteRange`, `@geoLookup`. Negate with `!@`: `!@rx ...`.
-
-**Actions** govern what happens on match. The mandatory minimum: `id:<int>`, `phase:<int>`, and a disposition (`pass`, `deny`, `block`, `drop`). Common adjuncts: `log`, `nolog`, `auditlog`, `noauditlog`, `msg:'...'`, `tag:'attack-class'`, `severity:'CRITICAL|ERROR|WARNING|NOTICE'`, `status:<code>`, `t:<transformation>`, `chain` (continues on next rule), `skipAfter:<id>`, `ctl:ruleRemoveById=<id>`, `setvar:<varname>=<value>`.
-
-**Transformations** (`t:`) preprocess the variable before the operator runs. Chain them: `t:none,t:lowercase,t:urlDecodeUni,t:removeWhitespace`. `t:none` clears any inherited transformations from the SecDefaultAction. The synthesizer should be explicit about transformations — implicit chains break across hosts with different SecDefaultAction.
+SecRule directive shape, variable / operator / action / transformation catalogues, and the five-phase cost model are the shared grammar floor — see `skills/modsec-grammar/rules-101.md §SecRule directive shape + §Phases`. This file builds on that grammar; it does not restate it. Synthesis rule of thumb inherited from the grammar floor: pick the **earliest** phase that has the variables you need.
 
 ---
 
-## Phase discipline
+## Anchor patterns by evidence-pattern class
 
-ModSec rules run in one of five phases per request. Picking the wrong phase is the most common mistake the synthesizer can make. Costs and capabilities by phase:
+For each common evidence-pattern class blacklight defends against, the canonical rule shape. The synthesis call adapts these — the shape is the constraint, the regex is filled from the case's evidence.
 
-**Phase 1 — request headers received.** Cheapest. Variables available: `REQUEST_URI`, `REQUEST_HEADERS`, `REMOTE_ADDR`, `REQUEST_METHOD`. Use for: URL-evasion rules, IP/geo blocks, header-based UA filtering, large `Content-Length` rejections. Cannot inspect body.
-
-**Phase 2 — request body received.** Variables available: everything from phase 1 plus `ARGS`, `REQUEST_BODY`, `FILES_*`. Use for: payload inspection, SQLi/XSS filtering, file-upload screening. Most attack-blocking rules belong in phase 2. Cost: the body must be buffered, which respects `SecRequestBodyLimit`.
-
-**Phase 3 — response headers received.** Use for: response-header sanitation, status-code-based intrusion detection (e.g., chained rule that escalates if many 404s from one IP). Variables available: response headers and status, plus everything from phases 1-2.
-
-**Phase 4 — response body received.** Variables available: `RESPONSE_BODY`. Use for: data-exfil detection (cardholder data leaving in a response), response-content sanitation. Cost: response body buffering, also bound by limits.
-
-**Phase 5 — logging only.** Variables available: everything. No disposition allowed (cannot block). Use for: audit-log enrichment, post-hoc tagging, conditional `auditlog` decisions.
-
-Synthesizer rule of thumb: pick the **earliest** phase that has the variables you need. Cheaper phase = lower cost on every request.
-
----
-
-## Anchor patterns by attack class
-
-For each common attack class blacklight defends against, the canonical rule shape. The synthesizer adapts these — the shape is the constraint, the regex is filled from the case's evidence.
+Note: the `tag:'attack-*'` strings below are ModSec grammar literals matching OWASP CRS convention — they are rule-engine tokens, not editorial vocabulary, and are preserved verbatim for tool compatibility.
 
 ### URL-evasion (APSB25-94 PolyShell class)
 
-The attack: a request to `something.php/banner.jpg?op=...` routes to PHP execution because of `AcceptPathInfo` or rewrite rules; the trailing `.jpg` defeats extension-based filters.
+The intrusion vector: a request to `something.php/banner.jpg?op=...` routes to PHP execution because of `AcceptPathInfo` or rewrite rules; the trailing `.jpg` defeats extension-based filters.
 
 ```apache
 SecRule REQUEST_URI "@rx \.php(/[^?]*)?\.(jpg|jpeg|png|gif|svg|css|js|webp|bmp|ico)(\?|$)" \
@@ -81,7 +55,7 @@ Notes:
 
 ### Credential-harvest endpoint protection
 
-The attack: POST to `/admin/auth` (or the obfuscated admin URL) at high rate with credential pairs, or POST with a session-stealing payload after harvesting from a compromised host.
+The evidence pattern: POST to `/admin/auth` (or the obfuscated admin URL) at high rate with credential pairs, or POST with a session-stealing payload after harvesting from a compromised host.
 
 ```apache
 SecRule REQUEST_URI "@rx ^/(admin|backend)/.*\b(auth|login)\b" \
@@ -106,7 +80,7 @@ Notes:
 
 ### Anticipatory block: known-bad C2 callback in egress
 
-The attack: the host has been compromised and the operator is about to make a callback. blacklight knows the callback domain from prior cases on other hosts and blocks it on every host in the fleet, including ones never compromised.
+The evidence pattern: the host has been compromised and the adversary is about to make a callback. blacklight knows the callback domain from prior cases on other hosts and blocks it on every host in the fleet, including ones never compromised.
 
 ```apache
 SecRule REQUEST_HEADERS:Host "@pmFromFile /etc/modsec/blacklight-c2-domains.txt" \
@@ -216,16 +190,16 @@ Disables the rule engine for internal-network requests. Use only when the intern
 
 | Severity | When | Disposition |
 |---|---|---|
-| `CRITICAL` | Confirmed attack class, low FP risk | `deny, status:403` |
+| `CRITICAL` | Confirmed intrusion-vector match, low FP risk | `deny, status:403` |
 | `ERROR` | Strong signal, moderate FP risk | `deny, status:403, log, auditlog` |
 | `WARNING` | Anomaly worth flagging, FP plausible | `pass, log, auditlog` |
 | `NOTICE` | Behavioral marker for correlation | `pass, log` (no auditlog overhead) |
 
 Status code conventions:
 - `403` Forbidden — the default block response. Generic enough not to confirm rule presence.
-- `404` Not Found — for traversal and probe attempts; tells the attacker their target doesn't exist.
+- `404` Not Found — for traversal and probe attempts; tells the adversary their target doesn't exist.
 - `429` Too Many Requests — rate-limit responses; semantic match for credential-harvest gates.
-- `500` Server Error — avoid; tells the attacker something went wrong on the server side.
+- `500` Server Error — avoid; tells the adversary something went wrong on the server side.
 
 Never `301`/`302` — redirects can leak information and complicate logs.
 
@@ -242,17 +216,17 @@ ModSec rule IDs are integers, globally unique within the host's config. Collisio
 - `9400–9499` — path-traversal class
 - `9500–9599` — file-upload class
 - `9600–9699` — XSS/SQLi (when CRS isn't sufficient)
-- `9700–9799` — anticipatory rules (driven by `likely_next` capability map entries)
+- `9700–9799` — anticipatory rules (driven by `likely-next` capability map entries)
 - `9800–9899` — case-specific custom rules (manifest carries the case_id mapping)
 - `9900–9999` — reserved for operator manual additions; blacklight never auto-allocates here
 
-Within each class, rules are allocated sequentially. The synthesizer must check the manifest's allocated IDs and pick the next available; ID collisions on regeneration are a `configtest` failure.
+Within each class, rules are allocated sequentially. The synthesis call must check the manifest's allocated IDs and pick the next available; ID collisions on regeneration are a `configtest` failure.
 
 ---
 
 ## Validator failure modes seen in the field
 
-Things `apachectl configtest` rejects that the model needs to avoid:
+Things `apachectl configtest` rejects that the synthesis call needs to avoid:
 
 - **Unescaped quotes inside the action string.** `msg:'It's a trap'` fails — the apostrophe terminates the string. Fix: `msg:'It\\'s a trap'` or rephrase to avoid the apostrophe.
 - **Trailing commas in the action list.** `id:9100,phase:2,deny,` — the trailing comma is a parse error.
@@ -263,7 +237,7 @@ Things `apachectl configtest` rejects that the model needs to avoid:
 - **Regex compile failures.** PCRE quirks: unescaped `{` in some positions, atomic groups in non-PCRE2 builds, named captures with hyphens. Test the regex with `pcregrep` against a fixture before emitting.
 - **Variable-length lookbehinds.** PCRE rejects `(?<=.*)` patterns. Fix by anchoring the regex differently or using `@beginsWith` / `@endsWith`.
 
-When `configtest` fails, the synthesizer captures the stderr block and writes it into the rule's `suggested_rules` entry. The operator sees the actual ModSec parser error, not a synthesizer-level summary.
+When `configtest` fails, the synthesis call captures the stderr block and writes it into the rule's `suggested_rules` entry. The operator sees the actual ModSec parser error, not a synthesis-level summary.
 
 ---
 
