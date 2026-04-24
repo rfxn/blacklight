@@ -1,0 +1,5 @@
+{
+  "key": "bl-case/CASE-2026-0001/pending/s-unknown.json",
+  "content": "{\n  \"verb\": \"observe.file\",\n  \"action_tier\": \"read-only\",\n  \"reasoning\": \"malformed fixture — step_id missing\",\n  \"args\": [{\"key\": \"path\", \"value\": \"/tmp/x\"}],\n  \"diff\": null,\n  \"patch\": null\n}",
+  "content_sha256": "abc123"
+}

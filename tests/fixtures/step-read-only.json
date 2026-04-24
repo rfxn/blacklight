@@ -1,0 +1,12 @@
+{
+  "step_id": "s-0001",
+  "verb": "observe.log_apache",
+  "action_tier": "read-only",
+  "reasoning": "obs-0001 initial log sweep against /var/log/apache2/*.log.gz for polyshell staging evidence",
+  "args": [
+    {"key": "path_glob", "value": "/var/log/apache2/access.log*"},
+    {"key": "since", "value": "2026-04-23T00:00:00Z"}
+  ],
+  "diff": null,
+  "patch": null
+}

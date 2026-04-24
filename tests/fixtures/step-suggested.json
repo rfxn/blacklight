@@ -1,0 +1,11 @@
+{
+  "step_id": "s-0043",
+  "verb": "defend.modsec",
+  "action_tier": "suggested",
+  "reasoning": "obs-0038 + obs-0041 confirm polyshell staging at /pub/media/.../a.php/banner.jpg. Rule targets REQUEST_FILENAME matching \\.php/[^/]+\\.(jpg|png|gif)$ in phase:2. apachectl -t passes.",
+  "args": [
+    {"key": "rule_file", "value": "/var/lib/bl/cases/CASE-2026-0001/actions/pending/act-0003.conf"}
+  ],
+  "diff": "--- a/etc/modsecurity/crs/REQUEST-941.conf\n+++ b/etc/modsecurity/crs/REQUEST-941.conf\n@@ ...\n+SecRule REQUEST_FILENAME \"@rx \\.php/[^/]+\\.(jpg|png|gif)$\" \\\n+    \"id:941999,phase:2,deny,log,msg:'polyshell double-ext staging'\"",
+  "patch": null
+}

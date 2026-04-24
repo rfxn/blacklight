@@ -208,6 +208,144 @@ bl_poll_pending() {
 }
 
 # ----------------------------------------------------------------------------
+# Common helpers — M5-authored, consumed by M5/M6/M7 handlers.
+# bl_jq_schema_check: jq-validate a JSON payload against a subset of
+#   JSON Schema Draft 2020-12 (type, required, enum, properties, items).
+#   --strict enables unknown-key rejection (additionalProperties: false).
+# bl_ledger_append: flock-protected append to /var/lib/bl/ledger/<case>.jsonl.
+# bl_files_api_upload: multipart POST to /v1/files; returns file_id.
+# ----------------------------------------------------------------------------
+
+bl_jq_schema_check() {
+    # bl_jq_schema_check <schema-path> <payload-path> [--strict] — 0/67
+    local schema_path="$1"
+    local payload_path="$2"
+    local strict=""
+    [[ "${3:-}" == "--strict" ]] && strict="yes"
+    if [[ ! -r "$schema_path" ]]; then
+        bl_error_envelope schema "schema not readable: $schema_path"
+        return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+    fi
+    if [[ ! -r "$payload_path" ]]; then
+        bl_error_envelope schema "payload not readable: $payload_path"
+        return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+    fi
+    # jq subset: check required keys present, enum values valid, no extra keys if --strict.
+    # Uses --slurpfile so schema and payload are each wrapped in an array; access via [0].
+    # shellcheck disable=SC2016  # jq program uses $ENV.BL_JQ_STRICT, not shell expansion
+    local jq_prog='
+        $payload[0] as $pay |
+        $schema[0] as $sch |
+        ($sch.required // []) as $req |
+        ($sch.properties // {}) as $props |
+        ($req | map(. as $k | $pay | has($k)) | all) as $req_ok |
+        ([ $props | to_entries[] |
+            select(.value.enum) |
+            ($pay[.key] // null) as $v |
+            if $v == null then true
+            else (.value.enum | index($v)) != null end
+          ] | all) as $enum_ok |
+        ( if $ENV.BL_JQ_STRICT == "yes" then
+              ($pay | keys) - ($props | keys) | length == 0
+          else true end ) as $addl_ok |
+        $req_ok and $enum_ok and $addl_ok
+    '
+    local result
+    result=$(BL_JQ_STRICT="${strict:-no}" jq -n \
+        --slurpfile payload "$payload_path" \
+        --slurpfile schema "$schema_path" \
+        "$jq_prog" 2>/dev/null) || {   # jq parse error in schema/payload → treat as fail
+        bl_error_envelope schema "jq evaluation failed on $payload_path"
+        return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+    }
+    if [[ "$result" != "true" ]]; then
+        bl_error_envelope schema "payload failed schema: $payload_path"
+        return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+    fi
+    return "$BL_EX_OK"
+}
+
+bl_ledger_append() {
+    # bl_ledger_append <case-id> <jsonl-record> — 0/65; flock-serialized
+    local case_id="$1"
+    local record="$2"
+    local ledger_file="$BL_VAR_DIR/ledger/$case_id.jsonl"
+    local ledger_dir="$BL_VAR_DIR/ledger"
+    if ! command mkdir -p "$ledger_dir" 2>/dev/null; then   # RO fs / perms
+        bl_error_envelope ledger "$ledger_dir not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    if ! command touch "$ledger_file" 2>/dev/null; then   # RO fs / perms
+        bl_error_envelope ledger "$ledger_file not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    # Compact to single-line JSON for JSONL format (grep/jq consumers expect one record per line)
+    local compact_record
+    compact_record=$(printf '%s' "$record" | jq -c '.') || {
+        bl_error_envelope ledger "record is not valid JSON"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    # FD 200 per spec §6.8; open RW for RO-mount-fallback safety
+    exec 200<>"$ledger_file" || {
+        bl_error_envelope ledger "cannot open lockfile $ledger_file"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    if ! flock -x -w 30 200; then
+        exec 200<&-
+        bl_error_envelope ledger "flock timeout on $ledger_file"
+        return "$BL_EX_CONFLICT"
+    fi
+    printf '%s\n' "$compact_record" >> "$ledger_file"
+    exec 200<&-
+    return "$BL_EX_OK"
+}
+
+bl_files_api_upload() {
+    # bl_files_api_upload <mime> <file-path> — prints file_id on stdout; 0/69/70
+    local mime="$1"
+    local path="$2"
+    local attempt=0
+    local backoffs=(2 5 10)
+    local resp http_status body
+    if [[ ! -r "$path" ]]; then
+        bl_error_envelope files "upload path not readable: $path"
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
+    while (( attempt < 3 )); do
+        resp=$(curl -sS --max-time 60 -w '\n%{http_code}' -X POST \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "anthropic-beta: files-api-2025-04-14,managed-agents-2026-04-01" \
+            -F "file=@$path;type=$mime" \
+            "https://api.anthropic.com/v1/files" 2>&1) || true   # retry handles curl exit
+        http_status="${resp##*$'\n'}"
+        body="${resp%$'\n'*}"
+        case "$http_status" in
+            2??)
+                printf '%s\n' "$body" | jq -r '.id'
+                return "$BL_EX_OK"
+                ;;
+            429)
+                attempt=$((attempt + 1))
+                (( attempt >= 3 )) && { bl_error_envelope files "rate limited after retries"; return "$BL_EX_RATE_LIMITED"; }
+                sleep "${backoffs[attempt-1]}"
+                ;;
+            5??)
+                attempt=$((attempt + 1))
+                (( attempt >= 3 )) && { bl_error_envelope files "upstream error (HTTP $http_status) after retries"; return "$BL_EX_UPSTREAM_ERROR"; }
+                sleep "${backoffs[attempt-1]}"
+                ;;
+            *)
+                bl_error_envelope files "files.create failed (HTTP ${http_status:-?})"
+                bl_debug "bl_files_api_upload: body=$body"
+                return "$BL_EX_UPSTREAM_ERROR"
+                ;;
+        esac
+    done
+    return "$BL_EX_UPSTREAM_ERROR"
+}
+
+# ----------------------------------------------------------------------------
 # Preflight — DESIGN.md §8.1 contract:
 # 1. Verify ANTHROPIC_API_KEY set + non-empty
 # 2. Verify curl + jq available
@@ -325,9 +463,55 @@ bl_version() {
 # M6 (defend), M7 (clean), M8 (setup).
 # ----------------------------------------------------------------------------
 
-bl_case()    { bl_error_envelope case    "not yet implemented (M5)"; return "$BL_EX_USAGE"; }
+bl_case() {
+    # bl_case <subcommand> [args] — route to _show/_log/_list/_close/_reopen
+    local sub="${1:-show}"
+    [[ "$sub" != -* && $# -ge 1 ]] && shift
+    case "$sub" in
+        show)    bl_case_show "$@"; return $? ;;
+        log)     bl_case_log "$@"; return $? ;;
+        list)    bl_case_list "$@"; return $? ;;
+        close)   bl_case_close "$@"; return $? ;;
+        reopen)  bl_case_reopen "$@"; return $? ;;
+        -h|--help|help)
+            printf 'Usage: bl case <show|log|list|close|reopen> [args]\n' >&2
+            return "$BL_EX_OK"
+            ;;
+        *)
+            bl_error_envelope case "unknown subcommand: $sub" "(use show / log / list / close / reopen)"
+            return "$BL_EX_USAGE"
+            ;;
+    esac
+}
 bl_clean()   { bl_error_envelope clean   "not yet implemented (M7)"; return "$BL_EX_USAGE"; }
-bl_consult() { bl_error_envelope consult "not yet implemented (M5)"; return "$BL_EX_USAGE"; }
+bl_consult() {
+    # bl_consult <args> — route to _new/_attach/_sweep_mode. Mutually exclusive.
+    local mode="" trigger="" case_id="" cve="" notes="" dedup=""
+    while (( $# > 0 )); do
+        case "$1" in
+            --new)         mode="new"; shift ;;
+            --attach)      mode="attach"; case_id="$2"; shift 2 ;;
+            --sweep-mode)  mode="sweep_mode"; shift ;;
+            --trigger)     trigger="$2"; shift 2 ;;
+            --cve)         cve="$2"; shift 2 ;;
+            --notes)       notes="$2"; shift 2 ;;
+            --dedup)       dedup="yes"; shift ;;
+            *)
+                bl_error_envelope consult "unknown flag: $1" "(use one of --new --attach <id> --sweep-mode)"
+                return "$BL_EX_USAGE"
+                ;;
+        esac
+    done
+    case "$mode" in
+        new)         bl_consult_new "$trigger" "$notes" "$dedup"; return $? ;;
+        attach)      bl_consult_attach "$case_id"; return $? ;;
+        sweep_mode)  bl_consult_sweep_mode "$cve"; return $? ;;
+        "")
+            bl_error_envelope consult "missing mode" "(use one of --new --attach <id> --sweep-mode)"
+            return "$BL_EX_USAGE"
+            ;;
+    esac
+}
 bl_defend()  { bl_error_envelope defend  "not yet implemented (M6)"; return "$BL_EX_USAGE"; }
 # ============================================================================
 # M4 observe handlers — spec: docs/specs/2026-04-24-M4-bl-observe.md
@@ -1860,7 +2044,961 @@ bl_observe() {
     esac
 }
 bl_run()     { bl_error_envelope run     "not yet implemented (M5)"; return "$BL_EX_USAGE"; }
+bl_run() {
+    # bl_run <args> — route to _step (default), _batch (--batch), _list (--list)
+    local mode="step" step_id="" max=16 yes="" dry_run="" unsafe="" explain=""
+    while (( $# > 0 )); do
+        case "$1" in
+            --batch)    mode="batch"; shift ;;
+            --list)     mode="list"; shift ;;
+            --max)      max="$2"; shift 2 ;;
+            --yes)      yes="yes"; shift ;;
+            --dry-run)  dry_run="yes"; shift ;;
+            --unsafe)   unsafe="yes"; shift ;;
+            --explain)  explain="yes"; shift ;;
+            -*)         bl_error_envelope run "unknown flag: $1"; return "$BL_EX_USAGE" ;;
+            *)          step_id="$1"; shift ;;
+        esac
+    done
+    case "$mode" in
+        step)   bl_run_step "$step_id" "$yes" "$dry_run" "$unsafe" "$explain"; return $? ;;
+        batch)  bl_run_batch "$max"; return $? ;;
+        list)   bl_run_list; return $? ;;
+    esac
+}
 bl_setup()   { bl_error_envelope setup   "not yet implemented (M8)"; return "$BL_EX_USAGE"; }
+
+# ----------------------------------------------------------------------------
+# bl_consult_* — case-lifecycle open/attach/inventory (M5)
+# Spec: docs/specs/2026-04-24-M5-consult-run-case.md §5.1
+# ----------------------------------------------------------------------------
+
+bl_consult_allocate_case_id() {
+    # bl_consult_allocate_case_id — prints CASE-YYYY-NNNN on stdout; 0/65/71
+    local counter_file="$BL_STATE_DIR/case-id-counter"
+    local year new_n
+    year=$(date -u +%Y)
+    if ! command mkdir -p "$BL_STATE_DIR" 2>/dev/null; then   # RO fs / perms
+        bl_error_envelope consult "$BL_STATE_DIR not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    if ! command touch "$counter_file" 2>/dev/null; then   # RO fs / perms
+        bl_error_envelope consult "$counter_file not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    # flock FD 201 to avoid re-entry conflict with bl_ledger_append (FD 200)
+    exec 201<>"$counter_file"
+    if ! flock -x -w 30 201; then
+        exec 201<&-
+        bl_error_envelope consult "flock timeout on $counter_file"
+        return "$BL_EX_CONFLICT"
+    fi
+    local raw cur_year cur_n
+    raw=$(command cat "$counter_file" 2>/dev/null || printf '')   # missing/empty → reset path below
+    cur_year=$(printf '%s' "$raw" | jq -r '.year // empty' 2>/dev/null || printf '')
+    cur_n=$(printf '%s' "$raw" | jq -r '.n // empty' 2>/dev/null || printf '')
+    if [[ -z "$cur_year" || -z "$cur_n" ]] || [[ "$cur_year" != "$year" ]]; then
+        cur_n=0
+    fi
+    new_n=$((cur_n + 1))
+    local tmp="$counter_file.tmp.$$"
+    printf '{"year":%s,"n":%s}\n' "$year" "$new_n" > "$tmp"
+    command mv "$tmp" "$counter_file"
+    exec 201<&-
+    printf 'CASE-%s-%04d\n' "$year" "$new_n"
+    return "$BL_EX_OK"
+}
+
+bl_consult_fingerprint_trigger() {
+    # bl_consult_fingerprint_trigger <artifact> — prints 16-hex on stdout; 0/65
+    local artifact="$1"
+    local fp=""
+    if [[ "$artifact" == /* || "$artifact" == */* ]]; then
+        if [[ ! -e "$artifact" ]]; then
+            bl_error_envelope consult "trigger artifact not found: $artifact"
+            return "$BL_EX_USAGE"
+        fi
+        fp=$(sha256sum "$artifact" | cut -c1-16)
+    else
+        fp=$(printf '%s' "$artifact" | sha256sum | cut -c1-16)
+    fi
+    printf '%s\n' "$fp"
+    return "$BL_EX_OK"
+}
+
+bl_consult_materialize_case() {
+    # bl_consult_materialize_case <case-id> <fingerprint> <notes> — 0/65/69
+    # Posts template files to memstore under bl-case/<case-id>/.
+    local case_id="$1"
+    local fp="$2"
+    local notes="${3:-}"
+    local memstore_prefix="bl-case/$case_id"
+    local now
+    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    # BL_REPO_ROOT: derived from $0 so templates are found at install path
+    local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"
+    local templates=(hypothesis open-questions attribution ip-clusters url-patterns file-patterns defense-hits)
+    local tmpl content body_file rc
+    for tmpl in "${templates[@]}"; do
+        local tpl_path="$repo_root/case-templates/$tmpl.md"
+        [[ -r "$tpl_path" ]] || tpl_path="case-templates/$tmpl.md"
+        content=$(command cat "$tpl_path") || return "$BL_EX_PREFLIGHT_FAIL"
+        if [[ "$tmpl" == "hypothesis" ]]; then
+            content="<!-- trigger_fingerprint: $fp -->"$'\n'"$content"
+        fi
+        body_file=$(mktemp)
+        jq -n --arg k "$memstore_prefix/$tmpl.md" --arg c "$content" \
+            '{key: $k, content: $c, metadata: {}}' > "$body_file"
+        bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+        rc=$?
+        command rm -f "$body_file"
+        (( rc == 0 )) || return "$rc"
+    done
+    body_file=$(mktemp)
+    jq -n --arg k "$memstore_prefix/STEP_COUNTER" --arg c "0" \
+        '{key: $k, content: $c, metadata: {}}' > "$body_file"
+    bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null || {
+        command rm -f "$body_file"
+        return "$BL_EX_UPSTREAM_ERROR"
+    }
+    command rm -f "$body_file"
+    bl_consult_update_index_row_append "$case_id" "$now" "$notes" || return $?
+    return "$BL_EX_OK"
+}
+
+bl_consult_register_curator() {
+    # bl_consult_register_curator <case-id> <fingerprint> — 0/69/70
+    local case_id="$1"
+    local fp="$2"
+    local session_id_file="$BL_STATE_DIR/session-$case_id"
+    local session_id=""
+    [[ -r "$session_id_file" ]] && session_id=$(command cat "$session_id_file")
+    [[ -z "$session_id" ]] && session_id="${BL_SESSION_ID:-}"
+    if [[ -z "$session_id" ]]; then
+        bl_warn "no bl-curator session; wake event queued to outbox (per R10)"
+        local outbox_file
+        outbox_file="$BL_VAR_DIR/outbox/$(date -u +%Y%m%dT%H%M%SZ)-wake-$case_id.json"
+        jq -n --arg c "$case_id" --arg f "$fp" \
+            '{type:"user.message", content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f)}]}' \
+            > "$outbox_file"
+        return "$BL_EX_OK"
+    fi
+    local body_file
+    body_file=$(mktemp)
+    jq -n --arg c "$case_id" --arg f "$fp" \
+        '{type:"user.message", content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f+"; read first per system-prompt §3")}]}' \
+        > "$body_file"
+    bl_api_call POST "/v1/sessions/$session_id/events" "$body_file" >/dev/null
+    local rc=$?
+    command rm -f "$body_file"
+    return "$rc"
+}
+
+bl_consult_find_open_case_by_fingerprint() {
+    # bl_consult_find_open_case_by_fingerprint <16hex> — prints case-id or empty on miss; 0/69
+    local fp="$1"
+    local index_body
+    index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" 2>/dev/null) || return "$BL_EX_OK"   # missing INDEX → no prior cases
+    local active_cases
+    active_cases=$(printf '%s' "$index_body" | jq -r '.content' | grep -E '^\| CASE-[0-9]{4}-[0-9]{4} \|.*\| active \|' | awk -F'|' '{print $2}' | tr -d ' ')
+    local case_id hyp_body hyp_fp
+    while IFS= read -r case_id; do
+        [[ -z "$case_id" ]] && continue
+        hyp_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null) || continue   # skip unreadable row
+        hyp_fp=$(printf '%s' "$hyp_body" | jq -r '.content' | grep -oE 'trigger_fingerprint: [a-f0-9]{16}' | awk '{print $2}')
+        if [[ "$hyp_fp" == "$fp" ]]; then
+            printf '%s\n' "$case_id"
+            return "$BL_EX_OK"
+        fi
+    done <<< "$active_cases"
+    return "$BL_EX_OK"
+}
+
+bl_consult_update_index_row_append() {
+    # bl_consult_update_index_row_append <case-id> <iso-ts> <notes> — 0/69/70/71
+    local case_id="$1"
+    local ts="$2"
+    local notes="${3:-investigation open, no hypothesis yet}"
+    local preview
+    preview=$(printf '%.30s' "$notes")
+    local new_row="| $case_id | $ts | active | $preview | — |"
+    local attempt=0 index_body current_content new_content body_file rc
+    local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"
+    while (( attempt < 3 )); do
+        index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" 2>/dev/null) || {
+            current_content=$(command cat "$repo_root/case-templates/INDEX.md" 2>/dev/null || command cat "case-templates/INDEX.md" 2>/dev/null || printf '')
+            new_content=$(printf '%s\n%s\n' "$current_content" "$new_row")
+            body_file=$(mktemp)
+            jq -n --arg k "bl-case/INDEX.md" --arg c "$new_content" \
+                '{key:$k, content:$c, metadata:{}}' > "$body_file"
+            bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+            rc=$?
+            command rm -f "$body_file"
+            (( rc == 0 )) && return "$BL_EX_OK"
+            attempt=$((attempt + 1))
+            continue
+        }
+        current_content=$(printf '%s' "$index_body" | jq -r '.content')
+        if printf '%s' "$current_content" | grep -q '<!-- WRAPPER-APPEND -->'; then
+            new_content=$(printf '%s' "$current_content" | sed "s|<!-- WRAPPER-APPEND -->|$new_row\n<!-- WRAPPER-APPEND -->|")
+        else
+            new_content=$(printf '%s\n%s\n' "$current_content" "$new_row")
+        fi
+        local current_sha
+        current_sha=$(printf '%s' "$index_body" | jq -r '.content_sha256 // empty')
+        body_file=$(mktemp)
+        jq -n --arg c "$new_content" --arg s "$current_sha" \
+            '{content:$c, if_content_sha256:$s}' > "$body_file"
+        bl_api_call PATCH "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" "$body_file" >/dev/null
+        rc=$?
+        command rm -f "$body_file"
+        (( rc == 0 )) && return "$BL_EX_OK"
+        attempt=$((attempt + 1))
+        bl_debug "bl_consult_update_index_row_append: retry $attempt/3"
+    done
+    bl_error_envelope consult "INDEX.md update exhausted 3 retries"
+    return "$BL_EX_CONFLICT"
+}
+
+bl_consult_new() {
+    # bl_consult_new <trigger> <notes> <dedup> — 0/64/65/71; emits case-id to stdout
+    local trigger="$1"
+    local notes="$2"
+    local dedup="$3"
+    # BL_MEMSTORE_CASE_ID: read from state file per MUST-FIX 6.2
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    if [[ -z "$trigger" ]]; then
+        bl_error_envelope consult "missing --trigger <artifact>"
+        return "$BL_EX_USAGE"
+    fi
+    local fp
+    fp=$(bl_consult_fingerprint_trigger "$trigger") || return $?
+    if [[ "$dedup" == "yes" ]]; then
+        local existing=""
+        existing=$(bl_consult_find_open_case_by_fingerprint "$fp") || existing=""   # miss → empty string, not error
+        if [[ -n "$existing" ]]; then
+            bl_info "dedup: attaching to existing open case $existing (fingerprint $fp)"
+            bl_consult_attach "$existing"
+            return $?
+        fi
+    elif [[ -z "$dedup" ]]; then
+        local existing=""
+        existing=$(bl_consult_find_open_case_by_fingerprint "$fp") || existing=""   # miss → empty, non-fatal
+        [[ -n "$existing" ]] && bl_warn "trigger fingerprint $fp already open in $existing (use --dedup to attach, or proceed for new)"
+    fi
+    local case_id attempt=0
+    while (( attempt < 3 )); do
+        case_id=$(bl_consult_allocate_case_id) || return $?
+        if bl_consult_materialize_case "$case_id" "$fp" "$notes"; then
+            printf '%s' "$case_id" > "$BL_CASE_CURRENT_FILE"
+            bl_consult_register_curator "$case_id" "$fp" || true   # non-fatal; outbox queued
+            bl_ledger_append "$case_id" \
+                "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg f "$fp" \
+                    '{ts:$ts, case:$c, kind:"case_opened", payload:{trigger_fingerprint:$f}}')"
+            bl_info "allocated $case_id"
+            printf '%s\n' "$case_id"
+            return "$BL_EX_OK"
+        fi
+        attempt=$((attempt + 1))
+        bl_debug "bl_consult_new: materialize conflict (attempt $attempt/3); retrying"
+    done
+    bl_error_envelope consult "case-id allocation exhausted 3 retries"
+    return "$BL_EX_CONFLICT"
+}
+
+bl_consult_attach() {
+    # bl_consult_attach <case-id> — 0/64/65/69/72
+    local case_id="$1"
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    if [[ -z "$case_id" ]]; then
+        bl_error_envelope consult "missing <case-id> for --attach"
+        return "$BL_EX_USAGE"
+    fi
+    local probe_rc=0
+    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" >/dev/null || probe_rc=$?
+    if (( probe_rc == 65 )); then
+        local list_rc=0
+        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/" >/dev/null || list_rc=$?
+        if (( list_rc != 0 )); then
+            bl_error_envelope consult "case not found: $case_id"
+            return "$BL_EX_NOT_FOUND"
+        fi
+    elif (( probe_rc != 0 )); then
+        return "$probe_rc"
+    fi
+    printf '%s' "$case_id" > "$BL_CASE_CURRENT_FILE"
+    bl_ledger_append "$case_id" \
+        "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" \
+            '{ts:$ts, case:$c, kind:"case_attached", payload:{}}')"
+    bl_info "attached to $case_id"
+    return "$BL_EX_OK"
+}
+
+bl_consult_sweep_mode() {
+    # bl_consult_sweep_mode [cve] — 0/64/69; read-only inventory
+    local cve="${1:-}"
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    local list_body
+    list_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/&depth=2") || return $?
+    local closed_cases
+    closed_cases=$(printf '%s' "$list_body" | jq -r '.data[] | select(.key | test("^bl-case/CASE-[^/]+/closed\\.md$")) | .key' 2>/dev/null || printf '')
+    if [[ -z "$closed_cases" ]]; then
+        printf 'No closed cases in workspace.\n'
+        return "$BL_EX_OK"
+    fi
+    printf '%-18s  %-20s  %s\n' "Case" "Closed" "Brief (md)"
+    local key case_id body
+    while IFS= read -r key; do
+        [[ -z "$key" ]] && continue
+        case_id=$(printf '%s' "$key" | sed 's|bl-case/||; s|/closed.md||')
+        body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${key//\//%2F}" 2>/dev/null) || continue   # skip unreadable
+        if [[ -n "$cve" ]]; then
+            local hyp
+            hyp=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null) || continue   # skip unreadable
+            printf '%s' "$hyp" | grep -qi "$cve" || continue   # no match → skip row
+        fi
+        local closed_at fid_md
+        closed_at=$(printf '%s' "$body" | jq -r '.content' | grep '^closed_at:' | cut -d' ' -f2-)
+        fid_md=$(printf '%s' "$body" | jq -r '.content' | grep '^brief_file_id_md:' | cut -d' ' -f2-)
+        printf '%-18s  %-20s  %s\n' "$case_id" "$closed_at" "$fid_md"
+    done <<< "$closed_cases"
+    return "$BL_EX_OK"
+}
+
+# ----------------------------------------------------------------------------
+# bl_run_* — tier-gated step execution (M5)
+# Spec: docs/specs/2026-04-24-M5-consult-run-case.md §5.2 + §5.2.1 flow
+# Tier matrix: docs/action-tiers.md §5 + spec §7.5
+# ----------------------------------------------------------------------------
+
+bl_run_step() {
+    # bl_run_step <step-id> <yes> <dry-run> <unsafe> <explain> — full 13-step flow
+    local step_id="$1"
+    local yes="$2"
+    local dry_run="$3"
+    local unsafe="$4"
+    local explain="$5"
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    [[ -z "$step_id" ]] && { bl_error_envelope run "missing <step-id>"; return "$BL_EX_USAGE"; }
+    local case_id
+    case_id=$(bl_case_current)
+    if [[ -z "$case_id" ]]; then
+        bl_error_envelope run "no active case" "(bl consult --attach <id>)"
+        return "$BL_EX_NOT_FOUND"
+    fi
+    local pending_tmp memstore_key
+    pending_tmp=$(mktemp)
+    memstore_key="bl-case/$case_id/pending/$step_id.json"
+    local resp rc
+    rc=0
+    resp=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${memstore_key//\//%2F}") || rc=$?
+    if (( rc == 65 )); then
+        command rm -f "$pending_tmp"
+        bl_error_envelope run "step $step_id not found in pending/"
+        return "$BL_EX_NOT_FOUND"
+    elif (( rc != 0 )); then
+        command rm -f "$pending_tmp"
+        return "$rc"
+    fi
+    printf '%s' "$resp" | jq -r '.content' > "$pending_tmp"
+    local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"
+    local schema_path="$repo_root/schemas/step.json"
+    [[ -r "$schema_path" ]] || schema_path="schemas/step.json"
+    if ! bl_jq_schema_check "$schema_path" "$pending_tmp" --strict; then
+        bl_ledger_append "$case_id" \
+            "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg s "$step_id" \
+                '{ts:$ts, case:$c, kind:"schema_reject", payload:{step_id:$s}}')"
+        command rm -f "$pending_tmp"
+        return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+    fi
+    local tier verb
+    verb=$(jq -r '.verb' "$pending_tmp")
+    tier=$(bl_run_evaluate_tier "$pending_tmp") || {
+        command rm -f "$pending_tmp"
+        return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+    }
+    if [[ "$tier" == "unknown" ]]; then
+        if [[ "$unsafe" != "yes" || "$yes" != "yes" ]]; then
+            bl_error_envelope run "tier-gate denied (tier=unknown)" "override requires both --unsafe and --yes"
+            bl_ledger_append "$case_id" \
+                "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg s "$step_id" \
+                    '{ts:$ts, case:$c, kind:"unknown_tier_deny", payload:{step_id:$s}}')"
+            command rm -f "$pending_tmp"
+            return "$BL_EX_TIER_GATE_DENIED"
+        fi
+    fi
+    local args_json diff
+    args_json=$(jq -c '.args' "$pending_tmp")
+    diff=$(jq -r '.diff // ""' "$pending_tmp")
+    case "$tier" in
+        read-only|auto)
+            : ;;
+        suggested|destructive)
+            if ! bl_run_preflight_tier "$tier" "$verb" "$args_json"; then
+                bl_ledger_append "$case_id" \
+                    "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg s "$step_id" --arg t "$tier" \
+                        '{ts:$ts, case:$c, kind:"preflight_fail", payload:{step_id:$s, tier:$t}}')"
+                command rm -f "$pending_tmp"
+                return "$BL_EX_TIER_GATE_DENIED"
+            fi
+            if [[ "$yes" != "yes" && "$dry_run" != "yes" ]]; then
+                if ! bl_run_prompt_operator "$step_id" "$tier" "$diff"; then
+                    bl_ledger_append "$case_id" \
+                        "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg s "$step_id" \
+                            '{ts:$ts, case:$c, kind:"operator_decline", payload:{step_id:$s}}')"
+                    command rm -f "$pending_tmp"
+                    return "$BL_EX_TIER_GATE_DENIED"
+                fi
+            fi
+            ;;
+    esac
+    if [[ "$dry_run" == "yes" ]]; then
+        printf '%s\n' "$diff"
+        command rm -f "$pending_tmp"
+        return "$BL_EX_OK"
+    fi
+    local stdout_file="/tmp/bl-step-$step_id.out"
+    local exec_rc=0
+    bl_run_dispatch_verb "$verb" "$args_json" > "$stdout_file" || exec_rc=$?
+    bl_run_writeback_result "$step_id" "$exec_rc" "$stdout_file" "$case_id" || bl_warn "writeback failed; local file at $stdout_file preserved"
+    bl_ledger_append "$case_id" \
+        "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg s "$step_id" --arg t "$tier" --arg v "$verb" --argjson rc "$exec_rc" \
+            '{ts:$ts, case:$c, kind:"step_run", payload:{step_id:$s, tier:$t, verb:$v, rc:$rc}}')"
+    local session_id_file="$BL_STATE_DIR/session-$case_id"
+    if [[ -r "$session_id_file" ]]; then
+        local session_id
+        session_id=$(command cat "$session_id_file")
+        local body_file
+        body_file=$(mktemp)
+        jq -n --arg s "$step_id" --argjson rc "$exec_rc" \
+            '{type:"user.message", content:[{type:"text", text:("result landed: "+$s+" rc="+($rc|tostring))}]}' > "$body_file"
+        bl_api_call POST "/v1/sessions/$session_id/events" "$body_file" >/dev/null || true   # non-fatal; ledger has the event
+        command rm -f "$body_file"
+    fi
+    command rm -f "$pending_tmp" "$stdout_file"
+    return "$exec_rc"
+}
+
+bl_run_evaluate_tier() {
+    # bl_run_evaluate_tier <pending-path> — prints tier on stdout; 0/67
+    local pending_path="$1"
+    local declared_tier verb expected_tier
+    declared_tier=$(jq -r '.action_tier' "$pending_path")
+    verb=$(jq -r '.verb' "$pending_path")
+    case "$verb" in
+        observe.*)              expected_tier="read-only" ;;
+        defend.firewall)        expected_tier="auto" ;;
+        defend.sig)             expected_tier="auto" ;;
+        defend.modsec)          expected_tier="suggested" ;;
+        defend.modsec_remove)   expected_tier="destructive" ;;
+        clean.*)                expected_tier="destructive" ;;
+        case.close|case.reopen) expected_tier="suggested" ;;
+        *)                      expected_tier="unknown" ;;
+    esac
+    if [[ "$declared_tier" != "$expected_tier" && "$declared_tier" != "unknown" ]]; then
+        bl_warn "curator tier=$declared_tier overridden to $expected_tier per verb-class (verb=$verb)"
+    fi
+    [[ "$declared_tier" == "unknown" ]] && expected_tier="unknown"
+    printf '%s' "$expected_tier"
+    return "$BL_EX_OK"
+}
+
+bl_run_prompt_operator() {
+    # bl_run_prompt_operator <step-id> <tier> <diff> — 0 on approve, 68 on decline
+    local step_id="$1"
+    local tier="$2"
+    local diff="$3"
+    local ans
+    printf 'bl-run: step %s tier=%s\n' "$step_id" "$tier" >&2
+    [[ -n "$diff" ]] && printf '[diff]\n%s\n' "$diff" >&2
+    while :; do
+        printf 'Apply? [y/N/diff-full/explain/abort] ' >&2
+        IFS= read -r ans || ans="${BL_PROMPT_DEFAULT:-N}"
+        ans="${ans:-${BL_PROMPT_DEFAULT:-N}}"
+        case "${ans,,}" in
+            y|yes)        return 0 ;;
+            n|no|abort|'') return "$BL_EX_TIER_GATE_DENIED" ;;   # operator declined → caller checks rc
+            diff-full)
+                printf '%s\n' "$diff" >&2
+                ;;
+            explain)
+                printf '(explain — re-prints reasoning from step envelope; M5 stub shows tier+diff only)\n' >&2
+                ;;
+            *)
+                printf 'invalid; type y, N, diff-full, explain, or abort\n' >&2
+                ;;
+        esac
+    done
+}
+
+bl_run_preflight_tier() {
+    # bl_run_preflight_tier <tier> <verb> <args-json> — 0 on pass, 68 on fail
+    local tier="$1"
+    local verb="$2"
+    local args_json="$3"
+    case "$verb" in
+        defend.modsec)
+            if command -v apachectl >/dev/null 2>&1; then   # optional tool; fail-closed if missing
+                apachectl -t >/dev/null 2>&1 || {   # fail-closed: config test failed
+                    bl_error_envelope preflight "apachectl -t failed; rule rejected"
+                    return "$BL_EX_TIER_GATE_DENIED"
+                }
+            else
+                bl_warn "apachectl not found; skipping preflight (M6 will enforce via backend-lock)"
+            fi
+            ;;
+        defend.sig)
+            bl_debug "bl_run_preflight_tier: defend.sig FP-gate deferred to M6"
+            ;;
+        defend.firewall)
+            bl_debug "bl_run_preflight_tier: defend.firewall ASN check deferred to M6"
+            ;;
+        *)
+            : ;;
+    esac
+    return "$BL_EX_OK"
+}
+
+bl_run_dispatch_verb() {
+    # bl_run_dispatch_verb <verb> <args-json> — dispatches to bl_<ns>_<action>
+    local verb="$1"
+    local args_json="$2"
+    local func_name
+    func_name="bl_$(printf '%s' "$verb" | tr '.' '_')"
+    if ! declare -f "$func_name" >/dev/null 2>&1; then   # handler not landed yet (M4/M6/M7 pre-merge)
+        bl_error_envelope run "$verb handler not yet landed" "(see M4 for observe.*, M6 for defend.*, M7 for clean.*)"
+        return "$BL_EX_USAGE"
+    fi
+    "$func_name" "$args_json"
+    return $?
+}
+
+bl_run_writeback_result() {
+    # bl_run_writeback_result <step-id> <rc> <stdout-path> <case-id> — 0/69/70
+    local step_id="$1"
+    local rc="$2"
+    local stdout_path="$3"
+    local case_id="$4"
+    local stdout_content now
+    stdout_content=$(command cat "$stdout_path" 2>/dev/null || printf '')   # missing → empty
+    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    local pending_tmp
+    pending_tmp=$(mktemp)
+    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fpending%2F$step_id.json" 2>/dev/null | jq -r '.content' > "$pending_tmp" || true   # transient miss
+    local result_content
+    result_content=$(jq -n --slurpfile pending "$pending_tmp" --argjson rc "$rc" --arg stdout "$stdout_content" --arg now "$now" \
+        '$pending[0] + {result: {rc:$rc, stdout:$stdout, applied_at:$now}}')
+    local body_file
+    body_file=$(mktemp)
+    jq -n --arg k "bl-case/$case_id/results/$step_id.json" --arg c "$result_content" \
+        '{key:$k, content:$c, metadata:{}}' > "$body_file"
+    bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+    local post_rc=$?
+    command rm -f "$body_file"
+    (( post_rc != 0 )) && { command rm -f "$pending_tmp"; return "$post_rc"; }
+    bl_api_call DELETE "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fpending%2F$step_id.json" >/dev/null || bl_warn "pending delete failed; manual cleanup may be needed"
+    command rm -f "$pending_tmp"
+    return "$BL_EX_OK"
+}
+
+bl_run_batch() {
+    # bl_run_batch <max> — 0/64/68/72
+    local max="$1"
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    local case_id
+    case_id=$(bl_case_current)
+    [[ -z "$case_id" ]] && { bl_error_envelope run "no active case"; return "$BL_EX_NOT_FOUND"; }
+    local list_body step_ids
+    list_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/pending/") || return $?
+    step_ids=$(printf '%s' "$list_body" | jq -r '.data[].key' | sed "s|bl-case/$case_id/pending/||; s|\.json$||" | sort)
+    if [[ -z "$step_ids" ]]; then
+        bl_info "no pending steps for $case_id"
+        return "$BL_EX_OK"
+    fi
+    local count=0 rc=0
+    while IFS= read -r sid; do
+        [[ -z "$sid" ]] && continue
+        (( count >= max )) && { bl_info "batch max=$max reached"; break; }
+        bl_run_step "$sid" "" "" "" "" || rc=$?
+        (( rc == 68 )) && { bl_info "batch halted on tier-gate decline at $sid"; return "$rc"; }
+        count=$((count + 1))
+    done <<< "$step_ids"
+    return "$BL_EX_OK"
+}
+
+bl_run_list() {
+    # bl_run_list — 0/64/69/72; enumerates pending without execution
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    local case_id
+    case_id=$(bl_case_current)
+    [[ -z "$case_id" ]] && { bl_error_envelope run "no active case"; return "$BL_EX_NOT_FOUND"; }
+    local list_body
+    list_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/pending/") || return $?
+    local keys
+    keys=$(printf '%s' "$list_body" | jq -r '.data[].key' | sort)
+    if [[ -z "$keys" ]]; then
+        bl_info "no pending steps"
+        return "$BL_EX_OK"
+    fi
+    printf '%-8s  %-24s  %-11s  %s\n' "step_id" "verb" "tier" "reasoning"
+    local key body sid verb tier reasoning
+    while IFS= read -r key; do
+        body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${key//\//%2F}" 2>/dev/null | jq -r '.content') || continue   # skip unreadable
+        sid=$(printf '%s' "$body" | jq -r '.step_id')
+        verb=$(printf '%s' "$body" | jq -r '.verb')
+        tier=$(printf '%s' "$body" | jq -r '.action_tier')
+        reasoning=$(printf '%s' "$body" | jq -r '.reasoning' | cut -c1-60)
+        printf '%-8s  %-24s  %-11s  %s\n' "$sid" "$verb" "$tier" "$reasoning"
+    done <<< "$keys"
+    return "$BL_EX_OK"
+}
+
+# ----------------------------------------------------------------------------
+# bl_case_* — case inspection + lifecycle close/reopen (M5)
+# Spec: docs/specs/2026-04-24-M5-consult-run-case.md §5.3 + §5.3.1 flow
+# ----------------------------------------------------------------------------
+
+bl_case_show() {
+    # bl_case_show [case-id] — 6-section summary; 0/64/69/72
+    local case_id="${1:-}"
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    [[ -z "$case_id" ]] && case_id=$(bl_case_current)
+    [[ -z "$case_id" ]] && { bl_error_envelope case "no active case"; return "$BL_EX_NOT_FOUND"; }
+    printf '# Case %s\n' "$case_id"
+    printf '\n## Hypothesis\n'
+    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null | jq -r '.content // "(not found)"' || printf '(not found)\n'
+    printf '\n## Evidence\n'
+    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/evidence/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
+    printf '\n## Pending steps\n'
+    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/pending/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
+    printf '\n## Applied actions\n'
+    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
+    printf '\n## Defense hits\n'
+    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fdefense-hits.md" 2>/dev/null | jq -r '.content // "(none)"' || printf '(none)\n'
+    printf '\n## Open questions\n'
+    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fopen-questions.md" 2>/dev/null | jq -r '.content // "(none)"' || printf '(none)\n'
+    local closed_list
+    closed_list=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/closed-" 2>/dev/null | jq -r '.data[].key' || printf '')
+    if [[ -n "$closed_list" ]]; then
+        printf '\n## Previous closures\n%s\n' "$closed_list"
+    fi
+    return "$BL_EX_OK"
+}
+
+bl_case_log() {
+    # bl_case_log [case-id] — JSONL to stdout; 0/64/69/72
+    local case_id="${1:-}"
+    [[ -z "$case_id" ]] && case_id=$(bl_case_current)
+    [[ -z "$case_id" ]] && { bl_error_envelope case "no active case"; return "$BL_EX_NOT_FOUND"; }
+    local ledger_file="$BL_VAR_DIR/ledger/$case_id.jsonl"
+    local all_events
+    all_events=$(mktemp)
+    [[ -r "$ledger_file" ]] && command cat "$ledger_file" >> "$all_events"
+    sort -t'"' -k4 "$all_events"
+    command rm -f "$all_events"
+    return "$BL_EX_OK"
+}
+
+bl_case_list() {
+    # bl_case_list [--open|--closed|--all] — 0/64/69
+    local filter="${1:---open}"
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    local status_match
+    case "$filter" in
+        --open)    status_match="active" ;;
+        --closed)  status_match="closed" ;;
+        --all)     status_match=".*" ;;
+        *)         bl_error_envelope case "unknown filter: $filter"; return "$BL_EX_USAGE" ;;
+    esac
+    local index_body
+    index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" 2>/dev/null | jq -r '.content')
+    if [[ -z "$index_body" ]]; then
+        bl_info "(no cases in workspace)"
+        return "$BL_EX_OK"
+    fi
+    printf '%s' "$index_body" | grep -E '^\| CASE-[0-9]{4}-[0-9]{4} \|' | awk -F'|' -v s="$status_match" '$4 ~ s {print}'
+    return "$BL_EX_OK"
+}
+
+bl_case_update_index_status() {
+    # bl_case_update_index_status <case-id> <new-status> — 0/69/70/71
+    # Shared helper: bl_case_close_update_index + bl_case_reopen use this.
+    # MUST-FIX 5.2 resolution: extracted from close flow so reopen can call it too.
+    local case_id="$1"
+    local new_status="$2"
+    local attempt=0
+    while (( attempt < 3 )); do
+        local index_body current_content new_content current_sha body_file rc
+        index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md") || return $?
+        current_content=$(printf '%s' "$index_body" | jq -r '.content')
+        current_sha=$(printf '%s' "$index_body" | jq -r '.content_sha256 // empty')
+        # Replace the status cell for this case row
+        new_content=$(printf '%s' "$current_content" | sed -E "s|(\| $case_id \|[^|]+\|) [a-z]+ (\|.*\|)|\1 $new_status \2|")
+        body_file=$(mktemp)
+        jq -n --arg c "$new_content" --arg s "$current_sha" \
+            '{content:$c, if_content_sha256:$s}' > "$body_file"
+        bl_api_call PATCH "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" "$body_file" >/dev/null
+        rc=$?
+        command rm -f "$body_file"
+        (( rc == 0 )) && return "$BL_EX_OK"
+        attempt=$((attempt + 1))
+    done
+    return "$BL_EX_CONFLICT"
+}
+
+bl_case_close_validate_preconditions() {
+    # bl_case_close_validate_preconditions <case-id> <force> — 0/68/69
+    local case_id="$1"
+    local force="$2"
+    local oq_body oq_content
+    oq_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fopen-questions.md" 2>/dev/null | jq -r '.content')
+    oq_content=$(printf '%s' "$oq_body" | grep -vE '^<!--|^# |^$' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+    if [[ -n "$oq_content" && "$oq_content" != "none" ]]; then
+        bl_error_envelope case "open-questions.md has unresolved entries (expected 0 or 'none')"
+        return "$BL_EX_TIER_GATE_DENIED"
+    fi
+    local pending results
+    pending=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/pending/" 2>/dev/null | jq -r '.data[].key' | sed "s|bl-case/$case_id/pending/||")
+    results=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/results/" 2>/dev/null | jq -r '.data[].key' | sed "s|bl-case/$case_id/results/||")
+    local missing
+    missing=$(comm -23 <(printf '%s\n' "$pending" | sort) <(printf '%s\n' "$results" | sort))
+    if [[ -n "$missing" ]]; then
+        bl_error_envelope case "pending steps without results: $(printf '%s' "$missing" | head -3 | tr '\n' ' ')"
+        return "$BL_EX_TIER_GATE_DENIED"
+    fi
+    local applied_keys missing_hint=0
+    applied_keys=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key')
+    while IFS= read -r k; do
+        [[ -z "$k" ]] && continue
+        local applied_content
+        applied_content=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${k//\//%2F}" 2>/dev/null | jq -r '.content')
+        printf '%s' "$applied_content" | grep -q '^retire_hint:' || { missing_hint=1; break; }
+    done <<< "$applied_keys"
+    if (( missing_hint == 1 )); then
+        bl_error_envelope case "at least one applied action lacks retire_hint"
+        return "$BL_EX_TIER_GATE_DENIED"
+    fi
+    if [[ "$force" != "yes" ]]; then
+        local hyp_body confidence
+        hyp_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null | jq -r '.content')
+        confidence=$(printf '%s' "$hyp_body" | awk '/^## Confidence/{flag=1; next} flag && /^0?\.[0-9]+|^[0-9]+(\.[0-9]+)?/{print; exit}' | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+        if [[ -z "$confidence" ]] || awk "BEGIN{exit !($confidence < 0.7)}"; then
+            bl_error_envelope case "hypothesis confidence < 0.7 (use --force to override)"
+            return "$BL_EX_TIER_GATE_DENIED"
+        fi
+    fi
+    return "$BL_EX_OK"
+}
+
+bl_case_close_render_brief_input() {
+    # bl_case_close_render_brief_input <case-id> — prints brief-input path on stdout; 0/69
+    local case_id="$1"
+    local out="/tmp/brief-$case_id-$$.md"
+    {
+        printf '# Case %s\n\n' "$case_id"
+        printf '## Executive summary\n'
+        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null | jq -r '.content' || printf '(hypothesis unavailable)\n'
+        printf '\n## Kill chain\n'
+        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fattribution.md" 2>/dev/null | jq -r '.content' || printf '(not populated)\n'
+        printf '\n## Indicators of compromise\n'
+        for f in ip-clusters url-patterns file-patterns; do
+            bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2F$f.md" 2>/dev/null | jq -r '.content' || printf '\n'
+        done
+        printf '\n## Remediation applied\n'
+        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
+        printf '\n## Defense hits\n'
+        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fdefense-hits.md" 2>/dev/null | jq -r '.content' | tail -30 || printf '(none)\n'
+        printf '\n## Open questions resolved\nnone at close\n'
+        printf '\n## Audit\nSee /var/lib/bl/ledger/%s.jsonl\n' "$case_id"
+    } > "$out"
+    printf '%s' "$out"
+    return "$BL_EX_OK"
+}
+
+bl_case_close_write_closed_md() {
+    # bl_case_close_write_closed_md <case-id> <fid-md> <fid-html> <fid-pdf> — 0/69/70
+    local case_id="$1"
+    local fid_md="$2"
+    local fid_html="$3"
+    local fid_pdf="$4"
+    local now
+    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"
+    local template_content
+    template_content=$(command cat "$repo_root/case-templates/closed.md" 2>/dev/null || command cat "case-templates/closed.md")
+    local closed_content
+    closed_content=$(printf '%s' "$template_content" | \
+        sed "s|{CASE_ID}|$case_id|g; s|{ISO_8601_TIMESTAMP}|$now|")
+    closed_content=$(printf '%s' "$closed_content" | awk -v md="$fid_md" -v pdf="$fid_pdf" -v html="$fid_html" '
+        /brief_file_id_md:/  { sub(/\{FILE_ID_OR_EMPTY\}/, md) }
+        /brief_file_id_pdf:/ { sub(/\{FILE_ID_OR_EMPTY\}/, pdf) }
+        /brief_file_id_html:/{ sub(/\{FILE_ID_OR_EMPTY\}/, html) }
+        {print}')
+    local body_file
+    body_file=$(mktemp)
+    jq -n --arg k "bl-case/$case_id/closed.md" --arg c "$closed_content" \
+        '{key:$k, content:$c, metadata:{}}' > "$body_file"
+    bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+    local rc=$?
+    command rm -f "$body_file"
+    return "$rc"
+}
+
+bl_case_close_schedule_retire() {
+    # bl_case_close_schedule_retire <case-id> — 0/65; queues retire-hint entries
+    local case_id="$1"
+    local queue_file="$BL_VAR_DIR/state/retire-queue.jsonl"
+    command mkdir -p "$BL_VAR_DIR/state" 2>/dev/null || return "$BL_EX_PREFLIGHT_FAIL"   # RO fs / perms
+    local applied_keys
+    applied_keys=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key')
+    while IFS= read -r k; do
+        [[ -z "$k" ]] && continue
+        local body act_id hint
+        body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${k//\//%2F}" 2>/dev/null | jq -r '.content')
+        act_id=$(printf '%s' "$body" | grep '^act_id:' | awk '{print $2}')
+        hint=$(printf '%s' "$body" | grep '^retire_hint:' | cut -d' ' -f2-)
+        [[ -n "$act_id" && -n "$hint" ]] || continue   # malformed → skip
+        jq -n --arg c "$case_id" --arg a "$act_id" --arg h "$hint" \
+            '{case:$c, act_id:$a, retire_when:$h, retire_cond:$h}' >> "$queue_file"
+    done <<< "$applied_keys"
+    return "$BL_EX_OK"
+}
+
+bl_case_close_stage2_render() {
+    # bl_case_close_stage2_render <case-id> <fid-md> <out-html-var> <out-pdf-var> — 0/69/70
+    # Polls files.list(scope_id=$session_id) for up to 60s for agent-produced brief.{html,pdf}.
+    # Returns via printf '<html_id>|<pdf_id>' to stdout; caller uses IFS=| read.
+    local case_id="$1"
+    local fid_md="$2"
+    local session_id=""
+    [[ -r "$BL_STATE_DIR/session-$case_id" ]] && session_id=$(command cat "$BL_STATE_DIR/session-$case_id")
+    if [[ -z "${session_id:-}" ]]; then
+        bl_warn "no session for $case_id; skipping stage-2 render"
+        printf '|'
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
+    local wake_body
+    wake_body=$(mktemp)
+    jq -n --arg m "$fid_md" --arg c "$case_id" \
+        '{type:"user.message", content:[{type:"text", text:("render file_id="+$m+" to HTML and PDF; write to /mnt/session/outputs/brief-"+$c+".{html,pdf}")}]}' > "$wake_body"
+    bl_api_call POST "/v1/sessions/$session_id/events" "$wake_body" >/dev/null || {
+        command rm -f "$wake_body"
+        printf '|'
+        return "$BL_EX_UPSTREAM_ERROR"
+    }
+    command rm -f "$wake_body"
+    local attempts=0 files_body html_id="" pdf_id=""
+    while (( attempts < 12 )); do
+        sleep 5
+        files_body=$(bl_api_call GET "/v1/files?scope_id=$session_id&limit=50" 2>/dev/null) || true   # transient miss
+        html_id=$(printf '%s' "$files_body" | jq -r ".data[] | select(.filename == \"brief-$case_id.html\") | .id" | head -1)
+        pdf_id=$(printf '%s' "$files_body" | jq -r ".data[] | select(.filename == \"brief-$case_id.pdf\") | .id" | head -1)
+        [[ -n "$html_id" && -n "$pdf_id" ]] && break
+        attempts=$((attempts + 1))
+    done
+    printf '%s|%s' "$html_id" "$pdf_id"
+    if [[ -z "$html_id" || -z "$pdf_id" ]]; then
+        bl_warn "curator render did not complete within 60s"
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
+    return "$BL_EX_OK"
+}
+
+bl_case_close() {
+    # bl_case_close [case-id] [--force] — 0/64/68/69/72; 12-step flow per spec §5.3.1
+    local case_id="" force=""
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    while (( $# > 0 )); do
+        case "$1" in
+            --force) force="yes"; shift ;;
+            -*)      bl_error_envelope case "unknown flag: $1"; return "$BL_EX_USAGE" ;;
+            *)       case_id="$1"; shift ;;
+        esac
+    done
+    [[ -z "$case_id" ]] && case_id=$(bl_case_current)
+    [[ -z "$case_id" ]] && { bl_error_envelope case "no active case"; return "$BL_EX_NOT_FOUND"; }
+    local checkpoint="$BL_STATE_DIR/close-checkpoint-$case_id.json"
+    bl_case_close_validate_preconditions "$case_id" "$force" || return $?
+    local brief_path
+    brief_path=$(bl_case_close_render_brief_input "$case_id") || return $?
+    local fid_md
+    fid_md=$(bl_files_api_upload "text/markdown" "$brief_path")
+    local up_rc=$?
+    if (( up_rc != 0 )); then
+        bl_error_envelope case "brief MD upload failed (rc=$up_rc)"
+        command rm -f "$brief_path"
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
+    bl_info "uploaded text/markdown → $fid_md"
+    local fid_html="" fid_pdf=""
+    if [[ "${BL_BRIEF_MIMES:-text/markdown,text/html,application/pdf}" =~ text/html|application/pdf ]]; then
+        local render_out
+        render_out=$(bl_case_close_stage2_render "$case_id" "$fid_md") || bl_warn "stage-2 render degraded; closing with MD only"
+        if [[ -n "$render_out" ]]; then
+            IFS='|' read -r fid_html fid_pdf <<< "$render_out"
+        fi
+    fi
+    bl_case_close_write_closed_md "$case_id" "$fid_md" "$fid_html" "$fid_pdf" || {
+        jq -n --arg c "$case_id" --arg m "$fid_md" --arg h "$fid_html" --arg p "$fid_pdf" \
+            '{case:$c, fid_md:$m, fid_html:$h, fid_pdf:$p, phase:"closed_md_pending"}' > "$checkpoint"
+        command rm -f "$brief_path"
+        return "$BL_EX_UPSTREAM_ERROR"
+    }
+    bl_case_update_index_status "$case_id" "closed" || {
+        jq -n --arg c "$case_id" '{case:$c, phase:"index_pending"}' > "$checkpoint"
+        command rm -f "$brief_path"
+        return "$BL_EX_CONFLICT"
+    }
+    bl_case_close_schedule_retire "$case_id"
+    [[ -f "$BL_CASE_CURRENT_FILE" ]] && command rm -f "$BL_CASE_CURRENT_FILE"
+    bl_ledger_append "$case_id" \
+        "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg m "$fid_md" --arg h "$fid_html" --arg p "$fid_pdf" \
+            '{ts:$ts, case:$c, kind:"case_closed", payload:{brief_file_ids:{md:$m, html:$h, pdf:$p}}}')"
+    [[ -f "$checkpoint" ]] && command rm -f "$checkpoint"
+    command rm -f "$brief_path"
+    bl_info "$case_id closed"
+    return "$BL_EX_OK"
+}
+
+bl_case_reopen() {
+    # bl_case_reopen <case-id> --reason <str> — 0/64/69/72
+    local case_id="" reason=""
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    while (( $# > 0 )); do
+        case "$1" in
+            --reason) reason="$2"; shift 2 ;;
+            -*)       bl_error_envelope case "unknown flag: $1"; return "$BL_EX_USAGE" ;;
+            *)        case_id="$1"; shift ;;
+        esac
+    done
+    [[ -z "$case_id" ]] && { bl_error_envelope case "missing <case-id>"; return "$BL_EX_USAGE"; }
+    [[ -z "$reason" ]] && { bl_error_envelope case "missing --reason <str>"; return "$BL_EX_USAGE"; }
+    local closed_body
+    closed_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fclosed.md")
+    local rc=$?
+    (( rc != 0 )) && { bl_error_envelope case "case is not closed (closed.md not found)"; return "$BL_EX_USAGE"; }
+    local ts
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    local archive_key="bl-case/$case_id/closed-$ts.md"
+    local content body_file
+    content=$(printf '%s' "$closed_body" | jq -r '.content')
+    body_file=$(mktemp)
+    jq -n --arg k "$archive_key" --arg c "$content" \
+        '{key:$k, content:$c, metadata:{}}' > "$body_file"
+    bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null || {
+        command rm -f "$body_file"
+        return "$BL_EX_UPSTREAM_ERROR"
+    }
+    command rm -f "$body_file"
+    bl_api_call DELETE "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fclosed.md" >/dev/null || bl_warn "original closed.md delete failed"
+    # MUST-FIX 5.2: update INDEX status to reopened via shared helper
+    bl_case_update_index_status "$case_id" "reopened" || bl_warn "INDEX update failed on reopen; manual correction may be needed"
+    bl_ledger_append "$case_id" \
+        "$(jq -n --arg ts "$ts" --arg c "$case_id" --arg r "$reason" \
+            '{ts:$ts, case:$c, kind:"case_reopened", payload:{reason:$r}}')"
+    bl_info "$case_id reopened"
+    return "$BL_EX_OK"
+}
 
 # ----------------------------------------------------------------------------
 # Main dispatcher — flag-sniff first (help/version/setup bypass preflight),

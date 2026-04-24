@@ -1,0 +1,5 @@
+{
+  "key": "bl-case/CASE-2026-0001/pending/s-0044.json",
+  "content": "{\n  \"step_id\": \"s-0044\",\n  \"verb\": \"clean.htaccess\",\n  \"action_tier\": \"destructive\",\n  \"reasoning\": \"obs-0055 /var/www/html/.htaccess line 42 'AddHandler application/x-httpd-php .jpg' injected per skills/webshell-families/polyshell.md. Backup written before edit.\",\n  \"args\": [\n    {\"key\": \"file\", \"value\": \"/var/www/html/.htaccess\"},\n    {\"key\": \"line\", \"value\": \"42\"},\n    {\"key\": \"expected_sha256\", \"value\": \"a3f5c8de90cf47d112ab3e6f891c0d23\"}\n  ],\n  \"diff\": \"--- a/var/www/html/.htaccess\\n+++ b/var/www/html/.htaccess\\n@@ -40,7 +40,5 @@\\n RewriteRule ^(.*)$ index.php [L]\\n </IfModule>\\n \\n-AddHandler application/x-httpd-php .jpg\\n-\\n # End of file\",\n  \"patch\": null\n}",
+  "content_sha256": "abc123"
+}

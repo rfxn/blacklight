@@ -59,20 +59,33 @@ teardown() {
     [[ "$output" == *"not yet implemented (M8)"* ]]
 }
 
-@test "bl observe/consult/run/defend/clean/case each dispatch to stub and exit 64 (parameterised)" {
+@test "bl observe is a real router; defend/clean stubs return exit 64 with not-yet-implemented" {
     # Pre-seed agent-id so preflight passes for non-setup verbs
     mkdir -p "$BL_VAR_DIR/state"
     printf '%s' "agent_test_stub" > "$BL_VAR_DIR/state/agent-id"
     export ANTHROPIC_API_KEY="sk-ant-test"
-    # M4 landed: 'observe' is now a real router (exits 64 with "missing sub-verb" not "not yet implemented")
+    # M4 landed: 'observe' is a real router (exits 64 with "missing sub-verb" not "not yet implemented")
     run "$BL_SOURCE" observe
     [ "$status" -eq 64 ] || { echo "FAIL: observe returned $status"; return 1; }
     [[ "$output" == *"missing sub-verb"* ]] || { echo "FAIL: observe missing sub-verb msg"; return 1; }
-    # Remaining stubs: consult, run, defend, clean, case
-    for ns in consult run defend clean case; do
+    # M5 handlers (consult/run/case) have their own @test below. Remaining stubs: defend (M6), clean (M7)
+    for ns in defend clean; do
         run "$BL_SOURCE" "$ns"
         [ "$status" -eq 64 ] || { echo "FAIL: $ns returned $status"; return 1; }
         [[ "$output" == *"not yet implemented"* ]] || { echo "FAIL: $ns missing stub msg"; return 1; }
+    done
+}
+
+@test "bl consult/run/case dispatch to M5 handlers and exit 64 on missing args" {
+    # M5 handlers implemented — no args → usage error (64), not stub message
+    mkdir -p "$BL_VAR_DIR/state"
+    printf '%s' "agent_test_stub" > "$BL_VAR_DIR/state/agent-id"
+    printf '%s' "memstore_test_stub" > "$BL_VAR_DIR/state/memstore-case-id"
+    export ANTHROPIC_API_KEY="sk-ant-test"
+    export BL_VAR_DIR
+    for ns in consult run; do
+        run "$BL_SOURCE" "$ns"
+        [ "$status" -eq 64 ] || { echo "FAIL: $ns returned $status (expected 64)"; return 1; }
     done
 }
 

@@ -10,6 +10,8 @@ RUN microdnf install -y jq zstd ShellCheck && microdnf clean all
 COPY . /opt/blacklight-src
 COPY tests/ /opt/tests/
 COPY bl /opt/bl
+COPY schemas/ /opt/schemas/
+COPY case-templates/ /opt/case-templates/
 RUN chmod +x /opt/bl
 
 WORKDIR /opt/tests

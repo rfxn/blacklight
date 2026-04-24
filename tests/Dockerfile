@@ -12,9 +12,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Project source at /opt/blacklight-src (reference); test files at /opt/tests/
 # (matches BATSMAN_CONTAINER_TEST_PATH); `bl` at /opt/bl so that tests resolving
 # $BATS_TEST_DIRNAME/../bl from /opt/tests find it at /opt/bl.
+# schemas/ and case-templates/ alongside bl so repo_root=/opt resolves them.
 COPY . /opt/blacklight-src
 COPY tests/ /opt/tests/
 COPY bl /opt/bl
+COPY schemas/ /opt/schemas/
+COPY case-templates/ /opt/case-templates/
 RUN chmod +x /opt/bl
 
 WORKDIR /opt/tests

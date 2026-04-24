@@ -125,7 +125,7 @@ Body MAY include:
   "name": "bl-curator-env",
   "type": "cloud",
   "packages": {
-    "apt": ["apache2", "libapache2-mod-security2", "modsecurity-crs", "yara", "jq", "zstd", "duckdb"]
+    "apt": ["apache2", "libapache2-mod-security2", "modsecurity-crs", "yara", "jq", "zstd", "duckdb", "pandoc", "weasyprint"]
   },
   "networking": {"type": "unrestricted"}
 }

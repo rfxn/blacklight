@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "step_id": "s-0042",
+      "verb": "defend.firewall",
+      "action_tier": "auto",
+      "reasoning": "batch fixture step 1 — auto-exec, no prompt",
+      "args": [{"key": "ip", "value": "203.0.113.51"}, {"key": "backend", "value": "iptables"}],
+      "diff": "+ iptables -I INPUT -s 203.0.113.51 -j DROP",
+      "patch": null
+    },
+    {
+      "step_id": "s-0043",
+      "verb": "defend.modsec",
+      "action_tier": "suggested",
+      "reasoning": "batch fixture step 2 — prompts operator; halts batch if declined",
+      "args": [{"key": "rule_file", "value": "/tmp/test-rule.conf"}],
+      "diff": "--- /dev/null\n+++ /etc/modsecurity/test.conf\n+SecRule ...",
+      "patch": null
+    },
+    {
+      "step_id": "s-0044",
+      "verb": "clean.htaccess",
+      "action_tier": "destructive",
+      "reasoning": "batch fixture step 3 — destructive; no batch auto-confirm per docs/action-tiers.md §5.4",
+      "args": [{"key": "file", "value": "/var/www/html/.htaccess"}, {"key": "line", "value": "42"}],
+      "diff": "--- a/.htaccess\n+++ b/.htaccess\n@@ -42 +42 @@\n-AddHandler application/x-httpd-php .jpg\n+",
+      "patch": null
+    }
+  ]
+}

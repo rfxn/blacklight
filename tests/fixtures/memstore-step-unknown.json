@@ -1,0 +1,5 @@
+{
+  "key": "bl-case/CASE-2026-0001/pending/s-0099.json",
+  "content": "{\n  \"step_id\": \"s-0099\",\n  \"verb\": \"observe.file\",\n  \"action_tier\": \"unknown\",\n  \"reasoning\": \"operator-synthetic test fixture — exercises --unsafe --yes override path; curator should never author this\",\n  \"args\": [\n    {\"key\": \"path\", \"value\": \"/tmp/synthetic-test\"}\n  ],\n  \"diff\": null,\n  \"patch\": null\n}",
+  "content_sha256": "abc123"
+}

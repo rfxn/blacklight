@@ -1,0 +1,11 @@
+{
+  "step_id": "s-0099",
+  "verb": "observe.file",
+  "action_tier": "unknown",
+  "reasoning": "operator-synthetic test fixture — exercises --unsafe --yes override path; curator should never author this",
+  "args": [
+    {"key": "path", "value": "/tmp/synthetic-test"}
+  ],
+  "diff": null,
+  "patch": null
+}

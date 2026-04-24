@@ -1,0 +1,5 @@
+{
+  "key": "bl-case/CASE-2026-0001/pending/s-0042.json",
+  "content": "{\n  \"step_id\": \"s-0042\",\n  \"verb\": \"defend.firewall\",\n  \"action_tier\": \"auto\",\n  \"reasoning\": \"obs-0071 203.0.113.51 8412 POST /a.php/banner.jpg requests; ASN lookup non-CDN per skills/defense-synthesis/firewall-rules.md\",\n  \"args\": [\n    {\"key\": \"ip\", \"value\": \"203.0.113.51\"},\n    {\"key\": \"backend\", \"value\": \"iptables\"},\n    {\"key\": \"case_tag\", \"value\": \"CASE-2026-0001\"}\n  ],\n  \"diff\": \"+ iptables -I INPUT -s 203.0.113.51 -j DROP -m comment --comment \\\"bl-case CASE-2026-0001 polyshell-c2\\\"\",\n  \"patch\": null\n}",
+  "content_sha256": "abc123"
+}

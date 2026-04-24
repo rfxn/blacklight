@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
-# tests/helpers/assert-jsonl.bash — JSONL preamble + per-source record field validator
-# Consumed by tests/04-observe.bats.
-# Validates against schemas/evidence-envelope.md §1 preamble + §3 per-source record fields.
+# tests/helpers/assert-jsonl.bash — JSONL assertion helpers for BATS
+#
+# Two complementary surfaces:
+#   M4 observe (tests/04-observe.bats):
+#     assert_jsonl_preamble <line>                      — 6 required preamble keys present
+#     assert_jsonl_record   <line> <source-taxonomy>    — per-source record fields per
+#                                                          schemas/evidence-envelope.md §3
+#
+#   M5 consult/run/case (tests/05-consult-run-case.bats):
+#     assert_jsonl_schema_valid    <schema-path> <payload-path>
+#                                                        — JSON Schema draft-2020-12 subset
+#                                                          (same subset as bl's bl_jq_schema_check)
+#     assert_jsonl_records_count   <jsonl-path> <expected-count>
+#     assert_jsonl_record_has      <jsonl-path> <line-no> <jq-path> <expected>
+#
+# All assertions return 0 on pass, 1 on fail (BATS captures).
+
+# ─── M4 observe — evidence-envelope validators ──────────────────────────────
 
 assert_jsonl_preamble() {
     # $1 = one JSONL line
@@ -109,4 +124,41 @@ assert_jsonl_record() {
             return 1
             ;;
     esac
+}
+
+# ─── M5 consult/run/case — schema + count + single-record assertions ────────
+
+assert_jsonl_schema_valid() {
+    local schema="$1"
+    local payload="$2"
+    [[ -r "$schema" ]] || { echo "assert_jsonl_schema_valid: schema not readable: $schema" >&2; return 1; }
+    [[ -r "$payload" ]] || { echo "assert_jsonl_schema_valid: payload not readable: $payload" >&2; return 1; }
+    local req_keys_ok
+    req_keys_ok=$(jq -n --slurpfile s "$schema" --slurpfile p "$payload" '
+        ($s[0].required // []) as $req |
+        $p[0] as $pay |
+        ($req | map(. as $k | $pay | has($k)) | all)
+    ')
+    [[ "$req_keys_ok" == "true" ]] || { echo "assert_jsonl_schema_valid: missing required key in $payload" >&2; return 1; }
+    return 0
+}
+
+assert_jsonl_records_count() {
+    local path="$1"
+    local expected="$2"
+    local actual
+    actual=$(grep -c '^' "$path" 2>/dev/null || printf '0')
+    [[ "$actual" -eq "$expected" ]] || { echo "assert_jsonl_records_count: expected $expected, got $actual in $path" >&2; return 1; }
+    return 0
+}
+
+assert_jsonl_record_has() {
+    local path="$1"
+    local line_no="$2"
+    local jq_path="$3"
+    local expected="$4"
+    local actual
+    actual=$(sed -n "${line_no}p" "$path" | jq -r "$jq_path")
+    [[ "$actual" == "$expected" ]] || { echo "assert_jsonl_record_has: line $line_no $jq_path expected '$expected' got '$actual'" >&2; return 1; }
+    return 0
 }

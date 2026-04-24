@@ -1,0 +1,13 @@
+{
+  "step_id": "s-0042",
+  "verb": "defend.firewall",
+  "action_tier": "auto",
+  "reasoning": "obs-0071 203.0.113.51 8412 POST /a.php/banner.jpg requests; ASN lookup non-CDN per skills/defense-synthesis/firewall-rules.md",
+  "args": [
+    {"key": "ip", "value": "203.0.113.51"},
+    {"key": "backend", "value": "iptables"},
+    {"key": "case_tag", "value": "CASE-2026-0001"}
+  ],
+  "diff": "+ iptables -I INPUT -s 203.0.113.51 -j DROP -m comment --comment \"bl-case CASE-2026-0001 polyshell-c2\"",
+  "patch": null
+}

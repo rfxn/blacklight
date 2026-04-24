@@ -1,0 +1,8 @@
+{
+  "verb": "observe.file",
+  "action_tier": "read-only",
+  "reasoning": "malformed fixture — step_id missing",
+  "args": [{"key": "path", "value": "/tmp/x"}],
+  "diff": null,
+  "patch": null
+}
