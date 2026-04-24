@@ -406,10 +406,13 @@ bl_clean_cron() {
         _bl_clean_dry_run_emit "clean.cron" "$target" "$diff_text"
         return $?
     fi
-    _bl_clean_dry_run_check "clean.cron" "$target" || { command rm -f "$cur_tmp"; return $?; }
+    local _rc
+    _bl_clean_dry_run_check "clean.cron" "$target"; _rc=$?
+    if (( _rc != 0 )); then command rm -f "$cur_tmp"; return "$_rc"; fi
     if [[ "$yes" != "yes" ]]; then
         local backup_preview="$BL_VAR_DIR/backups/<ISO-ts>.<hash>.crontab_${user}"
-        _bl_clean_prompt_operator "clean.cron" "$target" "$diff_text" "$backup_preview" "" || { command rm -f "$cur_tmp"; return $?; }
+        _bl_clean_prompt_operator "clean.cron" "$target" "$diff_text" "$backup_preview" ""; _rc=$?
+        if (( _rc != 0 )); then command rm -f "$cur_tmp"; return "$_rc"; fi
     fi
     # Write the current crontab dump as a backup source file first
     local cur_snapshot="$BL_VAR_DIR/state/cron-snapshot-${user}.txt"
@@ -417,7 +420,8 @@ bl_clean_cron() {
     command cp "$cur_tmp" "$cur_snapshot"
     local case_id backup_id
     case_id=$(bl_case_current)
-    backup_id=$(_bl_clean_write_backup "$cur_snapshot" "clean.cron" "$case_id") || { command rm -f "$cur_tmp" "$cur_snapshot"; return $?; }
+    backup_id=$(_bl_clean_write_backup "$cur_snapshot" "clean.cron" "$case_id"); _rc=$?
+    if (( _rc != 0 )); then command rm -f "$cur_tmp" "$cur_snapshot"; return "$_rc"; fi
     # Apply patch to the snapshot; install result via crontab -u <user>
     if ! command patch -p0 --forward -s "$cur_snapshot" < "$patch_file"; then
         command rm -f "$cur_tmp" "$cur_snapshot"
@@ -626,7 +630,7 @@ bl_clean_undo() {
             ;;
         clean.cron)
             # original_path was the snapshot file; user embedded in filename not reliable,
-            # so extract from backup meta's original_path which is the snapshot path.
+            # so extract from backup meta's original_path (the snapshot path).
             # Snapshot path format: $BL_VAR_DIR/state/cron-snapshot-<user>.txt
             local user
             user=$(printf '%s' "$original_path" | command sed -nE 's|.*/cron-snapshot-(.+)\.txt$|\1|p')

@@ -59,7 +59,7 @@ teardown() {
     [[ "$output" == *"not yet implemented (M8)"* ]]
 }
 
-@test "bl observe is a real router; defend/clean stubs return exit 64 with not-yet-implemented" {
+@test "bl observe is a real router; defend stub returns exit 64 with not-yet-implemented; clean is real router" {
     # Pre-seed agent-id so preflight passes for non-setup verbs
     mkdir -p "$BL_VAR_DIR/state"
     printf '%s' "agent_test_stub" > "$BL_VAR_DIR/state/agent-id"
@@ -68,12 +68,14 @@ teardown() {
     run "$BL_SOURCE" observe
     [ "$status" -eq 64 ] || { echo "FAIL: observe returned $status"; return 1; }
     [[ "$output" == *"missing sub-verb"* ]] || { echo "FAIL: observe missing sub-verb msg"; return 1; }
-    # M5 handlers (consult/run/case) have their own @test below. Remaining stubs: defend (M6), clean (M7)
-    for ns in defend clean; do
-        run "$BL_SOURCE" "$ns"
-        [ "$status" -eq 64 ] || { echo "FAIL: $ns returned $status"; return 1; }
-        [[ "$output" == *"not yet implemented"* ]] || { echo "FAIL: $ns missing stub msg"; return 1; }
-    done
+    # M6 defend stub: still not-yet-implemented
+    run "$BL_SOURCE" defend
+    [ "$status" -eq 64 ] || { echo "FAIL: defend returned $status"; return 1; }
+    [[ "$output" == *"not yet implemented"* ]] || { echo "FAIL: defend missing stub msg"; return 1; }
+    # M7 clean: real router landed — exits 64 with "missing subcommand" (not stub message)
+    run "$BL_SOURCE" clean
+    [ "$status" -eq 64 ] || { echo "FAIL: clean returned $status"; return 1; }
+    [[ "$output" == *"missing subcommand"* ]] || { echo "FAIL: clean missing subcommand msg"; return 1; }
 }
 
 @test "bl consult/run/case dispatch to M5 handlers and exit 64 on missing args" {
