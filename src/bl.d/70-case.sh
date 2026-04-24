@@ -1,4 +1,11 @@
 # shellcheck shell=bash
+_bl_ledger_event_json() {
+    # _bl_ledger_event_json <ts> <case-id> <kind> <payload-json> — schema-conformant ledger event JSON; private (M9 P7)
+    local ts="$1" case_id="$2" kind="$3" payload="$4"
+    jq -n --arg ts "$ts" --arg c "$case_id" --arg k "$kind" --argjson p "$payload" \
+        '{ts:$ts, case:$c, kind:$k, payload:$p}'
+}
+
 bl_case() {
     # bl_case <subcommand> [args] — route to _show/_log/_list/_close/_reopen
     local sub="${1:-show}"
@@ -313,8 +320,8 @@ bl_case_close() {
     bl_case_close_schedule_retire "$case_id"
     [[ -f "$BL_CASE_CURRENT_FILE" ]] && command rm -f "$BL_CASE_CURRENT_FILE"
     bl_ledger_append "$case_id" \
-        "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg m "$fid_md" --arg h "$fid_html" --arg p "$fid_pdf" \
-            '{ts:$ts, case:$c, kind:"case_closed", payload:{brief_file_ids:{md:$m, html:$h, pdf:$p}}}')"
+        "$(_bl_ledger_event_json "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$case_id" "case_closed" \
+            "$(jq -n --arg m "$fid_md" --arg h "$fid_html" --arg p "$fid_pdf" '{brief_file_ids:{md:$m, html:$h, pdf:$p}}')")"
     [[ -f "$checkpoint" ]] && command rm -f "$checkpoint"
     command rm -f "$brief_path"
     bl_info "$case_id closed"
@@ -355,8 +362,8 @@ bl_case_reopen() {
     # MUST-FIX 5.2: update INDEX status to reopened via shared helper
     bl_case_update_index_status "$case_id" "reopened" || bl_warn "INDEX update failed on reopen; manual correction may be needed"
     bl_ledger_append "$case_id" \
-        "$(jq -n --arg ts "$ts" --arg c "$case_id" --arg r "$reason" \
-            '{ts:$ts, case:$c, kind:"case_reopened", payload:{reason:$r}}')"
+        "$(_bl_ledger_event_json "$ts" "$case_id" "case_reopened" \
+            "$(jq -n --arg r "$reason" '{reason:$r}')")"
     bl_info "$case_id reopened"
     return "$BL_EX_OK"
 }

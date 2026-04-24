@@ -21,6 +21,14 @@ https://github.com/rfxn/blacklight
       retained skip (429-mock requires multi-response curator-mock per
       plan §Phase-3 acknowledgment). All G1+G3+G4+G5+G6-outbox green.
 
+- M9 P7 | Apr 24 2026 — ledger construction normalization:
+[Change] src/bl.d/70-case.sh — _bl_ledger_event_json shared helper; bl_case_close
+      and bl_case_reopen ledger events now use consistent construction (behavior
+      unchanged; both conform to schemas/ledger-event.json via Phase 2's
+      validation gate).
+[Change] tests/09-hardening.bats — P7 @test asserts case_closed + case_reopened
+      events pass ledger-event.json (29th @test; appended at EOF).
+
 - M9 P2 | Apr 24 2026 — ledger schema + validated append:
 [New] schemas/ledger-event.json — canonical JSONL record per DESIGN.md §13.3;
       18 kinds enum (plan §Phase-2 specified 14; enum extended to cover live

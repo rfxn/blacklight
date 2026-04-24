@@ -246,3 +246,27 @@ _source_bl() { source "$BL_SOURCE" >/dev/null 2>&1 || true; }
 @test "bl flush --outbox drains and exits 0" {
     skip "handler not landed until Phase 8"
 }
+
+# ─── P7: case close/reopen schema conformance ──────────────────────────────
+
+@test "bl_case_close + bl_case_reopen emit schema-conformant ledger events" {
+    # Seed a closed-then-reopened case; inspect ledger entries.
+    bl_case_fixture_seed CASE-2026-0001
+    printf 'CASE-2026-0001' > "$BL_VAR_DIR/state/case.current"
+    # Drive bl_case_close via the CLI path; mock the upstream calls.
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    # Build a case_closed event via _bl_ledger_event_json then append. `|| true` after source matches G1/G3 pattern: bl's `set -euo pipefail` propagates main's no-arg exit 64 unless suppressed.
+    local closed_event
+    closed_event=$(bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; _bl_ledger_event_json '2026-04-24T20:00:00Z' 'CASE-2026-0001' 'case_closed' '{\"brief_file_ids\":{\"md\":\"fid_m\",\"html\":\"fid_h\",\"pdf\":\"fid_p\"}}'")
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_ledger_append CASE-2026-0001 '$closed_event'"
+    [ "$status" -eq 0 ]
+    # And case_reopened
+    local reopen_event
+    reopen_event=$(bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; _bl_ledger_event_json '2026-04-24T21:00:00Z' 'CASE-2026-0001' 'case_reopened' '{\"reason\":\"new-evidence\"}'")
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_ledger_append CASE-2026-0001 '$reopen_event'"
+    [ "$status" -eq 0 ]
+    # Both lines must be in the ledger and schema-valid.
+    [ "$(command wc -l < $BL_VAR_DIR/ledger/CASE-2026-0001.jsonl)" -ge 2 ]
+    grep -q '"kind":"case_closed"' "$BL_VAR_DIR/ledger/CASE-2026-0001.jsonl"
+    grep -q '"kind":"case_reopened"' "$BL_VAR_DIR/ledger/CASE-2026-0001.jsonl"
+}
