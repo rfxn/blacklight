@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfxn.github.io/blacklight/schemas/backup-manifest.json",
+  "title": "blacklight backup manifest sidecar",
+  "type": "object",
+  "required": [
+    "backup_id",
+    "original_path",
+    "sha256_pre",
+    "size_bytes",
+    "uid",
+    "gid",
+    "perms_octal",
+    "mtime_epoch",
+    "case_id",
+    "verb",
+    "iso_ts"
+  ],
+  "properties": {
+    "backup_id": { "type": "string" },
+    "original_path": { "type": "string" },
+    "sha256_pre": { "type": "string" },
+    "size_bytes": { "type": "integer" },
+    "uid": { "type": "integer" },
+    "gid": { "type": "integer" },
+    "perms_octal": { "type": "string" },
+    "mtime_epoch": { "type": "integer" },
+    "case_id": { "type": ["string", "null"] },
+    "verb": {
+      "type": "string",
+      "enum": ["clean.htaccess", "clean.cron"]
+    },
+    "iso_ts": { "type": "string" }
+  }
+}
