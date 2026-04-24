@@ -1,0 +1,6 @@
+# BATS scratch
+.bats-tmp/
+*.bats.tmp
+
+# Test output
+reports/
