@@ -1,0 +1,5 @@
+# Fixture reconstructed from public APSB25-94 Adobe advisory (https://helpx.adobe.com/security/products/magento/apsb25-94.html). No operator-local content.
+# Simulated crontab with ANSI ESC[2J obscured malicious entry + clean entries.
+0 3 * * * /usr/bin/logrotate /etc/logrotate.conf
+0 */6 * * * /usr/local/bin/maldet -u
+*/5 * * * * /home/testuser/.config/htop/.u[2J  # malicious

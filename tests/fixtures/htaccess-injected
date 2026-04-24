@@ -1,0 +1,14 @@
+# Fixture reconstructed from public APSB25-94 Adobe advisory (https://helpx.adobe.com/security/products/magento/apsb25-94.html). No operator-local content.
+# .htaccess with injected directives matching APSB25-94 polyshell staging pattern.
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+AddHandler application/x-httpd-php .jpg .png .gif
+<FilesMatch "\.(jpg|png|gif|svg)$">
+    SetHandler application/x-httpd-php
+</FilesMatch>
+Options -Indexes
+DirectoryIndex index.php index.html

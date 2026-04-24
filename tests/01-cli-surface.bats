@@ -64,7 +64,12 @@ teardown() {
     mkdir -p "$BL_VAR_DIR/state"
     printf '%s' "agent_test_stub" > "$BL_VAR_DIR/state/agent-id"
     export ANTHROPIC_API_KEY="sk-ant-test"
-    for ns in observe consult run defend clean case; do
+    # M4 landed: 'observe' is now a real router (exits 64 with "missing sub-verb" not "not yet implemented")
+    run "$BL_SOURCE" observe
+    [ "$status" -eq 64 ] || { echo "FAIL: observe returned $status"; return 1; }
+    [[ "$output" == *"missing sub-verb"* ]] || { echo "FAIL: observe missing sub-verb msg"; return 1; }
+    # Remaining stubs: consult, run, defend, clean, case
+    for ns in consult run defend clean case; do
         run "$BL_SOURCE" "$ns"
         [ "$status" -eq 64 ] || { echo "FAIL: $ns returned $status"; return 1; }
         [[ "$output" == *"not yet implemented"* ]] || { echo "FAIL: $ns missing stub msg"; return 1; }

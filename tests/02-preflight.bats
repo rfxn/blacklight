@@ -30,9 +30,9 @@ teardown() {
     # mock still configured empty — preflight should NOT hit API because cache exists.
     bl_mock_set_response empty
     run "$BL_SOURCE" observe
-    # preflight passes (cached agent-id), handler stub returns 64
+    # preflight passes (cached agent-id), router returns 64 with missing sub-verb diagnostic
     [ "$status" -eq 64 ]
-    [[ "$output" == *"not yet implemented (M4)"* ]]
+    [[ "$output" == *"missing sub-verb"* ]]
 }
 
 @test "bl_preflight on seeded workspace (API returns 1+ agent) caches agent-id and returns 0" {

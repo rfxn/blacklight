@@ -1,0 +1,17 @@
+# Fixture reconstructed from public APSB25-94 Adobe advisory (https://helpx.adobe.com/security/products/magento/apsb25-94.html). No operator-local content.
+# Simulated iptables -L -n --line-numbers -v output. TEST-NET-3 IPs per RFC 5737.
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination
+1     1234  98K ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED
+2      512  32K ACCEPT     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:22
+3       88  5120 ACCEPT    tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:80
+4       76  4096 ACCEPT    tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:443
+5        0     0 DROP      all  --  *      *       203.0.113.51         0.0.0.0/0            /* bl-case CASE-2026-9999 -- polyshell-c2 */
+6        0     0 DROP      all  --  *      *       203.0.113.52         0.0.0.0/0
+7      100  6400 ACCEPT     icmp --  *      *       0.0.0.0/0            0.0.0.0/0
+
+Chain FORWARD (policy DROP 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination

@@ -1,0 +1,37 @@
+# Fixture reconstructed from public APSB25-94 Adobe advisory (https://helpx.adobe.com/security/products/magento/apsb25-94.html). No operator-local content.
+# ModSec Serial audit log format. Three transactions: one polyshell double-ext trigger, two clean.
+--a1b2c3d4e5f6a7b8-A--
+a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+23/Apr/2026:14:22:07.123456 +0000
+--a1b2c3d4e5f6a7b8-B--
+POST /pub/media/catalog/product/.cache/a.php/banner.jpg HTTP/1.1
+Host: fleet-01-host-99.example.test
+X-Forwarded-For: 203.0.113.51
+Content-Type: application/x-www-form-urlencoded
+--a1b2c3d4e5f6a7b8-F--
+HTTP/1.1 403 Forbidden
+--a1b2c3d4e5f6a7b8-H--
+Message: Warning. Pattern match "php" at REQUEST_URI. [file "/etc/modsecurity/owasp-crs/rules/REQUEST-920-PROTOCOL-ENFORCEMENT.conf"] [line "1042"] [id "920450"] [msg "HTTP Request Header or a Response Header is restricted by policy (...]
+Rule id: 920450
+Rule tag: polyshell/double-ext
+Stopwatch2: 123456789 2345; combined=1234, p1=234, p2=876, p3=0, p4=0, p5=0
+--a1b2c3d4e5f6a7b8-Z--
+--b1c2d3e4f5a6b7c8-A--
+b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0
+23/Apr/2026:14:21:55.000001 +0000
+--b1c2d3e4f5a6b7c8-B--
+GET /index.php HTTP/1.1
+Host: fleet-01-host-99.example.test
+--b1c2d3e4f5a6b7c8-F--
+HTTP/1.1 200 OK
+--b1c2d3e4f5a6b7c8-Z--
+--c1d2e3f4a5b6c7d8-A--
+c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0
+23/Apr/2026:14:22:04.999999 +0000
+--c1d2e3f4a5b6c7d8-B--
+POST /index.php/admin/system_account/token HTTP/1.1
+Host: fleet-01-host-99.example.test
+X-Real-IP: 203.0.113.51
+--c1d2e3f4a5b6c7d8-F--
+HTTP/1.1 302 Found
+--c1d2e3f4a5b6c7d8-Z--

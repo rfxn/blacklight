@@ -16,9 +16,10 @@ curator/storage/work/
 curator/storage/manifest.yaml
 curator/storage/manifest.yaml.sha256
 
-# logs (runtime); exhibits/**/*.log are committed demo fixtures
+# logs (runtime); exhibits/**/*.log and tests/fixtures/*.log are committed demo fixtures
 *.log
 !exhibits/**/*.log
+!tests/fixtures/*.log
 
 # editor / OS
 .vscode/

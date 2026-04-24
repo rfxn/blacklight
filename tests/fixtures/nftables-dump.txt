@@ -1,0 +1,16 @@
+# Fixture reconstructed from public APSB25-94 Adobe advisory (https://helpx.adobe.com/security/products/magento/apsb25-94.html). No operator-local content.
+# Simulated nft -a list ruleset output. TEST-NET-3 IPs per RFC 5737.
+table inet filter {
+	chain input {
+		type filter hook input priority filter; policy accept;
+		ct state established,related accept # handle 1
+		iif "lo" accept # handle 2
+		tcp dport 22 accept # handle 3
+		tcp dport { 80, 443 } accept # handle 4
+		ip saddr 203.0.113.51 drop comment "bl-case CASE-2026-9999" # handle 5
+		ip saddr 203.0.113.52 drop # handle 6
+	}
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+	}
+}

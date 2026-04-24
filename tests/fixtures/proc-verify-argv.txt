@@ -1,0 +1,9 @@
+# Fixture reconstructed from public APSB25-94 Adobe advisory (https://helpx.adobe.com/security/products/magento/apsb25-94.html). No operator-local content.
+# Simulated ps -u output: pid user args. One row has argv0 spoofed (mariadbd but exe=httpd).
+1001 www-data apache2 -DFOREGROUND
+1002 www-data apache2 -DFOREGROUND
+1003 www-data php-fpm: pool www
+1004 www-data php-fpm: pool www
+1005 www-data mariadbd --basedir=/usr
+1006 www-data nginx: worker process
+1007 www-data nginx: worker process

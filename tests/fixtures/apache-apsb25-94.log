@@ -1,0 +1,15 @@
+# Fixture reconstructed from public APSB25-94 Adobe advisory (https://helpx.adobe.com/security/products/magento/apsb25-94.html). No operator-local content.
+# Combined-log format (Apache/nginx). TEST-NET-3 IPs per RFC 5737. Hostnames .example.test shape.
+# Simulates double-extension staging and admin-backdoor probes matching APSB25-94 attack pattern.
+203.0.113.42 - - [23/Apr/2026:14:21:55 +0000] "GET /index.php HTTP/1.1" 200 5432 "-" "Mozilla/5.0 (compatible; Googlebot/2.1)"
+203.0.113.42 - - [23/Apr/2026:14:21:58 +0000] "GET /catalog/product/view/id/12 HTTP/1.1" 200 8102 "https://fleet-01-host-99.example.test/" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+203.0.113.42 - - [23/Apr/2026:14:22:01 +0000] "GET /customer/account/login HTTP/1.1" 200 3210 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+203.0.113.51 - - [23/Apr/2026:14:22:04 +0000] "POST /index.php/admin/system_account/token HTTP/1.1" 302 0 "-" "python-requests/2.28.0"
+203.0.113.51 - - [23/Apr/2026:14:22:05 +0000] "POST /index.php/admin/system_account/token HTTP/1.1" 302 0 "-" "python-requests/2.28.0"
+203.0.113.51 - - [23/Apr/2026:14:22:06 +0000] "POST /index.php/admin/system/adminauth/login HTTP/1.1" 200 1024 "-" "python-requests/2.28.0"
+203.0.113.51 - - [23/Apr/2026:14:22:07 +0000] "GET /pub/media/catalog/product/.cache/a.php/banner.jpg HTTP/1.1" 200 512 "-" "curl/7.88.1"
+203.0.113.51 - - [23/Apr/2026:14:22:08 +0000] "GET /pub/media/catalog/product/.cache/b.php/thumb.jpg HTTP/1.1" 200 512 "-" "curl/7.88.1"
+203.0.113.51 - - [23/Apr/2026:14:22:09 +0000] "GET /pub/media/catalog/product/.cache/c.php/icon.png HTTP/1.1" 200 512 "-" "curl/7.88.1"
+203.0.113.44 - - [23/Apr/2026:14:22:20 +0000] "GET /sitemap.xml HTTP/1.1" 200 4200 "-" "Mozilla/5.0 compatible"
+203.0.113.44 - - [23/Apr/2026:14:22:22 +0000] "GET /robots.txt HTTP/1.1" 200 512 "-" "Mozilla/5.0 compatible"
+203.0.113.51 - - [23/Apr/2026:14:22:30 +0000] "GET /pub/media/catalog/product/.cache/d.php/logo.gif HTTP/1.1" 404 0 "-" "curl/7.88.1"
