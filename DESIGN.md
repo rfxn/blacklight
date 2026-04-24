@@ -363,6 +363,7 @@ Two memory stores. Files for blobs. No local state store on the host beyond `/va
 ### 7.2 `bl-case` memory store
 
 - Access: `read_write` from the agent's perspective
+- See also: `docs/case-layout.md` — writer-owner contract (who writes which path when), size budget, lifecycle transitions, `STEP_COUNTER` addendum
 - Structure:
 
 ```
