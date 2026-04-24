@@ -2,7 +2,6 @@
 
 **Date:** 2026-04-24 (Friday; Day 4 of 6-day hackathon sprint)
 **Supersedes:** `PIVOT.md` (2026-04-23, ratified as direction but overscoped)
-**Trigger:** Operator adversarial review of PIVOT v1 + Discord signal that community wants skills-native architectures on Managed Agents, not bespoke local agents.
 **Execution window:** Fri 14:00 CT → Sun 15:00 CT = ~49 hours, ~32 productive hours.
 **Status:** This document is canonical for the remaining sprint. All other planning docs (`PLAN.md`, `BRIEF.md`, `PRD.md`, `HANDOFF.md`, `RULES.md`, `docs/workflow-example.md`) are legacy.
 
