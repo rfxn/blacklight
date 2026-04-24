@@ -22,7 +22,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup: blank state → creates agent + env + 2 memstores + seeds skills + persists 4 ids" {
-    skip "blocked on Phase 2"
     bl_curator_mock_add_route '/v1/agents\?name=bl-curator' 'setup-agents-list-empty.json' 200
     bl_curator_mock_add_route '/v1/agents$' 'setup-agent-create-success.json' 201
     bl_curator_mock_add_route '/v1/environments$' 'setup-env-create-success.json' 201
@@ -160,7 +159,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup: preflight finds existing agent → caches id, skips create" {
-    skip "blocked on Phase 2"
     bl_curator_mock_add_route '/v1/agents\?name=bl-curator' 'setup-agents-list-hit.json' 200
     bl_curator_mock_add_route '/v1/environments$' 'setup-env-create-success.json' 201
     bl_curator_mock_add_route '/v1/memory_stores\?name=' 'setup-memstore-list-empty.json' 200
@@ -181,7 +179,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup: create-time 409 race → bl_api_call returns 71, ensure_agent re-probes + caches" {
-    skip "blocked on Phase 2"
     # First preflight GET → empty (race begins here)
     # POST /v1/agents → 409 (race lost)
     # Re-probe GET /v1/agents → hit (other host won)
@@ -206,7 +203,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup: 401 from API → exits 65" {
-    skip "blocked on Phase 2"
     bl_curator_mock_set_response 'setup-error-401.json' 401
     run "$BL_SOURCE" setup
     [ "$status" -eq 65 ]
@@ -217,7 +213,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup: 400 on agent create → exits 65 with body forwarded to operator" {
-    skip "blocked on Phase 2"
     bl_curator_mock_add_route '/v1/agents\?name=bl-curator' 'setup-agents-list-empty.json' 200
     bl_curator_mock_add_route '/v1/agents$' 'setup-error-400.json' 400
     run "$BL_SOURCE" setup

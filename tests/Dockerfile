@@ -12,11 +12,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Project source at /opt/blacklight-src (reference); test files at /opt/tests/
 # (matches BATSMAN_CONTAINER_TEST_PATH); `bl` at /opt/bl so that tests resolving
 # $BATS_TEST_DIRNAME/../bl from /opt/tests find it at /opt/bl.
-# schemas/ and case-templates/ alongside bl so repo_root=/opt resolves them.
+# schemas/, prompts/, case-templates/ alongside bl so repo_root=/opt resolves them.
+# prompts/ is required by M8 bl_setup_compose_agent_body (reads prompts/curator-agent.md).
 COPY . /opt/blacklight-src
 COPY tests/ /opt/tests/
 COPY bl /opt/bl
 COPY schemas/ /opt/schemas/
+COPY prompts/ /opt/prompts/
 COPY case-templates/ /opt/case-templates/
 RUN chmod +x /opt/bl
 

@@ -49,6 +49,10 @@ bl_api_call() {
                 bl_debug "bl_api_call: ${http_status}, backing off ${backoffs[attempt-1]}s"
                 sleep "${backoffs[attempt-1]}"
                 ;;
+            409)
+                bl_debug "bl_api_call: 409 conflict (already-exists or race) — body=$body"
+                return "$BL_EX_CONFLICT"
+                ;;
             4??)
                 bl_error_envelope api "client error (HTTP $http_status)"
                 bl_debug "bl_api_call: body=$body"

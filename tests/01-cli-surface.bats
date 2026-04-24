@@ -52,12 +52,14 @@ teardown() {
     [[ "$output" =~ ^bl\ [0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
 
-@test "bl setup dispatches to stub and exits 64 (bypasses preflight)" {
-    # setup is in the pre-case bypass list; no API key / agent-id seed needed
+@test "bl setup dispatches to handler and bypasses bl_preflight (exits 65 on missing API key, not 66)" {
+    # M8: setup is in the pre-case bypass list. Real handler now lands; the
+    # bypass invariant is preserved (no preflight 66 on unseeded state) but
+    # bl_setup_local_preflight surfaces missing ANTHROPIC_API_KEY as 65.
     unset ANTHROPIC_API_KEY
     run "$BL_SOURCE" setup
-    [ "$status" -eq 64 ]
-    [[ "$output" == *"not yet implemented (M8)"* ]]
+    [ "$status" -eq 65 ]
+    [[ "$output" == *"ANTHROPIC_API_KEY not set"* ]]
 }
 
 @test "bl observe is a real router; defend stub returns exit 64 with not-yet-implemented; clean is real router" {

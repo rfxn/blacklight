@@ -11,6 +11,7 @@ COPY . /opt/blacklight-src
 COPY tests/ /opt/tests/
 COPY bl /opt/bl
 COPY schemas/ /opt/schemas/
+COPY prompts/ /opt/prompts/
 COPY case-templates/ /opt/case-templates/
 RUN chmod +x /opt/bl
 
