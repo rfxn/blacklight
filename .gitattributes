@@ -2,6 +2,7 @@
 # Paths listed here are stripped from `git archive` output (GitHub "Download ZIP").
 
 # Development surface never shipped to judges / downstream consumers
+legacy/             export-ignore
 tests/              export-ignore
 docs/               export-ignore
 audit-output/       export-ignore
