@@ -132,35 +132,79 @@ _source_bl() { source "$BL_SOURCE" >/dev/null 2>&1 || true; }
 # ─── G4: Outbox (Phase 3) ───────────────────────────────────────────────────
 
 @test "bl_outbox_enqueue writes filename YYYYMMDDTHHMMSSZ-NNNN-kind-case.json" {
-    skip "handler not landed until Phase 3"
+    local payload='{"mime":"application/octet-stream","path":"/tmp/foo","case":"CASE-2026-0001"}'
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_outbox_enqueue signal_upload '$payload'"
+    [ "$status" -eq 0 ]
+    local f
+    f=$(ls "$BL_VAR_DIR/outbox/"*.json 2>/dev/null | head -n1)
+    [[ "$f" =~ /[0-9]{8}T[0-9]{6}Z-[0-9]{4}-signal_upload-CASE-2026-0001\.json$ ]]
 }
 
 @test "bl_outbox_drain processes wake/signal_upload/action_mirror" {
-    skip "handler not landed until Phase 3"
+    # Seed a wake event with session-id present; default mock (200) drains it.
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    printf 'sesn_test_stub' > "$BL_VAR_DIR/state/session-CASE-2026-0001"
+    local wake_file="$BL_VAR_DIR/outbox/20260424T200000Z-0001-wake-CASE-2026-0001.json"
+    printf '{"type":"user.message","content":[{"type":"text","text":"hi"}],"case":"CASE-2026-0001"}' > "$wake_file"
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_outbox_drain --max 16 --deadline 10"
+    [ "$status" -eq 0 ]
+    [ ! -f "$wake_file" ]
 }
 
 @test "bl_outbox_drain halts on 429 and leaves remainder" {
-    skip "handler not landed until Phase 3"
+    # Mock: first POST 200, second POST 429 — drain halts on second.
+    skip "requires multi-response curator-mock; exercised by integration path"
 }
 
 @test "bl_outbox_drain bounded by --max and --deadline" {
-    skip "handler not landed until Phase 3"
+    # Seed 5 wake entries; drain --max 2 --deadline 10 → 2 drained, 3 remain.
+    local i
+    for i in 1 2 3 4 5; do
+        printf '{"type":"user.message","content":[],"case":"CASE-2026-0001"}' \
+            > "$BL_VAR_DIR/outbox/20260424T20000${i}Z-0001-wake-CASE-2026-0001.json"
+    done
+    printf 'sesn_test_stub' > "$BL_VAR_DIR/state/session-CASE-2026-0001"
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_outbox_drain --max 2 --deadline 10"
+    [ "$status" -eq 0 ]
+    local remaining
+    remaining=$(ls "$BL_VAR_DIR/outbox/"*.json 2>/dev/null | command wc -l)
+    [ "$remaining" -eq 3 ]
 }
 
 # ─── G5: Backpressure (Phase 3) ─────────────────────────────────────────────
 
 @test "bl_outbox_enqueue returns 70 at depth=1000" {
-    skip "handler not landed until Phase 3"
+    # Seed 1000 dummy entries to hit watermark
+    local i
+    for i in $(seq 1 1000); do
+        printf '{}' > "$BL_VAR_DIR/outbox/dummy-$i.json"
+    done
+    local payload='{"mime":"x","path":"y","case":"CASE-2026-0001"}'
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_outbox_enqueue signal_upload '$payload'"
+    [ "$status" -eq 70 ]
+    grep -q 'backpressure_reject' "$BL_VAR_DIR/ledger/CASE-2026-0001.jsonl" \
+        || grep -q 'backpressure_reject' "$BL_VAR_DIR/ledger/global.jsonl"
 }
 
 @test "bl_outbox_enqueue warns at depth=500" {
-    skip "handler not landed until Phase 3"
+    local i
+    for i in $(seq 1 500); do
+        printf '{}' > "$BL_VAR_DIR/outbox/dummy-$i.json"
+    done
+    local payload='{"mime":"x","path":"y","case":"CASE-2026-0001"}'
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_outbox_enqueue signal_upload '$payload' 2>&1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"outbox depth=500"* || "$output" == *"warn threshold=500"* ]]
 }
 
 # ─── G6: Schema-check extension (Phases 2, 3, 6) ────────────────────────────
 
 @test "bl_outbox_enqueue validates per-kind schema" {
-    skip "handler not landed until Phase 3"
+    # action_mirror schema requires target_key matching bl-case/CASE-.../actions/applied/
+    local bad_payload='{"record":{},"target_key":"invalid/key"}'
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_outbox_enqueue action_mirror '$bad_payload'"
+    [ "$status" -eq 67 ]
 }
 
 @test "bl_run_writeback_result validates result envelope schema" {

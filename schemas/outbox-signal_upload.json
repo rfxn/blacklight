@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfxn.github.io/blacklight/schemas/outbox-signal_upload.json",
+  "title": "blacklight outbox kind=signal_upload payload",
+  "type": "object",
+  "required": ["mime", "path", "case"],
+  "properties": {
+    "mime": {"type": "string"},
+    "path": {"type": "string"},
+    "case": {"type": "string", "pattern": "^CASE-[0-9]{4}-[0-9]{4}$"},
+    "attempted": {"type": "integer", "minimum": 0}
+  }
+}

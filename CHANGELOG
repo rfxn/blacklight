@@ -3,6 +3,24 @@ Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
 
+- M9 P3 | Apr 24 2026 — outbox + backpressure + per-kind schemas:
+[New] src/bl.d/27-outbox.sh — bl_outbox_enqueue / bl_outbox_drain /
+      bl_outbox_depth / bl_outbox_oldest_age_secs. Filename convention
+      YYYYMMDDTHHMMSSZ-NNNN-<kind>-<case>.json with FD 202 flock on
+      .counter for per-second monotonic NNNN. Watermarks: WARN=500,
+      HIGH=1000 → BL_EX_RATE_LIMITED (70). Cycle-break: enqueue uses
+      direct printf for backpressure_reject (never bl_ledger_append);
+      drain calls bl_ledger_append exactly once with kind=outbox_drain
+      (per spec §4.5 rule 1).
+[New] schemas/outbox-wake.json + schemas/outbox-signal_upload.json +
+      schemas/outbox-action_mirror.json — per-kind payload schemas.
+      Pattern enforcement (target_key, case-id) handled in 27-outbox.sh
+      since bl_jq_schema_check covers required/enum/additionalProperties
+      but not "pattern".
+[Change] tests/09-hardening.bats — 6 G4/G5/G6 @tests unskipped + 1
+      retained skip (429-mock requires multi-response curator-mock per
+      plan §Phase-3 acknowledgment). All G1+G3+G4+G5+G6-outbox green.
+
 - M9 P2 | Apr 24 2026 — ledger schema + validated append:
 [New] schemas/ledger-event.json — canonical JSONL record per DESIGN.md §13.3;
       18 kinds enum (plan §Phase-2 specified 14; enum extended to cover live

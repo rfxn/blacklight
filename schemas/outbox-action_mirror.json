@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfxn.github.io/blacklight/schemas/outbox-action_mirror.json",
+  "title": "blacklight outbox kind=action_mirror payload",
+  "type": "object",
+  "required": ["record", "target_key"],
+  "properties": {
+    "record": {"type": "object"},
+    "target_key": {"type": "string", "pattern": "^bl-case/CASE-[0-9]{4}-[0-9]{4}/actions/applied/"}
+  }
+}

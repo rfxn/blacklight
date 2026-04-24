@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfxn.github.io/blacklight/schemas/outbox-wake.json",
+  "title": "blacklight outbox kind=wake payload",
+  "type": "object",
+  "required": ["type", "content"],
+  "properties": {
+    "type": {"const": "user.message"},
+    "content": {"type": "array"},
+    "trigger_fingerprint_fenced": {"type": "string", "pattern": "^<untrusted fence=\"[a-f0-9]{16}\""}
+  }
+}
