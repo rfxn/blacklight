@@ -1,0 +1,5 @@
+{
+  "key": "bl-case/CASE-2026-0001/hypothesis.md",
+  "content": "<!-- trigger_fingerprint: 541413cc0f10f775 -->\n<!-- writer: curator, when: on-open + on-hypothesis-revision, lifecycle: mutable, cap: 50 KB, src: case-layout.md §3 row 2 + §7 -->\n\n# Hypothesis\n\nAPSB25-94 dedup exhibit: seeded-case hypothesis. Fingerprint matches trigger content 'apsb25-94-dedup-fingerprint-test' (sha256[:16]).\n",
+  "content_sha256": "dedupfp0000000000"
+}

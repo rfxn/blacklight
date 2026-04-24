@@ -115,7 +115,24 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl consult --new --dedup with matching fingerprint attaches to existing case" {
-    skip "requires seeded INDEX.md with matching fingerprint; enable after Phase 6 fixture expansion"
+    bl_case_fixture_seed CASE-2026-0001
+    rm -f "$BL_VAR_DIR/state/case.current"   # dedup --attach must (re)write case.current
+    # Trigger content 'apsb25-94-dedup-fingerprint-test' → sha256[:16] = 541413cc0f10f775
+    # Matches the fingerprint baked into memstore-hypothesis-dedup-fp.json
+    local trigger
+    trigger=$(mktemp)
+    printf 'apsb25-94-dedup-fingerprint-test' > "$trigger"
+    # Default catch-all; explicit routes override in registration priority order
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    # INDEX.md GET → roster with active CASE-2026-0001 (existing memstore-index.json)
+    bl_curator_mock_add_route 'bl-case%2FINDEX\.md' 'memstore-index.json' 200
+    # Hypothesis.md for CASE-2026-0001 carries matching trigger_fingerprint
+    bl_curator_mock_add_route 'CASE-2026-0001%2Fhypothesis\.md' 'memstore-hypothesis-dedup-fp.json' 200
+    run "$BL_SOURCE" consult --new --dedup --trigger "$trigger"
+    rm -f "$trigger"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BL_VAR_DIR/state/case.current")" = "CASE-2026-0001" ]
+    grep -q '"kind":"case_attached"' "$BL_VAR_DIR/ledger/CASE-2026-0001.jsonl"
 }
 
 # ---------------------------------------------------------------------------
