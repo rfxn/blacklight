@@ -122,36 +122,47 @@ https://github.com/rfxn/blacklight
          description at property level.
 [New] docs/specs/2026-04-24-M0-contracts-lockdown.md — M0 spec.
 
-- v2 pivot | Apr 24 2026 — skills-first rewrite:
-[New] PIVOT-v2.md — skills-first defensive agent rewrite plan (curator =
-      Managed Agent, not a feature; case state persists across sim-days;
-      post-incident framing over live IR).
-[New] DESIGN.md — v2 architecture + command surface (bl bash CLI +
-      Managed Agents curator + 9-file case layout + safety-tier gates +
-      skills bundle ≥20 files).
-[New] PLAN.md — canonical v2 master plan (motion map M0-M7 + milestone
-      cuts + adversarial-review gates).
-[New] README.md — v2 positioning stub (hosting providers, MSPs, post-
-      incident forensics; AI framing second).
-[Change] DESIGN.md §15 — drop "multi-tenant hosting" non-goal (operator-
-         local scope only, no tenant isolation primitives).
-[Change] scorched earth — archive v1 Python/curator/tests/compose/
-         planning to legacy/; v1 source preserved at tag
-         legacy-pre-pivot; legacy/ dropped from main (recoverable via
-         `git checkout legacy-pre-pivot`).
+- v2 pivot | Apr 24 2026 — skills-first clean-room rewrite:
 
-- v1 pre-pivot | Apr 21-23 2026 — Python curator + hunters (archived):
-v1 stack preserved at the `legacy-pre-pivot` git tag. Contained:
-Python/Flask curator with Managed Agents first-contact scaffold, SQLite
-evidence.db schema + CRUD, fs/log/timeline hunters with public-source
-prompts, orchestrator → evidence.db → CASE allocation with split-on-
-unrelated helper, case_engine Opus 4.7 system prompt + adaptive thinking
-revise(), bl-agent bash scaffolds (pull/apply/report with SHA-256 sidecar
-verify and manifest-parse install + apachectl configtest), Docker compose
-7-host fleet simulation, host-2 APSB25-94 PolyShell staged exhibit with
-PHP-compatible raw DEFLATE payload, demo/time_compression 4-beat sim
-runner, 20-file skills bundle with injection hardening, managed_agents
-session wiring (agent_setup + session_runner + live smoke probe), audit
-pipeline (P0/P1/P2/M-1..M-4), docs/managed-agents.md beta reference. v2
-is a clean-room rewrite; no v1 runtime code ships in bl or the v2 skills
-bundle.
+Rationale. v1 (Apr 21-23) shipped a Python/Flask curator fronting a
+SQLite evidence.db, hunter plugins (fs/log/timeline), and a bl-agent
+pull/apply/report fleet — a scan-side framework wrapped around the
+model. Three days in, the shape was upside-down: hunters duplicated
+reasoning a Managed Agent with well-authored skills already does
+natively, the "live IR" framing didn't match the operator reality
+(post-incident forensics on known-bad hosts that already tripped a
+signature), and the Python surface was eating attention that belonged
+on the case layout and the skills bundle. v2 inverts the stack: a
+bash `bl` CLI for operator motions (consult/run/case/observe/defend/
+clean/setup/doctor), a Managed Agents curator holding case state
+across sim-days, a 9-file per-case layout on disk + memory store,
+safety-tier gates on every action, and a judge-skim-sized skills
+bundle (≥20 files, public-source authoring only).
+
+Discarded. Python/Flask curator + server; SQLite evidence.db + CRUD;
+fs / log / timeline hunters + prompts; orchestrator with split-on-
+unrelated helper; case_engine Opus 4.7 + revise() + apply_revision();
+bl-agent pull/apply/report + SHA-256 sidecar verify + manifest-parse
+install; bl-ctl operator view; synthesizer + apachectl configtest
+wrapper; demo/time_compression 4-beat sim runner; compose 7-host
+fleet; audit pipeline (P0/P1/P2/M-1..M-4); 6 v1 curator prompts.
+
+Kept or migrated. The Managed Agents curator pattern itself — rebuilt
+in v2 around explicit session wiring, files-API brief rendering (MD +
+HTML + PDF), and persisted case state, not the v1 Flask first-contact
+scaffold. APSB25-94 PolyShell exhibit knowledge — reconstructed from
+the public Adobe advisory into v2 test fixtures; no v1 artifact
+copied forward. Skills-bundle discipline — 20-file floor and public-
+source authoring held across the rewrite; 19 of ~28 v1 skills were
+reconciled into the v2 shape, the rest rewritten or retired.
+batsman submodule at tests/infra/ (v1 used pytest; v2 is BATS-only).
+docs/managed-agents.md beta reference, carried forward as the v2
+working reference.
+
+Archive. v1 source preserved at git tag `legacy-pre-pivot`;
+recoverable via `git checkout legacy-pre-pivot`. legacy/ was dropped
+from main after tag cut to keep the submission tree clean. Per
+project CLAUDE.md §License, no v1 runtime code ships in bl or the v2
+skills bundle — clean-room on runtime; shared rfxn infrastructure
+(batsman for tests, pkg_lib for packaging) is permitted at the
+boundary.
