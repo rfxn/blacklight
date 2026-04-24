@@ -121,12 +121,14 @@ IF compromise topology spans multiple hosts on shared platform
 ### When false-positive triage is needed
 
 ```
+IF any revision would mark an observation `unrelated` or close it as FP
+  → ALWAYS load false-positives/assessment-discipline.md (counter-hypothesis practice)
 IF flagged file is inside a known-benign vendor tree
-  → load false-positives/vendor-tree-allowlist.md
+  → ALSO load false-positives/vendor-tree-allowlist.md
 IF flagged file is an ionCube / SourceGuardian / Zend Guard encoded bundle
-  → load false-positives/encoded-vendor-bundles.md
+  → ALSO load false-positives/encoded-vendor-bundles.md
 IF flagged artifact matches backup tooling conventions (rsnapshot/rdiff/tar.gz/sqldump)
-  → load false-positives/backup-artifact-patterns.md
+  → ALSO load false-positives/backup-artifact-patterns.md
 ```
 
 ### When extracting URL / file IOC patterns
@@ -147,6 +149,20 @@ Always load for format consistency:
 - ic-brief-format/severity-vocab.md (P0–P4 ladder, downgrade triggers, notification matrix)
 - ic-brief-format/ioc-categorization.md (8-category mandatory IOC order)
 - ic-brief-format/executive-summary-voice.md (§1 voice discipline, forbidden constructions)
+AND IF case implicates attestation-regulated tenancy (Magento e-commerce, healthcare-SaaS under BAA, EU / CA / covered-state personal data)
+  → ALSO load ic-brief-format/operator-addendum-compliance.md (PCI DSS v4.0 §11.6.3 / GDPR Art. 33 awareness clock / SOC 2 CC7.2–7.4 / SAQ-D spillover / customer-contract SLA)
+```
+
+### When escalation is warranted
+
+```
+IF hypothesis.current.confidence >= 0.7
+   OR attribution.md has cross-host stanza populated
+   OR observed capability set includes CDN-overlap firewall block risk
+   OR attribution signature matches a prior case on the same customer
+  → load ir-playbook/escalation-routing.md (hosting-fleet routing grid —
+    customer-communication-ownership-first, CDN-overlap pre-defense gate,
+    recurring-adversary routing, Magento-peak compression)
 ```
 
 ### When remediation choreography is in scope
@@ -166,13 +182,14 @@ is the wrong cut.
 
 - `ir-playbook/case-lifecycle.md` — reasoning spine
 - `ir-playbook/kill-chain-reconstruction.md` — chain narrative
+- `ir-playbook/escalation-routing.md` — hosting-fleet escalation grid
 - `webshell-families/polyshell.md` — family reference
 - `defense-synthesis/modsec-patterns.md` — rule idioms
 - `defense-synthesis/firewall-rules.md` — firewall discipline
 - `defense-synthesis/sig-injection.md` — signature discipline
-- `false-positives/` (catalogue)
+- `false-positives/` (catalogue + assessment discipline)
 - `hosting-stack/` (shared-tenant platform quirks)
-- `ic-brief-format/` (brief conventions)
+- `ic-brief-format/` (brief conventions + compliance addendum)
 - `ioc-aggregation/` (feature-based pattern extraction)
 - `remediation/cleanup-choreography.md` — cleanup ordering
 
@@ -185,10 +202,15 @@ MITRE / Sansec / OWASP / upstream documentation.
 
 ## Bundle depth
 
-42 skill files across 16 subtrees. Depth over breadth — every file satisfies
+45 skill files across 16 subtrees. Depth over breadth — every file satisfies
 `DESIGN.md §9.2` (scenario-first opening, non-obvious rule, public-source
-example, named failure mode). No slop; `TODO(gap):` markers flag
-tribal-knowledge requirements rather than ship boilerplate.
+example, named failure mode). Zero gap markers; the three operator-facing
+concerns originally gap-flagged in `ir-playbook/case-lifecycle.md` (escalation
+routing, FP assessment discipline, IC brief compliance addendum) are now
+authored as dedicated skill files with blacklight-specific framing — hosting-
+fleet routing axis over enterprise SOC, counter-hypothesis discipline over
+static catalogue, PCI DSS v4.0 / GDPR / SOC 2 grading against web-hosting
+tenancy realities over enterprise-compliance boilerplate.
 
 Attribution: operator-authored (Ryan MacDonald). Public-source adaptations
 are marked with `<!-- adapted from ... -->` trailers; the sister-project
