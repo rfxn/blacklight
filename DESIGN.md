@@ -315,7 +315,7 @@ Every runtime invocation starts with preflight:
 
 ```bash
 bl() {
-    bl_preflight || return 64              # §8.1
+    bl_preflight || return $?              # §8.1 — propagate preflight's actual exit code
     case "$1" in
         observe)  shift; bl_observe "$@"  ;;
         consult)  shift; bl_consult "$@"  ;;
@@ -452,7 +452,7 @@ After setup completes the first host's worth of provisioning,
 every subsequent host running 'bl' against the same API key
 finds the workspace pre-seeded and skips this step.
 EOF
-        return 64
+        return 66
     fi
 
     mkdir -p /var/lib/bl/state && printf '%s' "$BL_AGENT_ID" > /var/lib/bl/state/agent-id
