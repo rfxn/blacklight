@@ -35,7 +35,7 @@ Regimes that actually grade web/platform-hosting IR, with the hosting-specific s
 | ISO 27001 / 27035 | Provider contract requires certification | Incident management is documented process scope | Contract-defined; typically annual audit cycle |
 | Customer-contract SLA | Enterprise MSP contracts with named-incident notification clauses | Often tighter than regulatory floor | 2-hour detection-to-notification is common for enterprise tiers |
 
-Column authorities: PCI requirements and SAQ boundaries at `https://www.pcisecuritystandards.org/document_library/`. GDPR and EDPB guidance at `https://edpb.europa.eu/our-work-tools/general-guidance/guidelines-recommendations-best-practices_en`. SOC 2 Trust Services Criteria at `https://www.aicpa-cima.com/resources/landing/system-and-organization-controls-soc-suite-of-services`. HIPAA Breach Notification Rule at `https://www.hhs.gov/hipaa/for-professionals/breach-notification/`.
+Column authorities: PCI DSS v4.0.1 (PCI Security Standards Council); GDPR Art. 33 + Art. 34 (Regulation (EU) 2016/679) and EDPB Guideline 9/2022 on personal data breach notification; SOC 2 Trust Services Criteria (AICPA TSP 100, 2017 with 2022 revised points of focus); HIPAA Breach Notification Rule at `https://www.hhs.gov/hipaa/for-professionals/breach-notification/`.
 
 ## §4 — The addendum field set
 
@@ -99,7 +99,7 @@ Validation rules the wrapper enforces at close-time, in addition to the field-co
 
 The §11.6.3 mandate is named separately because it is the compliance grading point most commonly missed on hosting IR, because it is new (effective 2025-03-31), and because it applies *to the provider's detection capability* in ways enterprise-SOC compliance primers do not surface.
 
-Requirement text (per PCI DSS v4.0.1 at `https://www.pcisecuritystandards.org/document_library/`): §11.6.3 requires "a mechanism is implemented to alert personnel to unauthorized modification" of payment pages, "at least weekly or at the frequency defined in the entity's targeted risk analysis." The requirement applies to all SAQ levels that include payment-page delivery, including SAQ-A merchants whose only involvement is iframe / hosted-field delivery of third-party-processor checkout.
+Requirement text (per PCI DSS v4.0.1): §11.6.3 requires "a mechanism is implemented to alert personnel to unauthorized modification" of payment pages, "at least weekly or at the frequency defined in the entity's targeted risk analysis." The requirement applies to all SAQ levels that include payment-page delivery, including SAQ-A merchants whose only involvement is iframe / hosted-field delivery of third-party-processor checkout.
 
 Hosting-specific grading:
 
@@ -120,7 +120,7 @@ Operational workflow at the §11.6.3 detection boundary: when a skimmer-injectio
 
 The 72-hour clock is the most commonly mis-started clock in hosting IR. Art. 33(1) text (per `https://gdpr-info.eu/art-33-gdpr/`): "In the case of a personal data breach, the controller shall without undue delay and, where feasible, not later than 72 hours after having become aware of it, notify the personal data breach to the competent supervisory authority..."
 
-"Aware" is not "confirmed." The EDPB Guideline 9/2022 on personal data breach notification (latest revision at `https://edpb.europa.eu/`) clarifies awareness as "a reasonable degree of certainty that a security incident has occurred that has led to personal data being compromised." Awareness is meaningfully earlier than remediation and usually earlier than containment.
+"Aware" is not "confirmed." The EDPB Guideline 9/2022 on personal data breach notification clarifies awareness as "a reasonable degree of certainty that a security incident has occurred that has led to personal data being compromised." Awareness is meaningfully earlier than remediation and usually earlier than containment.
 
 For hosting providers running blacklight, the operational mapping:
 
@@ -137,7 +137,9 @@ Non-EU-but-adjacent regimes the addendum treats as GDPR-parallel for clock purpo
 
 ## §7 — SOC 2 Type II evidence integration
 
-Most commercial hosting providers carry SOC 2 Type II attestations; the attestation is a required contractual artifact for enterprise MSP and hosted-SaaS sales motions. The Trust Services Criteria that map directly to blacklight case state (per AICPA Trust Services Criteria at `https://www.aicpa-cima.com/resources/download/2017-trust-services-criteria-with-revised-points-of-focus-2022`):
+Most commercial hosting providers carry SOC 2 Type II attestations; the attestation is a required contractual artifact for enterprise MSP and hosted-SaaS sales motions.
+
+The Trust Services Criteria that map directly to blacklight case state (per AICPA TSP 100, 2017 with 2022 revised points of focus):
 
 - **CC7.2 — System monitoring.** The curator's `observe.*` emissions across the case are the monitoring evidence. A full case timeline demonstrates continuous observability across the incident window, not retrospective log-stitching. The addendum field `CC7.2 monitoring evidence` cites the timeline span (first observe → last observe) and the observe-verb count; auditors verify the span covers the full incident window with no gaps.
 - **CC7.3 — Security incident response.** The `actions/pending → applied` transitions in `bl-case/actions/` are the response evidence. Each transition carries a timestamp, operator attribution, and a `defend.*` or `clean.*` verb. The addendum field `CC7.3 incident response evidence` cites the applied-ledger span and the action count; auditors verify that a documented response existed and escalated at appropriate severity thresholds per `severity-vocab.md`.
@@ -151,7 +153,7 @@ For providers with ISO 27035 incident-management requirements, the same case fil
 
 Two hosting-specific dynamics worth naming separately because they are frequent failure modes on the addendum:
 
-**SAQ-D spillover on shared-tenant nodes.** When a single tenant on a shared node handles raw PAN (pre-tokenization form, vaulted-form exception, or legacy integration), the provider's scope for that node rises to SAQ-D regardless of other tenants' SAQ levels. A skimmer incident on a SAQ-A tenant sharing a node with a SAQ-D tenant pulls the SAQ-D tenant's attestation into the incident addendum — the SAQ-D tenant's QSA is entitled to evidence that the shared-node compromise did not traverse tenant isolation. The addendum must enumerate *all* tenants on the affected node, not just the directly-implicated tenant, with an isolation-integrity note per tenant ("tenant-isolation verified per per-user `open_basedir` + CageFS boundaries, no cross-tenant reads in incident window"). PCI SSC guidance on shared environments: `https://www.pcisecuritystandards.org/document_library/` (Information Supplement: PCI DSS Shared Hosting Guidelines).
+**SAQ-D spillover on shared-tenant nodes.** When a single tenant on a shared node handles raw PAN (pre-tokenization form, vaulted-form exception, or legacy integration), the provider's scope for that node rises to SAQ-D regardless of other tenants' SAQ levels. A skimmer incident on a SAQ-A tenant sharing a node with a SAQ-D tenant pulls the SAQ-D tenant's attestation into the incident addendum — the SAQ-D tenant's QSA is entitled to evidence that the shared-node compromise did not traverse tenant isolation. The addendum must enumerate *all* tenants on the affected node, not just the directly-implicated tenant, with an isolation-integrity note per tenant ("tenant-isolation verified per per-user `open_basedir` + CageFS boundaries, no cross-tenant reads in incident window"). PCI SSC guidance on shared environments: PCI DSS Shared Hosting Guidelines (Information Supplement).
 
 **Customer-contract SLA notification clocks.** Enterprise MSP contracts commonly impose notification clocks tighter than any regulatory regime — 2-hour detection-to-notification is standard for enterprise-tier contracts, 4-hour for mid-market, 24-hour for SMB. Customer-contract clocks are addendum-relevant because they typically start at *detection*, not awareness — earlier than the GDPR clock, usually earlier than containment. The addendum field `Customer-contract SLA notifications triggered` must enumerate per-tenant tier + contractual clock-start + actual notification timestamp; a contractual clock missed is a contract-breach remediation path (service credits, termination-for-cause triggers) separate from the regulatory path. The curator cannot populate contract-tier from case state — the `operator-fill` discipline on this field is absolute.
 

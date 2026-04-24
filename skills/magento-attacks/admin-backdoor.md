@@ -1,9 +1,7 @@
 # Admin-Layer Backdoors and Persistence
 
 **Source authority:** Sansec `accesson.php` coverage within the PolyShell research
-<https://sansec.io/research/magento-polyshell>,
-Infiniroot field observations from PolyShell and SessionReaper incidents
-<https://www.infiniroot.com/blog/1527/magento-adobe-commerce-attacked-polyshell-sessionreaper-exploit-vulnerability>,
+<https://sansec.io/research/magento-polyshell>
 and the community patch inventory at
 <https://github.com/aregowe/magento2-module-polyshell-protection>
 as a defense-in-depth layer reference.

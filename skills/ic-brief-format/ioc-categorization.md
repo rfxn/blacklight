@@ -1,8 +1,18 @@
 # IOC Categorization
 
-**Source authority:** the STIX 2.1 IOC taxonomy from OASIS
-<https://oasis-open.github.io/cti-documentation/stix/intro>
-and the operator-voice category convention used across published IR briefs from CISA and Sansec. STIX provides the superset taxonomy; this skill narrows to the eight categories that consistently appear in hands-on managed-fleet briefs. The curator loads this skill when populating Section 4 of a brief — the section the reader greps against their own logs for self-check.
+**Source authority:** the STIX 2.1 IOC taxonomy (OASIS Cyber Threat Intelligence TC — framework reference for category superset), and the operator-voice category convention used across published IR briefs from CISA and Sansec. STIX provides the superset; this skill narrows to the eight categories that consistently appear in hands-on managed-fleet briefs.
+
+---
+
+## §1 — The scenario
+
+The brief closes at 15:00 local. The evidence names eleven IOCs: two confirmed adversary IPs, one C2 callback domain, two SHA-256 signatures matching LMD rules, three `.htaccess` post-exploit indicators, one cron-entry signal, a ModSec alert ID, and a scattered User-Agent the operator is 60% sure pairs with the actor cluster. Three reader populations will consume Section 4: the customer's SOC will grep each IOC against their own fleet logs before trusting the brief; the QSA will pull the IOCs into the §11.6.3 evidence package at the merchant's next attestation; the SOC 2 auditor will sample the brief six months from now and verify its IOC block reconciles against the case timeline.
+
+Three questions govern how Section 4 renders: which category does each IOC belong to, in what order do the categories appear, and which IOCs do not belong in this section at all? Get the order wrong and the SOC reader scans past the highest-value indicator. Get a category wrong and the grep misses. Include a User-Agent at confidence 0.4 and the reader's trust in the whole section drops. This skill answers the three questions as a structured schema — category definitions, ordering discipline, confidence floor — that the curator applies on every brief.
+
+## §2 — The non-obvious rule
+
+**IOC category assignment is not about IOC type; it is about what capability each category gates downstream.** Signatures go first because they are the fastest self-check a reader can run against their own scanner. Adversary IPs go second because the reader wants to block at the edge before working through artifacts. File artifacts go third because cleanup is the expensive work. User-Agents go sixth because the category is diagnostic-only — promoting it would mislead a reader into treating UA as an authoritative match. The ordering is not alphabetical, not chronological, and not by evidence count; it is by operational use. A brief that orders by evidence count (largest table first) teaches readers to scan the noisy categories and miss the signal categories.
 
 ---
 

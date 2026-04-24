@@ -9,8 +9,6 @@ R-fx Networks Linux Malware Detect (LMD) project page
 <https://rfxn.com/projects/linux-malware-detect/>.
 plaso / log2timeline multi-source log parser
 <https://plaso.readthedocs.io/en/latest/sources/user/Using-log2timeline.html>.
-The Sleuth Kit forensic toolkit
-<https://www.sleuthkit.org/sleuthkit/docs/api-docs/4.10.0/>.
 
 The curator loads this skill when multiple `observe.log_*` evidence batches are compounding and a unified timeline is needed before the interval segmentation step. Extraction runs to completion before segmentation — a segmentation pass on an incomplete stream places phase boundaries in the wrong intervals.
 
