@@ -5,7 +5,21 @@
 ARG BASE_IMAGE=blacklight-base-rocky9
 FROM ${BASE_IMAGE}
 
-RUN microdnf install -y jq zstd ShellCheck patch cronie && microdnf clean all
+RUN microdnf install -y jq zstd ShellCheck patch cronie \
+    httpd mod_security iptables nftables yara whois && microdnf clean all
+
+# M6: mock LMD/ClamAV shims (see tests/Dockerfile for rationale)
+RUN mkdir -p /usr/local/maldetect && \
+    printf '#!/bin/bash\necho "maldet shim: ${*}"; exit 0\n' \
+        > /usr/local/maldetect/maldet && \
+    chmod +x /usr/local/maldetect/maldet && \
+    printf '#!/bin/bash\necho "clamscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamscan && \
+    printf '#!/bin/bash\necho "clamdscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamdscan && \
+    chmod +x /usr/local/bin/clamscan /usr/local/bin/clamdscan
+
+COPY tests/fixtures/defend-fp-corpus/ /var/lib/bl/fp-corpus/
 
 COPY . /opt/blacklight-src
 COPY tests/ /opt/tests/

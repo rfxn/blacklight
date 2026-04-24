@@ -7,7 +7,23 @@ FROM ${BASE_IMAGE}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     jq zstd shellcheck patch cron \
+    apache2 libapache2-mod-security2 iptables nftables yara whois \
     && rm -rf /var/lib/apt/lists/*
+
+# M6: mock LMD (maldet) + ClamAV (clamscan/clamdscan) shims so bl_defend_sig
+# can detect + invoke scanners without installing real binaries (~400MB).
+RUN mkdir -p /usr/local/maldetect && \
+    printf '#!/bin/bash\necho "maldet shim: ${*}"; exit 0\n' \
+        > /usr/local/maldetect/maldet && \
+    chmod +x /usr/local/maldetect/maldet && \
+    printf '#!/bin/bash\necho "clamscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamscan && \
+    printf '#!/bin/bash\necho "clamdscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamdscan && \
+    chmod +x /usr/local/bin/clamscan /usr/local/bin/clamdscan
+
+# M6: FP-corpus sample directory (real system path bl_defend_sig reads).
+COPY tests/fixtures/defend-fp-corpus/ /var/lib/bl/fp-corpus/
 
 # Project source at /opt/blacklight-src (reference); test files at /opt/tests/
 # (matches BATSMAN_CONTAINER_TEST_PATH); `bl` at /opt/bl so that tests resolving
