@@ -188,6 +188,61 @@ EOF
 # sig (M6 P4)
 # ---------------------------------------------------------------------------
 
-@test "bl defend sig FP-gate-trip rejects on corpus match (TODO P4)" { skip "implemented in M6 P4"; }
-@test "bl defend sig happy-path appends to scanner sig file (TODO P4)" { skip "implemented in M6 P4"; }
-@test "bl defend sig auto-tier only if FP-gate passes (TODO P4)" { skip "implemented in M6 P4"; }
+@test "bl defend sig FP-gate-trip rejects on corpus match" {
+    # defend-sig-benign.hdb md5/size matches fp-corpus/benign.sh
+    export BL_LMD_SIG_DIR="$BL_VAR_DIR/lmd-sigs"
+    mkdir -p "$BL_LMD_SIG_DIR"
+    run "$BL_SOURCE" defend sig "$BATS_TEST_DIRNAME/fixtures/defend-sig-benign.hdb" --scanner lmd
+    [ "$status" -eq 68 ]   # BL_EX_TIER_GATE_DENIED
+    # LMD sig file must remain empty — append must NOT have happened
+    [ ! -s "$BL_LMD_SIG_DIR/custom.hdb" ]
+    # Ledger shows defend_sig_rejected
+    grep -q '"kind":"defend_sig_rejected"' "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+}
+
+@test "bl defend sig happy-path appends to LMD custom.hdb (clean sig)" {
+    export BL_LMD_SIG_DIR="$BL_VAR_DIR/lmd-sigs"
+    mkdir -p "$BL_LMD_SIG_DIR"
+    run "$BL_SOURCE" defend sig "$BATS_TEST_DIRNAME/fixtures/defend-sig-clean.hdb" --scanner lmd
+    [ "$status" -eq 0 ]
+    [ -s "$BL_LMD_SIG_DIR/custom.hdb" ]
+    grep -q 'deadbeefdeadbeef' "$BL_LMD_SIG_DIR/custom.hdb"
+    # Ledger shows defend_applied
+    grep -q '"kind":"defend_applied"' "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+    grep -q '"verb":"defend.sig"' "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+}
+
+@test "bl defend sig --scanner all fans out to each detected scanner" {
+    export BL_LMD_SIG_DIR="$BL_VAR_DIR/lmd-sigs"
+    export BL_YARA_RULES_DIR="$BL_VAR_DIR/yara-rules"
+    export BL_CLAMAV_SIG_DIR="$BL_VAR_DIR/clamav-sigs"
+    mkdir -p "$BL_LMD_SIG_DIR" "$BL_YARA_RULES_DIR" "$BL_CLAMAV_SIG_DIR"
+    # Shim clamscan to always return clean (exit 0) for the FP-gate
+    cat > "$BL_DEFEND_SCANNER_BIN/clamscan" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    # Shim yara to always return no-match (empty stdout)
+    cat > "$BL_DEFEND_SCANNER_BIN/yara" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/clamscan" "$BL_DEFEND_SCANNER_BIN/yara"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    run "$BL_SOURCE" defend sig "$BATS_TEST_DIRNAME/fixtures/defend-sig-clean.hdb" --scanner all
+    [ "$status" -eq 0 ]
+    # LMD was detected (via /usr/local/maldetect/maldet shim) → append happened
+    [ -s "$BL_LMD_SIG_DIR/custom.hdb" ]
+}
+
+@test "bl defend sig auto-tiers ledger entry only if FP-gate passes" {
+    export BL_LMD_SIG_DIR="$BL_VAR_DIR/lmd-sigs"
+    mkdir -p "$BL_LMD_SIG_DIR"
+    # Clean sig → should land with retire_hint (auto-tier marker in M5 tier-eval is separate;
+    # here we assert the ledger entry has retire_hint (implies tier-accepted))
+    run "$BL_SOURCE" defend sig "$BATS_TEST_DIRNAME/fixtures/defend-sig-clean.hdb" --scanner lmd
+    [ "$status" -eq 0 ]
+    local last
+    last=$(tail -n1 "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl")
+    printf '%s' "$last" | jq -e '.payload.retire_hint == "30d"' >/dev/null
+}

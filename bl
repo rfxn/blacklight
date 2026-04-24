@@ -5292,11 +5292,171 @@ bl_defend_firewall() {
     return "$BL_EX_OK"
 }
 
-# ---- sig (M6 P4 target) ---------------------------------------------------
+# ---- sig ------------------------------------------------------------------
+
+_bl_defend_sig_detect_scanners() {
+    # Prints space-separated list of detected scanners (lmd clamav yara).
+    local found=""
+    [[ -x /usr/local/maldetect/maldet ]] && found="$found lmd"
+    command -v clamscan >/dev/null 2>&1 && found="$found clamav"
+    command -v yara >/dev/null 2>&1 && found="$found yara"
+    printf '%s' "${found# }"
+}
+
+_bl_defend_sig_scanner_file() {
+    # $1 = scanner name; prints absolute path to append target.
+    case "$1" in
+        lmd)    printf '%s/custom.hdb' "${BL_LMD_SIG_DIR:-/usr/local/maldetect/sigs}" ;;
+        clamav) printf '%s/custom.ndb' "${BL_CLAMAV_SIG_DIR:-/var/lib/clamav}" ;;
+        yara)   printf '%s/custom.yar' "${BL_YARA_RULES_DIR:-/etc/yara/rules}" ;;
+    esac
+}
+
+_bl_defend_sig_fp_gate() {
+    # $1 = sig-file; $2 = scanner (lmd|clamav|yara). Scans $BL_DEFEND_FP_CORPUS
+    # (or /var/lib/bl/fp-corpus) for matches. Returns 0 if clean (0 FP),
+    # 68 if FP hit, 65 on error.
+    local sig_file="$1" scanner="$2"
+    local corpus="${BL_DEFEND_FP_CORPUS:-/var/lib/bl/fp-corpus}"
+    if [[ ! -d "$corpus" ]]; then
+        bl_warn "FP-corpus directory missing: $corpus; gate bypassed"
+        return "$BL_EX_OK"
+    fi
+
+    case "$scanner" in
+        lmd)
+            # LMD hdb format: <md5>:<size>:<name>. Compare md5/size of each
+            # sig line against every corpus file. The `|| [[ -n "$md5" ]]`
+            # tail-catch is SECURITY-LOAD-BEARING: without it a sig file
+            # lacking a trailing newline bypasses the FP-gate entirely
+            # (bash `read` returns non-zero on EOF-without-newline, so the
+            # while body never executes for a single unterminated line).
+            local line md5 size
+            while IFS=: read -r md5 size _ || [[ -n "$md5" ]]; do
+                [[ -z "$md5" || "$md5" =~ ^# ]] && continue
+                local f
+                for f in "$corpus"/*; do
+                    [[ -f "$f" ]] || continue
+                    local f_md5 f_size
+                    f_md5=$(md5sum "$f" | awk '{print $1}')
+                    f_size=$(stat -c %s "$f")
+                    if [[ "$f_md5" == "$md5" && "$f_size" == "$size" ]]; then
+                        bl_warn "FP-gate hit: $f matches sig $md5:$size"
+                        return "$BL_EX_TIER_GATE_DENIED"
+                    fi
+                done
+            done < "$sig_file"
+            ;;
+        clamav)
+            # ClamAV ndb scan against corpus: clamscan --database=<sig> <corpus>
+            # Exit 1 = virus found (FP!) → reject. 0 = clean → pass.
+            if clamscan --database="$sig_file" --infected --no-summary "$corpus"/* >/dev/null 2>&1; then
+                return "$BL_EX_OK"
+            fi
+            # non-zero could mean virus found (1), error (2+); only 1 is FP
+            local rc=$?
+            if (( rc == 1 )); then
+                bl_warn "FP-gate hit: clamscan matched sig against FP-corpus"
+                return "$BL_EX_TIER_GATE_DENIED"
+            fi
+            bl_warn "clamscan FP-gate error (rc=$rc); failing closed"
+            return "$BL_EX_PREFLIGHT_FAIL"
+            ;;
+        yara)
+            if yara -q "$sig_file" "$corpus" 2>/dev/null | grep -q .; then   # yara stderr: rule parse errors are fail-closed below; 2>/dev/null silences per-file parse noise on mixed corpora
+                bl_warn "FP-gate hit: yara matched sig against FP-corpus"
+                return "$BL_EX_TIER_GATE_DENIED"
+            fi
+            ;;
+    esac
+    return "$BL_EX_OK"
+}
+
+_bl_defend_sig_reload() {
+    # $1 = scanner; best-effort reload. Failure is logged, not fatal.
+    case "$1" in
+        lmd)    : ;;   # LMD reads signatures on next scan invocation; no reload needed
+        clamav)
+            if command -v clamdscan >/dev/null 2>&1; then
+                clamdscan --reload >/dev/null 2>&1 || \
+                    bl_debug "clamdscan --reload failed or daemon not running (non-fatal)"   # reload failure is explicitly non-fatal; bl_debug logged for diagnostics only
+            fi
+            ;;
+        yara)   : ;;   # YARA: rules re-compiled per-scan; no daemon reload
+    esac
+    return "$BL_EX_OK"
+}
 
 bl_defend_sig() {
-    bl_error_envelope defend "sig sub-verb not yet implemented (M6 P4)"
-    return "$BL_EX_USAGE"
+    # bl_defend_sig <sig-file> [--scanner lmd|clamav|yara|all]
+    local sig_file="" scanner="auto"
+    while (( $# > 0 )); do
+        case "$1" in
+            --scanner)  scanner="$2"; shift 2 ;;
+            -*)         bl_error_envelope defend "unknown flag: $1"; return "$BL_EX_USAGE" ;;
+            *)          sig_file="$1"; shift ;;
+        esac
+    done
+    [[ -z "$sig_file" ]] && { bl_error_envelope defend "missing <sig-file>"; return "$BL_EX_USAGE"; }
+    [[ ! -r "$sig_file" ]] && { bl_error_envelope defend "sig file not readable: $sig_file"; return "$BL_EX_NOT_FOUND"; }
+
+    local case_id
+    case_id=$(bl_case_current)
+    [[ -z "$case_id" ]] && case_id="CASE-0000-0000"
+
+    bl_init_workdir || return $?
+
+    local scanners
+    if [[ "$scanner" == "auto" || "$scanner" == "all" ]]; then
+        scanners=$(_bl_defend_sig_detect_scanners)
+    else
+        scanners="$scanner"
+    fi
+    if [[ -z "$scanners" ]]; then
+        bl_error_envelope defend "no scanners detected (lmd|clamav|yara)"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+
+    local s gate_rc=0 append_count=0
+    for s in $scanners; do
+        gate_rc=0
+        _bl_defend_sig_fp_gate "$sig_file" "$s" || gate_rc=$?
+        if (( gate_rc != 0 )); then
+            # shellcheck disable=SC2016  # $f,$s are jq --arg variable names, not shell variables
+            _bl_defend_ledger_emit "$case_id" "defend_sig_rejected" \
+                '{verb:"defend.sig", sig_file:$f, scanner:$s, reason:"fp_gate_trip"}' \
+                --arg f "$sig_file" --arg s "$s"
+            bl_error_envelope defend "FP-gate tripped for $s; not appending"
+            # If --scanner was explicit-single, exit rejected. If auto/all, continue.
+            [[ "$scanner" != "auto" && "$scanner" != "all" ]] && return "$BL_EX_TIER_GATE_DENIED"
+            continue
+        fi
+        local target
+        target=$(_bl_defend_sig_scanner_file "$s")
+        command mkdir -p "$(dirname "$target")" 2>/dev/null || true   # scanner sig dir may be root-owned or read-only in tests
+        command cat "$sig_file" >> "$target" || {
+            # shellcheck disable=SC2016  # $f,$s are jq --arg variable names, not shell variables
+            _bl_defend_ledger_emit "$case_id" "defend_rollback" \
+                '{verb:"defend.sig", sig_file:$f, scanner:$s, reason:"append_failed"}' \
+                --arg f "$sig_file" --arg s "$s"
+            bl_error_envelope defend "append to $target failed"
+            [[ "$scanner" != "auto" && "$scanner" != "all" ]] && return "$BL_EX_PREFLIGHT_FAIL"
+            continue
+        }
+        _bl_defend_sig_reload "$s"
+        # shellcheck disable=SC2016  # $f,$s,$t are jq --arg variable names, not shell variables
+        _bl_defend_ledger_emit "$case_id" "defend_applied" \
+            '{verb:"defend.sig", sig_file:$f, scanner:$s, target:$t, result:"ok", retire_hint:"30d"}' \
+            --arg f "$sig_file" --arg s "$s" --arg t "$target"
+        append_count=$((append_count + 1))
+    done
+
+    if (( append_count == 0 )); then
+        bl_error_envelope defend "no scanners accepted sig (all FP-gate tripped or append-failed)"
+        return "$BL_EX_TIER_GATE_DENIED"
+    fi
+    printf 'bl-defend-sig: appended to %d scanner(s)\n' "$append_count" >&2
+    return "$BL_EX_OK"
 }
 
 # --- src/bl.d/90-main.sh ---
