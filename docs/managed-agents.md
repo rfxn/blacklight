@@ -1,19 +1,21 @@
 # Claude Managed Agents — reference notes
 
 Working reference for blacklight. Distilled from
-`platform.claude.com/docs/en/managed-agents/*` as of 2026-04-23.
+`platform.claude.com/docs/en/managed-agents/*` and
+`platform.claude.com/docs/en/build-with-claude/files` as of 2026-04-23.
 Not a substitute for the live docs — check the source before
 load-bearing implementation. Beta feature; behaviors may shift.
 
 All endpoints require header `anthropic-beta: managed-agents-2026-04-01`.
 Research-preview features (multi-agent, outcomes) additionally require
-`managed-agents-2026-04-01-research-preview`. SDKs set these automatically.
+`managed-agents-2026-04-01-research-preview`. Files API operations need
+`files-api-2025-04-14`. SDKs set these automatically.
 
 ---
 
 ## 1. Mental model
 
-Four first-class concepts plus one attached resource:
+Four first-class concepts plus two attached resource types:
 
 | Concept       | Identity            | What it is                                              | Lifetime                       |
 |---------------|---------------------|---------------------------------------------------------|--------------------------------|
@@ -21,9 +23,10 @@ Four first-class concepts plus one attached resource:
 | Environment   | `env_...` (or name) | Container template: packages, networking, base image    | Until archived or deleted      |
 | Session       | `sesn_...`          | A running agent instance in an environment, with its own container + filesystem + conversation history | Until deleted; checkpoint expires 30d after last activity |
 | Event         | (ids on events)     | Messages between your app and the agent (user events → agent/session/span events ←) | Persisted with session         |
-| Memory Store  | `memstore_...`      | Workspace-scoped, versioned, mounted document store. Attached at session creation. | Until archived or deleted      |
+| Memory Store  | `memstore_...`      | Workspace-scoped, versioned document store. Small atomic files (≤100 KB). Attached at session creation only; read/write enforced at FS layer. | Until archived or deleted      |
+| File          | `file_...`          | Workspace-scoped blob (≤500 MB). Mounted read-only in session containers. **Hot-swappable** on running sessions. | Persist until deleted (not tied to session/checkpoint) |
 
-The key relationship: **an agent is a recipe, an environment is a kitchen template, a session is a dinner service, events are the conversation, memory stores are the notebooks the chef brings in.** Sessions don't share filesystems. Memory stores are how state crosses session boundaries.
+The key relationship: **an agent is a recipe, an environment is a kitchen template, a session is a dinner service, events are the conversation, memory stores are the chef's notebook, files are the ingredients and the finished dishes.** Sessions don't share filesystems. Memory stores + files are how state and raw inputs cross session boundaries — with different sweet spots (§10.5).
 
 ### Model of "what Managed Agents does for you that `messages.create` doesn't"
 
@@ -32,8 +35,9 @@ The key relationship: **an agent is a recipe, an environment is a kitchen templa
 3. Checkpoints the container on idle so it can resume cleanly (30-day retention).
 4. Event-stream observability with server-side replay (SSE + event history API).
 5. First-class state primitive (memory stores) with immutable version history and optimistic concurrency.
-6. Hosted prompt caching (5-minute TTL, automatic).
-7. Optional research-preview surfaces: multi-agent delegation, outcome-driven work.
+6. First-class blob primitive (files) with session-scoped retrieval and free I/O.
+7. Hosted prompt caching (5-minute TTL, automatic).
+8. Optional research-preview surfaces: multi-agent delegation, outcome-driven work.
 
 ---
 
@@ -534,7 +538,167 @@ session = client.beta.sessions.create(
 
 ---
 
-## 10. Multi-agent (research preview)
+## 10. Files — raw blobs & deliverables
+
+Files is a separate beta (`files-api-2025-04-14`) but integrates with Managed Agents at two points: `resources[]` for mounting into a session's container, and `scope_id` filters for retrieving files the agent produced.
+
+### What it is
+
+- Workspace-scoped immutable blob storage.
+- Each file has a stable `file_id` (`file_011CNha8iCJcU1wXNR6q4V8w`), `filename`, `mime_type`, `size_bytes`, `created_at`, `downloadable` (bool).
+- Upload via `POST /v1/files` (multipart). Lives until you `DELETE`.
+- **Two provenance classes:**
+  - User-uploaded — `downloadable: false`. The agent can read; you **cannot** download the raw file back via the API. (You can re-fetch metadata, use it in messages, or mount it in a session.)
+  - Agent-produced (via skills or code execution tool) — `downloadable: true`. You can download via `GET /v1/files/:id/content`.
+
+### Limits
+
+| Limit                       | Value                                        |
+|-----------------------------|----------------------------------------------|
+| Max file size               | **500 MB** per file                          |
+| Total workspace storage     | **500 GB** per organization                  |
+| Files per session           | **100** via `resources[]`                    |
+| Files API rate limit        | **~100 RPM** during beta                     |
+| Filename constraints        | 1–255 chars; forbidden: `<>:"|?*\/` and unicode 0–31 |
+
+### Pricing
+
+- Upload / download / list / metadata / delete — **free**.
+- File content referenced in `Messages` requests is billed as **input tokens** (plus output tokens on responses).
+- Large PDFs + big CSVs inside messages hit context-window limits before cost limits.
+
+### Mount a file into a Managed Agents session (attach at creation)
+
+Add entries to `resources[]`. `mount_path` is absolute; parent dirs auto-created:
+
+```python
+session = client.beta.sessions.create(
+    agent=agent.id,
+    environment_id=environment.id,
+    resources=[
+        {"type": "file", "file_id": file.id, "mount_path": "/workspace/data.csv"},
+        {"type": "memory_store", "memory_store_id": store.id, "access": "read_only",
+         "instructions": "Reference data. Check before starting any task."},
+    ],
+)
+```
+
+`mount_path` is optional — the platform picks a default if omitted. **Tip from docs:** if you omit `mount_path`, make sure the uploaded filename is descriptive so the agent can find it.
+
+When mounted, the platform creates a **new `file_id` for the session-scoped copy**. That copy does **not** count against workspace storage limits. The original is untouched.
+
+### Hot-swap on a running session (files only, NOT memory stores)
+
+This is the big structural difference from memory stores. You can add or remove files on a live session via `/v1/sessions/:sid/resources`:
+
+```python
+resource = client.beta.sessions.resources.add(
+    session.id,
+    type="file",
+    file_id=file.id,  # mount_path optional
+)
+# resource.id e.g. "sesrsc_01ABC..."
+
+listed = client.beta.sessions.resources.list(session.id)
+for r in listed.data:
+    print(r.id, r.type)
+
+client.beta.sessions.resources.delete(resource.id, session_id=session.id)
+```
+
+This is why evidence bundles should ride on files, not memory stores: a long-lived curator session can receive *new* evidence mounts without having to be recreated.
+
+### Read-only mount semantics
+
+> "Files mounted in the container are read-only copies. The agent can read them but cannot modify the original uploaded file. To work with modified versions, the agent writes to new paths within the container."
+
+Implication: evidence bundles land at their mount path immutably. If the curator wants to extract a `.tgz`, it writes to `/tmp/extract-0042/…` — the mount stays clean.
+
+### Supported file types
+
+Straight from the docs: "The agent can work with any file type."
+
+- Source code (`.py`, `.js`, `.ts`, `.go`, `.rs`, …)
+- Data files (`.csv`, `.json`, `.xml`, `.yaml`)
+- Documents (`.txt`, `.md`, `.pdf`)
+- Archives (`.zip`, `.tar.gz`) — extract via bash
+- Binary — process with appropriate tools
+
+### File types for Messages API (separate from MA sandbox mounts)
+
+When referenced directly in a `messages.create` call (not mounted in an MA session), the content block type must match:
+
+| File type             | MIME                                            | Content block         |
+|-----------------------|-------------------------------------------------|-----------------------|
+| PDF                   | `application/pdf`                               | `document`            |
+| Plain text            | `text/plain`                                    | `document`            |
+| Images                | `image/jpeg|png|gif|webp`                       | `image`               |
+| Datasets, code-exec inputs | varies                                     | `container_upload`    |
+
+Unsupported types (`.csv`, `.docx`, `.xlsx`, `.md` as document) — convert to plain text and inline. For `.docx` with images, convert to PDF first.
+
+### Retrieving files the agent produced
+
+List + download by `scope_id` = the session id. Requires both beta headers:
+
+```python
+# List files scoped to a session (agent-produced + inputs)
+files = client.beta.files.list(
+    scope_id=session.id,
+    betas=["managed-agents-2026-04-01"],
+)
+for f in files:
+    print(f.id, f.filename)
+
+# Download one (must be downloadable — agent-produced, skills/code-exec outputs)
+content = client.beta.files.download(files.data[0].id)
+content.write_to_file("output.txt")
+```
+
+The outcomes docs say deliverables land at `/mnt/session/outputs/` and are retrievable this way. For non-outcome sessions, the agent can write anywhere in the sandbox; scope-filtering then picks up what got captured into Files on session-end.
+
+### File lifecycle
+
+- Files persist until you `DELETE`. No TTL.
+- Deletes are effectively immediate for new API calls but "may persist in active `Messages` API calls and associated tool uses."
+- User-uploaded files and agent-produced files share the same CRUD surface, but only agent-produced are downloadable.
+- ZDR: Files API is **not** ZDR-eligible. Data follows standard retention.
+
+### Errors to plan for
+
+- `404` — file_id missing or no access.
+- `400` invalid file type — content block mismatch.
+- `400` exceeds context window — e.g. 500 MB plaintext in a messages call.
+- `400` invalid filename — length or forbidden chars.
+- `413` — file >500 MB.
+- `403` — 500 GB org quota hit.
+
+---
+
+## 10.5. Memory stores vs Files — when to use which
+
+| Dimension                | Memory Store                                        | File                                               |
+|--------------------------|-----------------------------------------------------|----------------------------------------------------|
+| Sweet spot               | Structured, small, high-churn state (<100 KB each) | Raw blobs, archives, deliverables (≤500 MB each)   |
+| Attach timing            | Session creation only                               | Session creation OR hot-swap on running session     |
+| Versioning               | Built-in `memver_` audit trail (30 d)               | None (each upload = new file_id)                    |
+| Mutability from agent    | Read or read-write (access at attach)               | Read-only in container (write to new path)          |
+| External write API       | `memories.create/update/delete` + SHA-256 preconditions | `files.upload` only (no in-place update)         |
+| Prompt-injection risk    | High if `read_write` — attacker can poison future sessions. Use `read_only` for reference material. | Low for mounts (read-only); normal for message refs. |
+| System-prompt surface    | Store `description` + `instructions` auto-rendered  | None — just a file in the filesystem                |
+| Pricing                  | Undocumented here; check workspace quotas           | Ops free; content billed as tokens when in messages |
+| Capacity                 | 8 stores / session; 2,000 files / store; 100 KB / file; 100 MB / store | 100 files / session; 500 MB / file; 500 GB / org |
+| Natural use              | Case files, hypothesis history, action ledger, manifest, skills bundle, fleet topology | Evidence bundles (.tgz), raw log captures, PDFs, attacker artifacts, finished dossiers |
+
+**Rule of thumb for blacklight:**
+- If the agent will read-and-reason-on-summaries and you want versioned history → **memory store**.
+- If the data is a large, semi-opaque blob the agent will open-and-extract on demand → **file**.
+- If new evidence needs to arrive on an active investigation without tearing down the session → **file** (hot-swap) carrying the evidence, with a *pointer* written to the case memory store.
+- If the agent produces a deliverable (HTML brief, YAML manifest, PDF incident report) → the agent writes to the sandbox; Files API `scope_id=$session_id` retrieves it; you store the file id in the case memory store for cross-session reference.
+
+---
+
+## 11. Multi-agent (research preview)
 
 Research preview — need `managed-agents-2026-04-01-research-preview` beta header and enablement.
 
@@ -582,7 +746,7 @@ Rules:
 
 ---
 
-## 11. Outcomes (research preview)
+## 12. Outcomes (research preview)
 
 Research preview — same additional beta header as multi-agent.
 
@@ -640,7 +804,7 @@ If you don't have a rubric, show Claude an exemplar and have it derive one. "Mid
 
 ---
 
-## 12. Blacklight mapping — concrete architecture
+## 13. Blacklight mapping — concrete architecture
 
 This section binds the Managed Agents primitives to blacklight's curator design so any future session starts from a coherent picture.
 
@@ -671,13 +835,24 @@ Principle-of-least-privilege applies. Do **not** ship with `unrestricted` networ
 
 Every memory is **small + focused** (per docs' explicit guidance). One case = a directory tree of ~10-50 files, each <100KB. One action = one file. One host = one file. No monolithic case YAML.
 
-### Session lifecycle
+### Files (raw evidence + deliverables)
 
-1. **Evidence arrival** — `bl-agent` on a host pushes a report bundle to the curator's HTTP inbox. External Python code (not the session) writes an evidence summary into `bl-cases/<case>/evidence/` via `memories.create`.
-2. **Trigger** — inbox-handler creates a new Managed Agents session with `bl-curator` + `bl-curator-env` + all five memory stores attached. Sends a `user.message` event: *"New evidence arrived at `/mnt/memory/bl-cases/<case>/evidence/<id>.md`. Review and decide next action."*
-3. **Curator runs** — reads skills + case state + new evidence via filesystem. Reasons. Dispatches hunters via custom tool (or `callable_agents` thread). Revises hypothesis — writes new `history/<ts>.md`. Proposes actions — writes `bl-actions/pending/<id>.yaml`.
-4. **Idle** — session emits `session.status_idle` / `end_turn`. External worker reads `bl-actions/pending/`, promotes `--apply` ones to `bl-actions/applied/` and dispatches `bl-agent` commands on the fleet.
-5. **Container checkpoints** — 30-day retention. For blacklight this doesn't matter — *all load-bearing state is in memory stores*. We **recreate sessions freely**. The session is the CPU; memory stores are the brain.
+Memory stores carry structured state; files carry raw blobs. The split:
+
+- **Inbound evidence bundles** — `bl collect` on a host produces a `.tar.gz` (maldet hits dump, modsec audit log excerpt, transfer logs, yara output, system messages). `bl-agent` uploads via Files API, gets `file_id`. Curator mounts via `sessions.resources.add(type="file", file_id=…, mount_path="/workspace/inbox/evid-<id>.tgz")` — **hot-swap, no session restart**. This is exactly the capability memory stores lack.
+- **Attacker artifacts** — individual shell samples captured by hunters. Uploaded as files, mounted, passed to `bl-intent-reconstructor` as a sub-agent task. Kept as files (not memory) because they're opaque binary-ish content the intent reconstructor deobfuscates, not structured state anyone else reads.
+- **Deliverables** — the HTML incident brief, the YAML manifest, the ModSec rule bundle, the signed case PDF. Curator writes to `/mnt/session/outputs/` (or any sandbox path). External code lists via `files.list(scope_id=session.id)` after idle, downloads with `files.download(file_id)`. File ID gets written into `bl-cases/<case>/deliverables.md` as a pointer for cross-session reference.
+- **What stays in memory stores, not files** — pointers to files. Case file's `evidence` directory contains `.md` summaries that reference `file_id: file_01abc...` — the raw tarball lives in Files, the *summary the curator reasons about* lives in the memory store. Summary-in-memory, raw-in-files.
+
+Rate-limit guardrail: Files API is ~100 RPM during beta. An incident producing 20 evidence bundles/minute at peak is fine; a fleet-wide sweep pushing 200/minute needs throttling at the uploader.
+
+### Session lifecycle (revised with Files)
+
+1. **Evidence arrival** — `bl-agent` on a host pushes a `.tar.gz` to the curator's HTTP inbox. External Python uploads the bundle to Files, gets `file_id`, writes a stub `bl-cases/<case>/evidence/evid-0042.md` carrying `{file_id, filename, size, host, window}` and a short semantic preview.
+2. **Dispatch** — if the curator has an active session for this case, external Python calls `sessions.resources.add(session_id=…, type="file", file_id=…, mount_path="/workspace/inbox/evid-0042.tgz")` and sends a `user.message`: *"New evidence mounted at `/workspace/inbox/evid-0042.tgz`; stub at `/mnt/memory/bl-cases/<case>/evidence/evid-0042.md`. Process."* If no active session, external Python creates one with `bl-curator` + `bl-curator-env` + all five memory stores **and** the evidence file in initial `resources[]`.
+3. **Curator runs** — reads skills + case state + evidence stub via memory mounts. Extracts the tarball into `/tmp/evid-0042/` (writing to tmp since the mount is read-only). Dispatches hunters via custom tool. Revises hypothesis — writes new `history/<ts>.md` to memory. Proposes actions — writes `bl-actions/pending/<id>.yaml`. Writes deliverable (e.g. rule bundle) to `/mnt/session/outputs/case-17-rules-v3.conf`.
+4. **Idle** — session emits `session.status_idle` / `end_turn`. External worker reads `bl-actions/pending/`, lists `files.list(scope_id=session.id)` for deliverables, writes `file_id` pointers back into the case memory, promotes `--apply` actions to `bl-actions/applied/`, and dispatches `bl-agent` commands on the fleet.
+5. **Container checkpoints** — 30-day retention. For blacklight this doesn't matter — *all load-bearing state is in memory stores + files*. We **recreate sessions freely**. The session is the CPU; memory stores are the brain; files are the notebooks and the produced artifacts.
 
 ### Agent-to-agent handoff
 
@@ -709,21 +884,26 @@ Curator's work doesn't fit "rubric-gradable artifact" well — the output is *a 
 
 ---
 
-## 13. Pricing (what we know; verify before committing)
+## 14. Pricing (what we know; verify before committing)
 
 - **Session-hour billing** (~$0.08/hr per the BRIEF.md "Sharpenings" record from the launch announcement).
 - **Tokens** billed normally, with automatic prompt caching (5-min TTL). Session object's `usage` object reports `input_tokens` (uncached), `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`.
 - **Memory stores** — no explicit price listed in the fetched /memory page. Assume storage is included in workspace quota until proven otherwise.
-- **Files API** (used for outcome rubrics + deliverables) — separate billing per Files API docs.
+- **Files API ops** — upload / download / list / metadata / delete are **free** per the docs. File content referenced in `Messages` requests is billed as input tokens. Sandbox-mounted files read by the agent via filesystem tools are *not* direct-token-priced — they count only when actually read into context.
+
+Bandwidth, session-scoped file copies, and memory-store storage per-GB all fall in the "not explicitly priced in the fetched pages" bucket. Budget-critical deployments must confirm against the live billing console.
 
 The full pricing surface lives outside `/managed-agents/*` in the billing/console pages. **Always re-verify** cost assumptions at implementation time.
 
 ---
 
-## 14. Security considerations
+## 15. Security considerations
 
 - **Networking** — default to `limited` in production. Explicit `allowed_hosts`. Audit regularly. Do not grant `allow_package_managers` unless the agent legitimately needs to install at runtime.
 - **Memory store access** — default to `read_only` unless the agent genuinely needs to write. A single `read_write` mount receiving attacker-reachable content becomes a persistent attack vector across all future sessions.
+- **Files not ZDR-eligible.** Don't upload files carrying content that must live under Zero Data Retention guarantees. Sensitive operator data (customer hostnames, non-public IOCs) should be scrubbed before upload — matches CLAUDE.md reference-data rules already.
+- **File mounts are read-only** — good (attacker can't clobber the original). Anything the agent rewrites lives in sandbox-only paths and disappears with the session unless explicitly promoted back to Files via upload.
+- **User-uploaded files are non-downloadable via API.** If you need the content back, you uploaded it — keep a source-of-truth copy yourself. Agent-produced files are the ones that round-trip.
 - **MCP tools via vaults** — credentials live server-side; Anthropic handles refresh. See `/docs/en/managed-agents/vaults` for creation + attachment. Session takes `vault_ids[]` at creation.
 - **Permission policies** — for tools that affect external state, set `always_ask` and approve via `user.tool_confirmation`. For blacklight, `bl_emit_action` with live-apply should require confirmation; `bl_emit_action --suggest` may be `always_allow`.
 - **Prompt injection at the tool surface** — custom tool descriptions should specify exactly what each argument must / must not contain. Use strict input schemas (JSON Schema `pattern`, `enum`).
@@ -731,7 +911,7 @@ The full pricing surface lives outside `/managed-agents/*` in the billing/consol
 
 ---
 
-## 15. Gotchas (will-bite-you list)
+## 16. Gotchas (will-bite-you list)
 
 1. **Stream-before-send ordering.** Open the SSE stream first, then send `user.message`. Reverse order = race condition.
 2. **Memory stores only attach at session creation.** If you need a new store mid-investigation, create a new session. Plan for cheap session recreation (all state in stores, no context-window load-bearing).
@@ -742,6 +922,9 @@ The full pricing surface lives outside `/managed-agents/*` in the billing/consol
 7. **`session_thread_id` routing** for multi-agent tool confirmations — easy to miss; the platform won't route your response back to the waiting thread without it.
 8. **Agent name is unique per workspace.** Env name is unique per workspace. Plan for namespacing (`bl-curator`, `bl-hunter-filesystem`, etc.) to avoid collisions with other projects.
 9. **Memory file 100 KB cap.** Design for atomic files up front. Don't build a case format that produces a 500 KB YAML and then discover the cap at integration time.
+9a. **Files rate-limit 100 RPM during beta.** Sensitive for bursty-evidence workflows (fleet-wide sweep, batch re-scan). Queue / throttle at the uploader, not in the curator.
+9b. **Files-per-session cap 100.** Hot-swap is the release valve — unmount stale evidence once the curator summary lands in memory store. Don't leak evidence mounts across weeks of a long case.
+9c. **User-uploaded files aren't downloadable.** If the agent modifies a CSV, the modification lives only in the sandbox. To capture it, the agent must explicitly produce a new file in `/mnt/session/outputs/` (or use an appropriate tool path) so it becomes downloadable.
 10. **`web_fetch` / `web_search` allowed domains are separate from env `allowed_hosts`.** Limiting env networking does NOT lock down those tools — configure per-tool if that matters.
 11. **Container architecture is x86_64 only** (as of writing). Bash payloads that assume arm64 quirks will not apply.
 12. **No unarchive.** Archive is one-way for agents, envs, stores.
@@ -751,7 +934,7 @@ The full pricing surface lives outside `/managed-agents/*` in the billing/consol
 
 ---
 
-## 16. Open questions to verify live
+## 17. Open questions to verify live
 
 1. **Memory-store billing dimension.** Not explicit on /memory page. Check workspace quota page before committing to a multi-store architecture.
 2. **Multi-agent enablement status for this account.** Research preview; needs explicit request. Check before assuming `callable_agents` is available.
@@ -761,22 +944,26 @@ The full pricing surface lives outside `/managed-agents/*` in the billing/consol
 6. **Rate limits on `memories.create`.** Shares the 300/min create bucket? Undocumented here.
 7. **Inter-workspace memory-store sharing.** Docs say "workspace-scoped" — cross-workspace reuse is not described.
 8. **Session title field.** Appears in quickstart (`title: "Quickstart session"`) and in session create params, but not in the sessions-reference page feature table. Treat as informational metadata only.
+9. **Files API rate limit under blacklight load.** 100 RPM is tight for fleet-wide replay scenarios. Confirm whether upload + list + download share the bucket or are separate, and whether it can be raised for our workspace.
+10. **`scope_id` semantics on list.** Does `scope_id=$session_id` return *both* input files (user-mounted) and output files (agent-produced), or only one class? Docs imply both but doesn't state explicitly.
+11. **Files hot-swap under running session — any propagation latency?** `sessions.resources.add` returns a `sesrsc_...` but not documented whether the mount is immediately visible to the running agent or requires a new turn/message to be picked up.
+12. **Evidence bundle mounting vs direct inline in `user.message`.** For smaller bundles, is it cheaper to inline content as text in a `user.message` event (billed as tokens once) vs upload as file (free upload, read into context via `read` tool later)? Net-tokens likely equivalent; upload path wins on reusability across turns.
 
 ---
 
-## 17. Load-bearing docs to re-read before implementation
+## 18. Load-bearing docs to re-read before implementation
 
 - `/docs/en/managed-agents/memory` — before any memory store code lands.
+- `/docs/en/managed-agents/files` + `/docs/en/build-with-claude/files` — before evidence-bundle ingestion + deliverable retrieval wire up. Covers `resources[]`, hot-swap via `sessions.resources.add/list/delete`, and `scope_id` list pattern.
 - `/docs/en/managed-agents/events-and-streaming` — before the event loop is written; critical for custom tool + confirmation wiring.
 - `/docs/en/managed-agents/permission-policies` — not fetched into this doc; needed before any `user.tool_confirmation` flow.
 - `/docs/en/managed-agents/mcp-connector` — needed if Slack/GitHub MCPs get used.
 - `/docs/en/managed-agents/vaults` — needed for MCP auth.
 - `/docs/en/agents-and-tools/agent-skills/best-practices` — needed when authoring the `bl-skills` bundle for upload as a custom skill (vs. shipping as a file-tree in `bl-skills` memory store — TBD which is better).
-- `/docs/en/build-with-claude/files` — needed if we use outcomes with file-scoped deliverables.
 
 ---
 
-## 18. Doc provenance
+## 19. Doc provenance
 
 | Page                         | URL                                                                    |
 |------------------------------|------------------------------------------------------------------------|
@@ -789,6 +976,8 @@ The full pricing surface lives outside `/managed-agents/*` in the billing/consol
 | Tools                        | `/docs/en/managed-agents/tools`                                        |
 | Skills                       | `/docs/en/managed-agents/skills`                                       |
 | Memory                       | `/docs/en/managed-agents/memory`                                       |
+| Files (core)                 | `/docs/en/build-with-claude/files`                                     |
+| Files (Managed Agents mount) | `/docs/en/managed-agents/files`                                        |
 | Multi-agent (RP)             | `/docs/en/managed-agents/multi-agent`                                  |
 | Outcomes (RP)                | `/docs/en/managed-agents/define-outcomes`                              |
 | Cloud container reference    | `/docs/en/managed-agents/cloud-containers`                             |
