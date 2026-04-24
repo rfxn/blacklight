@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # ----------------------------------------------------------------------------
 # Handler stubs — remaining (bl_defend / bl_clean / bl_setup).
 # Real implementations land in M6 (defend), M7 (clean), M8 (setup).

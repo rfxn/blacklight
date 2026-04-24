@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 bl_ledger_append() {
     # bl_ledger_append <case-id> <jsonl-record> — 0/65; flock-serialized
     local case_id="$1"

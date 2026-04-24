@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 _bl_log_level_allows() {
     # $1 = message level (debug|info|warn|error)
     local msg_level="$1"

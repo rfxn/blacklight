@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 main() {
     # Pre-case flag sniff: help, version, setup all bypass preflight.
     if (( $# == 0 )); then

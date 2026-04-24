@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 bl_consult() {
     # bl_consult <args> — route to _new/_attach/_sweep_mode. Mutually exclusive.
     local mode="" trigger="" case_id="" cve="" notes="" dedup=""

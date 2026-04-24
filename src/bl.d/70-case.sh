@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 bl_case() {
     # bl_case <subcommand> [args] — route to _show/_log/_list/_close/_reopen
     local sub="${1:-show}"

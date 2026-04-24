@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 bl_observe_log_apache() {
     unset _BL_OBS_ID _BL_OBS_CLUSTER_N
     local around_path="" window_spec="6h" site=""

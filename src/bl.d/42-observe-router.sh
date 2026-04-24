@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 bl_bundle_build() {
     local format_arg="auto" since_arg="" out_dir_arg=""
     while [[ $# -gt 0 ]]; do

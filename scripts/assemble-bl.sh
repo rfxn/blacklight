@@ -33,7 +33,11 @@ printf '%s\n' '# Do not edit bl directly; make bl-check will fail in CI.'
 
 for p in "${sorted[@]}"; do
     printf '\n# --- %s ---\n' "$p"
-    # Strip a leading shebang line from the part (if present) — only the
-    # top-level shebang survives in assembled bl.
-    sed -e '1{/^#!/d;}' "$p"
+    # Strip a leading shebang OR a line-1 `# shellcheck shell=bash` directive
+    # from each part. Only the top-level shebang (and any load-bearing
+    # shellcheck disables on subsequent lines, like 00-header.sh:2) survive
+    # in assembled bl. The per-part shell=bash directive is satisfied in
+    # source to silence SC2148, but redundant once parts are concatenated
+    # under the top-level #!/bin/bash.
+    sed -e '1{/^#!/d; /^# shellcheck shell=bash/d;}' "$p"
 done

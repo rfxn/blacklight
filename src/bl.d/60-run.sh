@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 bl_run() {
     # bl_run <args> — route to _step (default), _batch (--batch), _list (--list)
     local mode="step" step_id="" max=16 yes="" dry_run="" unsafe="" explain=""

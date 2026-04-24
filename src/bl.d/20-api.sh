@@ -1,4 +1,4 @@
-
+# shellcheck shell=bash
 # ----------------------------------------------------------------------------
 # API helpers — HTTPS wrappers for Anthropic Managed Agents endpoints.
 # bl_poll_pending is a skeleton; M5 drops in real read/write against

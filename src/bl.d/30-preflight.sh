@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 bl_preflight() {
     # 1. API key
     if [[ -z "${ANTHROPIC_API_KEY+set}" ]]; then

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # ----------------------------------------------------------------------------
 # Workdir helpers — $BL_VAR_DIR lazy init and case-current reader
 # bl_init_workdir is consumed by M4-M8 handlers, NOT by bl_preflight.
