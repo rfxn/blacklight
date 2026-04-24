@@ -150,5 +150,8 @@ retired. batsman submodule for tests (v1 used pytest).
 
 Archive. v1 preserved at tag `legacy-pre-pivot` (`git checkout
 legacy-pre-pivot`); legacy/ dropped from main after tag cut.
-Clean-room on runtime per project CLAUDE.md §License — shared rfxn
-infra (batsman, pkg_lib) permitted at the boundary only.
+Clean-room on runtime per project CLAUDE.md §License. Shared rfxn
+infra (`batsman`, `pkg_lib`) is open-source GPL v2 on public GitHub —
+treated as external OSS dependencies, permitted under the hackathon
+rules' OSS clause — scoped to test scaffolding and package manifests;
+`bl` never sources either at runtime.
