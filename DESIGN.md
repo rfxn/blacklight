@@ -792,7 +792,6 @@ This document and v2 deliberately do not describe:
 - **Fleet-scope orchestration.** `bl` is per-host. Fleet propagation of defenses rides the operator's existing deployment primitive (Puppet, Ansible, Salt, Chef, manual SSH) — blacklight generates the payload; the operator propagates.
 - **Continuous posture monitoring daemon.** v2 is trigger-bound. Posture arc (periodic sweeps, trajectory analysis) is roadmap P2.
 - **Web frontend or dashboard.** The terminal REPL is the operator surface. A rendered HTML brief is a post-close artifact, not the primary interface.
-- **Multi-tenant hosting of blacklight itself.** Operators use their own Anthropic workspaces; the v2 product is the CLI + skills bundle, not a SaaS.
 - **Replacing defensive primitives.** blacklight directs `apachectl`, `apf`, `csf`, `iptables`, `nftables`, `maldet`, `clamscan`, `yara` — it does not re-implement any of them.
 - **Cross-CVE threat intelligence sharing.** Roadmap P2+.
 - **Windows / BSD support.** Roadmap P4. v2 is Linux only.
