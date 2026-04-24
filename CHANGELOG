@@ -134,6 +134,54 @@ https://github.com/rfxn/blacklight
 [Change] tests/09-hardening.bats — G3 schema-rejection @test unskipped; pattern
       matches G1 (`|| true` suppresses set -e from sourced bl main return).
 
+- M8 | Apr 24 2026 — bl setup workspace bootstrap:
+[New] src/bl.d/84-setup.sh — bl_setup workspace provisioner replacing
+      80-stubs.sh stub. Implements docs/setup-flow.md §3 happy path
+      (agent + env + 2 memstore creates), §5 idempotency (cached-id
+      skip-create with entry-snapshot ordering so first-run takes the
+      full-seed path), DESIGN.md §8.3 source-of-truth resolution
+      (BL_REPO_ROOT → cwd → BL_REPO_URL → default GitHub clone to
+      $XDG_CACHE_HOME/blacklight/repo), DESIGN.md §8.4 --sync (sha256
+      MANIFEST.json delta with POST(add)/POST(modify)/DELETE per
+      changed path; --prune required for delete), DESIGN.md §8.5
+      --check (per-slot status enumeration; ok/missing per agent /
+      env / memstore-skills / memstore-case).
+[Change] src/bl.d/20-api.sh — promote HTTP 409 from generic 4xx (was
+         BL_EX_PREFLIGHT_FAIL=65) to named BL_EX_CONFLICT=71 per
+         docs/setup-flow.md §4.2. Enables bl_setup_ensure_agent to
+         detect create-time race + re-probe preflight per spec.
+         Additive only; M5/M7 callers treat both 65 and 71 as fatal,
+         no behavior change for existing handlers.
+[New] schemas/defense.json + schemas/intent.json — empty-object stubs
+      so bl_setup_compose_agent_body has real input_schema files for
+      synthesize_defense + reconstruct_intent custom tools per
+      setup-flow.md §4.2. M5/M6 expand the schemas later.
+[New] tests/08-setup.bats — 14 BATS gates covering happy path,
+      partial-state --check matrix (5 combinations), --sync
+      delta + no-op, idempotent re-run summary, 401/400/409
+      envelope handling, source-of-truth resolution.
+[New] tests/fixtures/setup-*.json — 14 fixtures matching
+      docs/setup-flow.md §4 wire shapes (agents list/create + env
+      create + memstore list/create + memory create + MANIFEST
+      baseline + 400/401/409 envelopes).
+[Change] src/bl.d/80-stubs.sh — drop bl_setup stub (real handler in
+         src/bl.d/84-setup.sh). Stub fence narrows to bl_defend
+         (M6) only — bl_clean already in 83-clean.sh from M7.
+[Change] tests/01-cli-surface.bats — replace stale "bl setup
+         dispatches to stub" assertion with new contract: missing
+         ANTHROPIC_API_KEY exits 65 with "not set" message
+         (validates bypass-bl_preflight invariant).
+[Change] tests/Dockerfile + Dockerfile.rocky9 — add COPY prompts/
+         and COPY skills/ — required by bl_setup_compose_agent_body
+         (reads prompts/curator-agent.md) and bl_setup_seed_skills /
+         bl_setup_sync (enumerate skills/**/*.md).
+[Change] bl — regenerated from 17 parts via make bl; byte-exact to
+         scripts/assemble-bl.sh output. Drift-guard green.
+[New] M8 closes Wave 3 (M6 + M7 + M8 disjoint part-file parallel
+      merges) per PLAN.md §M5.5 enabling note. M6 (bl defend) is
+      the only Wave 3 motion remaining; M7 (bl clean) and M8
+      (bl setup) are now both on main.
+
 - M9 P1 | Apr 24 2026 — fence primitive + hardening test scaffold:
 [New] src/bl.d/26-fence.sh — fence primitive (M9 P1): bl_fence_derive/wrap/unwrap/kind;
       token-bound close tag per DESIGN.md §13.2.
