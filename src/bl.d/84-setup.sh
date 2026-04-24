@@ -239,16 +239,184 @@ bl_setup_compose_env_body() {
     }'
 }
 
-# bl_setup_seed_skills — Phase 3 expands; Phase 2 lands a no-op stub so
-# provisioning succeeds end-to-end without skill writes.
+# bl_setup_seed_skills <skills-memstore-id> — POST every skills/**/*.md (excluding
+# INDEX.md) plus a MANIFEST.json memory recording sha256 per file. Per setup-flow.md
+# §4.5. Returns 0/65/69/70. Single-skill 4xx (e.g. 413 oversize) is warn-and-continue;
+# >0 failures collapses into BL_EX_UPSTREAM_ERROR after the loop.
 bl_setup_seed_skills() {
-    bl_debug "bl_setup_seed_skills: Phase 3 will replace with MANIFEST-driven POST loop"
+    local skills_id="$1"
+    local repo_root
+    repo_root=$(bl_setup_resolve_source) || return $?
+    local skills_dir="$repo_root/skills"
+    [[ -d "$skills_dir" ]] || { bl_error_envelope setup "skills/ not found at $skills_dir"; return "$BL_EX_PREFLIGHT_FAIL"; }
+    local manifest_entries=""
+    local count=0 fail=0
+    local path rel sha
+    while IFS= read -r path; do
+        rel="${path#"$skills_dir"/}"
+        [[ "$rel" == "INDEX.md" ]] && continue
+        sha=$(command sha256sum "$path" | command awk '{print $1}')
+        [[ -n "$manifest_entries" ]] && manifest_entries="$manifest_entries,"
+        manifest_entries="$manifest_entries$(jq -n --arg p "$rel" --arg s "$sha" '{path:$p, sha256:$s}')"
+        if ! bl_setup_post_memory "$skills_id" "$rel" "$path" "$sha"; then
+            bl_warn "bl setup: failed to POST skill $rel"
+            fail=$((fail + 1))
+            continue
+        fi
+        count=$((count + 1))
+    done < <(find "$skills_dir" -name '*.md' | sort)
+    bl_info "bl setup: seeded $count skill(s); $fail failure(s)"
+    (( fail > 0 )) && return "$BL_EX_UPSTREAM_ERROR"
+    bl_setup_post_manifest "$skills_id" "$manifest_entries" || return $?
     return "$BL_EX_OK"
 }
 
-# bl_setup_check / bl_setup_sync — Phase 4 replaces with real implementations.
+# bl_setup_post_memory <store-id> <key> <content-path> <sha256> — POST one memory
+# (full body via mktemp body-file; cleaned on every exit path).
+bl_setup_post_memory() {
+    local store_id="$1"
+    local key="$2"
+    local content_path="$3"
+    local sha="$4"
+    local body_file
+    body_file=$(mktemp)
+    jq -n --arg k "$key" --rawfile c "$content_path" --arg s "$sha" \
+        '{key:$k, content:$c, metadata:{sha256:$s}}' > "$body_file"
+    bl_api_call POST "/v1/memory_stores/$store_id/memories" "$body_file" >/dev/null
+    local rc=$?
+    command rm -f "$body_file"
+    return $rc
+}
+
+# bl_setup_post_manifest <store-id> <comma-joined-entries> — POST MANIFEST.json memory.
+bl_setup_post_manifest() {
+    local store_id="$1"
+    local entries="$2"
+    local now
+    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    local body_file content
+    body_file=$(mktemp)
+    content="[$entries]"
+    jq -n --arg k "MANIFEST.json" --arg c "$content" --arg ts "$now" \
+        '{key:$k, content:$c, metadata:{generated_at:$ts}}' > "$body_file"
+    bl_api_call POST "/v1/memory_stores/$store_id/memories" "$body_file" >/dev/null
+    local rc=$?
+    command rm -f "$body_file"
+    return $rc
+}
+
+# bl_setup_resolve_source — Phase 4 replaces with cwd / $BL_REPO_URL / clone resolution
+# per DESIGN.md §8.3. Phase 3 returns BL_REPO_ROOT (or readlink-derived dir of $0)
+# so seed_skills / sync work under test.
+bl_setup_resolve_source() {
+    local resolved
+    resolved=$(readlink -f "$0" 2>/dev/null || printf '.')   # readlink -f may fail when $0 is relative / sourced — fallback to cwd
+    local rr="${BL_REPO_ROOT:-$(dirname "$resolved")}"
+    printf '%s' "$rr"
+    return "$BL_EX_OK"
+}
+
+# bl_setup_check — Phase 4 replaces with real implementation.
 bl_setup_check() { bl_error_envelope setup "--check not yet implemented (Phase 4)"; return "$BL_EX_USAGE"; }
-bl_setup_sync()  { bl_error_envelope setup "--sync not yet implemented (Phase 3)";  return "$BL_EX_USAGE"; }
+
+# bl_setup_sync <prune?> — diff local skills sha256 vs remote MANIFEST; POST/PATCH/DELETE
+# only changed paths. --prune required to actually delete (default warn-only). Updates
+# remote MANIFEST after diff applied. Per setup-flow.md §3 step 6 + §4.5 + DESIGN.md §8.4.
+bl_setup_sync() {
+    local prune="$1"
+    local skills_id=""
+    if [[ -r "$BL_STATE_DIR/memstore-skills-id" ]]; then
+        skills_id=$(command cat "$BL_STATE_DIR/memstore-skills-id")
+    fi
+    [[ -z "$skills_id" ]] && { bl_error_envelope setup "memstore-skills-id not cached; run 'bl setup' first"; return "$BL_EX_NOT_FOUND"; }
+    local repo_root
+    repo_root=$(bl_setup_resolve_source) || return $?
+    local skills_dir="$repo_root/skills"
+    [[ -d "$skills_dir" ]] || { bl_error_envelope setup "skills/ not found at $skills_dir"; return "$BL_EX_PREFLIGHT_FAIL"; }
+    # Build local manifest (sha256 by relative path)
+    local local_manifest_file remote_manifest_file
+    local_manifest_file=$(mktemp)
+    remote_manifest_file=$(mktemp)
+    bl_setup_compute_manifest "$skills_dir" > "$local_manifest_file"
+    # Fetch remote manifest
+    local remote_resp rc=0
+    remote_resp=$(bl_api_call GET "/v1/memory_stores/$skills_id/memories/MANIFEST.json") || rc=$?
+    if (( rc != 0 )); then
+        command rm -f "$local_manifest_file" "$remote_manifest_file"
+        return $rc
+    fi
+    # .content is a stringified JSON array per setup-flow.md §4.5 — parse via fromjson
+    printf '%s' "$remote_resp" | jq -r '.content // "[]"' > "$remote_manifest_file"
+    # Diff: arrays of {path, sha256} → {add, modify, remove} keyed by path.
+    local diff_json
+    diff_json=$(jq -n \
+        --slurpfile L "$local_manifest_file" \
+        --slurpfile R "$remote_manifest_file" \
+        '
+            ($L[0]) as $lcl |
+            ($R[0] | (if type == "string" then fromjson else . end)) as $rmt |
+            ($lcl | map({(.path): .sha256}) | add // {}) as $lm |
+            ($rmt | map({(.path): .sha256}) | add // {}) as $rm |
+            {
+                add:    [ $lm | to_entries[] | select($rm[.key] == null)        | .key ],
+                modify: [ $lm | to_entries[] | select($rm[.key] != null and $rm[.key] != .value) | .key ],
+                remove: [ $rm | to_entries[] | select($lm[.key] == null)        | .key ]
+            }
+        ')
+    command rm -f "$local_manifest_file" "$remote_manifest_file"
+    local n_add n_mod n_rm
+    n_add=$(printf '%s' "$diff_json" | jq -r '.add    | length')
+    n_mod=$(printf '%s' "$diff_json" | jq -r '.modify | length')
+    n_rm=$(printf '%s' "$diff_json" | jq -r '.remove | length')
+    if (( n_add == 0 && n_mod == 0 && n_rm == 0 )); then
+        printf 'bl setup --sync: 0 changes (no skills delta)\n'
+        return "$BL_EX_OK"
+    fi
+    printf 'bl setup --sync: %d add, %d modify, %d remove\n' "$n_add" "$n_mod" "$n_rm"
+    local rel sha path
+    while IFS= read -r rel; do
+        [[ -z "$rel" ]] && continue
+        path="$skills_dir/$rel"
+        sha=$(command sha256sum "$path" | command awk '{print $1}')
+        bl_setup_post_memory "$skills_id" "$rel" "$path" "$sha" || bl_warn "bl setup --sync: POST failed for $rel"
+    done < <(printf '%s' "$diff_json" | jq -r '.add[]')
+    while IFS= read -r rel; do
+        [[ -z "$rel" ]] && continue
+        path="$skills_dir/$rel"
+        sha=$(command sha256sum "$path" | command awk '{print $1}')
+        bl_setup_post_memory "$skills_id" "$rel" "$path" "$sha" || bl_warn "bl setup --sync: PATCH failed for $rel"
+    done < <(printf '%s' "$diff_json" | jq -r '.modify[]')
+    if [[ "$prune" == "yes" ]]; then
+        local key_enc
+        while IFS= read -r rel; do
+            [[ -z "$rel" ]] && continue
+            key_enc="${rel//\//%2F}"
+            bl_api_call DELETE "/v1/memory_stores/$skills_id/memories/$key_enc" >/dev/null || bl_warn "bl setup --sync: DELETE failed for $rel"
+        done < <(printf '%s' "$diff_json" | jq -r '.remove[]')
+    else
+        (( n_rm > 0 )) && bl_info "bl setup --sync: $n_rm remote-only skill(s) — pass --prune to remove"
+    fi
+    # Update remote MANIFEST to reflect new state (post-add/modify; remove already prune-gated above)
+    local entries
+    entries=$(bl_setup_compute_manifest "$skills_dir" | jq -c '.' | sed -E 's/^\[//; s/\]$//')
+    bl_setup_post_manifest "$skills_id" "$entries" || return $?
+    return "$BL_EX_OK"
+}
+
+# bl_setup_compute_manifest <skills-dir> — emits JSON array of {path, sha256} on stdout.
+bl_setup_compute_manifest() {
+    local skills_dir="$1"
+    local entries=""
+    local path rel sha
+    while IFS= read -r path; do
+        rel="${path#"$skills_dir"/}"
+        [[ "$rel" == "INDEX.md" ]] && continue
+        sha=$(command sha256sum "$path" | command awk '{print $1}')
+        [[ -n "$entries" ]] && entries="$entries,"
+        entries="$entries$(jq -n --arg p "$rel" --arg s "$sha" '{path:$p, sha256:$s}')"
+    done < <(find "$skills_dir" -name '*.md' | sort)
+    printf '[%s]\n' "$entries"
+}
 
 bl_setup_print_exports() {
     printf '\n'

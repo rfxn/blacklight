@@ -127,21 +127,21 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup --sync: remote MANIFEST matches local → zero POST calls, summary reports 0 changes" {
-    skip "blocked on Phase 3"
     mkdir -p "$BL_VAR_DIR/state"
     printf '%s' "agent_M8_TEST"      > "$BL_VAR_DIR/state/agent-id"
     printf '%s' "memstore_skills_M8" > "$BL_VAR_DIR/state/memstore-skills-id"
-    # Build current manifest dynamically against actual skills/ corpus
-    _bl_M8_synth_current_manifest > "$BL_VAR_DIR/manifest-current.json"
+    # Synth a current-state fixture matching the live skills/ corpus, written to
+    # the mock's fixtures dir so the route below resolves it. Cleanup in teardown.
+    _bl_M8_synth_current_manifest > "$BL_CURATOR_MOCK_FIXTURES_DIR/setup-manifest-current.json"
     bl_curator_mock_add_route 'memories/MANIFEST' "setup-manifest-current.json" 200
     bl_curator_mock_set_response 'setup-memory-create-success.json' 200
     run "$BL_SOURCE" setup --sync
+    rm -f "$BL_CURATOR_MOCK_FIXTURES_DIR/setup-manifest-current.json"
     [ "$status" -eq 0 ]
     [[ "$output" == *"0 changes"* ]] || [[ "$output" == *"no skills delta"* ]]
 }
 
 @test "bl setup --sync: remote MANIFEST is baseline (empty) → POSTs every skill, summary lists count" {
-    skip "blocked on Phase 3"
     mkdir -p "$BL_VAR_DIR/state"
     printf '%s' "agent_M8_TEST"      > "$BL_VAR_DIR/state/agent-id"
     printf '%s' "memstore_skills_M8" > "$BL_VAR_DIR/state/memstore-skills-id"
@@ -238,14 +238,18 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 _bl_M8_synth_current_manifest() {
+    # Mirrors bl_setup_compute_manifest exactly so the no-op sync test sees a
+    # remote MANIFEST that matches local. jq emits the {path,sha256} entries and
+    # then nests the resulting array as a JSON-as-string in .content (matches
+    # production wire shape per setup-flow.md §4.5).
     local skills_dir="$BL_REPO_ROOT/skills"
     local entries=""
+    local rel sha
     while IFS= read -r f; do
-        local rel="${f#"$skills_dir"/}"
-        local sha
+        rel="${f#"$skills_dir"/}"
         sha=$(sha256sum "$f" | command awk '{print $1}')
         [[ -n "$entries" ]] && entries="$entries,"
-        entries="$entries{\"path\":\"$rel\",\"sha256\":\"$sha\"}"
+        entries="$entries$(jq -n --arg p "$rel" --arg s "$sha" '{path:$p, sha256:$s}')"
     done < <(find "$skills_dir" -name '*.md' -not -name 'INDEX.md' | sort)
-    printf '{"id":"memory_MANIFEST","key":"MANIFEST.json","content":"[%s]"}\n' "$entries"
+    jq -n --arg c "[$entries]" '{id:"memory_MANIFEST", key:"MANIFEST.json", content:$c}'
 }

@@ -20,6 +20,7 @@ COPY bl /opt/bl
 COPY schemas/ /opt/schemas/
 COPY prompts/ /opt/prompts/
 COPY case-templates/ /opt/case-templates/
+COPY skills/ /opt/skills/
 RUN chmod +x /opt/bl
 
 WORKDIR /opt/tests
