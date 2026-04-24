@@ -2514,7 +2514,8 @@ bl_run_prompt_operator() {
         printf 'Apply? [y/N/diff-full/explain/abort] ' >&2
         IFS= read -r ans || ans="${BL_PROMPT_DEFAULT:-N}"
         ans="${ans:-${BL_PROMPT_DEFAULT:-N}}"
-        case "${ans,,}" in
+        ans=$(printf '%s' "$ans" | command tr '[:upper:]' '[:lower:]')
+        case "$ans" in
             y|yes)        return 0 ;;
             n|no|abort|'') return "$BL_EX_TIER_GATE_DENIED" ;;   # operator declined → caller checks rc
             diff-full)
