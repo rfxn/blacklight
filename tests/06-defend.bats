@@ -108,9 +108,81 @@ teardown() {
 # firewall (M6 P3)
 # ---------------------------------------------------------------------------
 
-@test "bl defend firewall happy-path applies with case-tag (TODO P3)" { skip "implemented in M6 P3"; }
-@test "bl defend firewall CDN-safelist refuses Cloudflare IP (TODO P3)" { skip "implemented in M6 P3"; }
-@test "bl defend firewall backend auto-detection prefers APF > CSF > nft > iptables (TODO P3)" { skip "implemented in M6 P3"; }
+@test "bl defend firewall applies via iptables with case-tag" {
+    # Mock iptables into PATH-injected bin to capture invocation.
+    # Use --backend iptables to bypass auto-detection (system may have nft).
+    cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$BL_VAR_DIR/iptables.log"
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/iptables"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    run "$BL_SOURCE" defend firewall 203.0.113.42 --backend iptables --reason "apsb25-94 scanner"
+    [ "$status" -eq 0 ]
+    grep -q 'INPUT -s 203.0.113.42 -j DROP' "$BL_VAR_DIR/iptables.log"
+    grep -q "bl-CASE-2026-0042:apsb25-94 scanner" "$BL_VAR_DIR/iptables.log"
+}
+
+@test "bl defend firewall CDN-safelist refuses Cloudflare IP (ASN cache hit)" {
+    # Seed ASN cache with Cloudflare hit for 1.1.1.1
+    bl_defend_fixture_mock_whois 1.1.1.1 '{"asn":"AS13335","org":"CLOUDFLARENET"}'
+    # Pre-populate cache with fresh timestamp
+    touch "$BL_DEFEND_ASN_CACHE/1.1.1.1.json"
+    # Provide an iptables shim (must not be invoked — safelist should short-circuit)
+    cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'
+#!/bin/bash
+printf 'UNEXPECTED: %s\n' "$*" >> "$BL_VAR_DIR/iptables.log"
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/iptables"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    run "$BL_SOURCE" defend firewall 1.1.1.1 --reason "bad actor"
+    [ "$status" -eq 68 ]   # BL_EX_TIER_GATE_DENIED
+    [ ! -s "$BL_VAR_DIR/iptables.log" ]   # apply must not have run
+    # Ledger must show a defend_refused record
+    local ledger="$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+    grep -q '"kind":"defend_refused"' "$ledger"
+    grep -q '"reason":"cdn_safelist"' "$ledger"
+}
+
+@test "bl defend firewall backend auto-detection prefers APF > iptables" {
+    # Provide both apf and iptables shims; expect apf to be chosen
+    cat > "$BL_DEFEND_SCANNER_BIN/apf" <<'EOF'
+#!/bin/bash
+printf 'apf:%s\n' "$*" >> "$BL_VAR_DIR/backend.log"
+exit 0
+EOF
+    cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'
+#!/bin/bash
+printf 'iptables:%s\n' "$*" >> "$BL_VAR_DIR/backend.log"
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/apf" "$BL_DEFEND_SCANNER_BIN/iptables"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    run "$BL_SOURCE" defend firewall 198.51.100.77 --reason "test"
+    [ "$status" -eq 0 ]
+    grep -q '^apf:' "$BL_VAR_DIR/backend.log"
+    ! grep -q '^iptables:' "$BL_VAR_DIR/backend.log"
+}
+
+@test "bl defend firewall emits schema-conforming ledger entry on success" {
+    # Use --backend iptables to bypass auto-detection (system may have nft).
+    cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/iptables"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    run "$BL_SOURCE" defend firewall 203.0.113.50 --backend iptables --reason "test" --retire 7d
+    [ "$status" -eq 0 ]
+    local ledger="$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+    local last
+    last=$(tail -n1 "$ledger")
+    printf '%s' "$last" | jq -e '.kind == "defend_applied"' >/dev/null
+    printf '%s' "$last" | jq -e '.payload.verb == "defend.firewall"' >/dev/null
+    printf '%s' "$last" | jq -e '.payload.retire_hint == "7d"' >/dev/null
+}
 
 # ---------------------------------------------------------------------------
 # sig (M6 P4)

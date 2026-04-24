@@ -5142,11 +5142,154 @@ _bl_defend_modsec_remove() {
     return "$BL_EX_OK"
 }
 
-# ---- firewall (M6 P3 target) ----------------------------------------------
+# ---- firewall -------------------------------------------------------------
+
+# CDN ASN allowlist (as-of 2026-04). Hardcoded to avoid a DNS dependency
+# at defense-time. Operator-extensible via $BL_DEFEND_EXTRA_CDN_ASNS (space-sep).
+_BL_DEFEND_CDN_ASNS="AS13335 AS54113 AS16509 AS20940 AS16625 AS32934"
+#                    ^Cloudflare ^Fastly ^AWS    ^Akamai ^Akamai ^Facebook
+
+_bl_defend_firewall_detect_backend() {
+    # Prints the first detected backend (apf|csf|nft|iptables) or fails 65.
+    if command -v apf >/dev/null 2>&1 || [[ -x /usr/local/sbin/apf ]]; then
+        printf 'apf'
+        return "$BL_EX_OK"
+    fi
+    if command -v csf >/dev/null 2>&1 || [[ -x /usr/sbin/csf ]]; then
+        printf 'csf'
+        return "$BL_EX_OK"
+    fi
+    if command -v nft >/dev/null 2>&1; then
+        printf 'nft'
+        return "$BL_EX_OK"
+    fi
+    if command -v iptables >/dev/null 2>&1; then
+        printf 'iptables'
+        return "$BL_EX_OK"
+    fi
+    bl_error_envelope defend "no firewall backend detected (apf|csf|nft|iptables)"
+    return "$BL_EX_PREFLIGHT_FAIL"
+}
+
+_bl_defend_firewall_is_private_ip() {
+    # $1 = ip; returns 0 if RFC1918/loopback/link-local, 1 otherwise.
+    local ip="$1"
+    # 10/8, 172.16-31/12, 192.168/16, 127/8, 169.254/16
+    [[ "$ip" =~ ^10\. ]] && return 0
+    [[ "$ip" =~ ^127\. ]] && return 0
+    [[ "$ip" =~ ^169\.254\. ]] && return 0
+    [[ "$ip" =~ ^192\.168\. ]] && return 0
+    [[ "$ip" =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\. ]] && return 0
+    return 1
+}
+
+_bl_defend_firewall_cdn_safelist_check() {
+    # $1 = ip; returns 0 (allowed) if NOT a CDN; 68 (refused) if CDN match.
+    local ip="$1"
+    if _bl_defend_firewall_is_private_ip "$ip"; then
+        return "$BL_EX_OK"
+    fi
+    local cache_dir="${BL_DEFEND_ASN_CACHE:-/var/cache/bl/asn}"
+    local cache_file="$cache_dir/$ip.json"
+    command mkdir -p "$cache_dir" 2>/dev/null || true   # best-effort; proceed even if uncached
+
+    local asn=""
+    if [[ -r "$cache_file" ]]; then
+        # Cache freshness gate: 24h TTL.
+        local age_s
+        age_s=$(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || printf '0') ))   # stat may fail on race (file rotated); age=0 forces cache-bypass — safe
+        if (( age_s < 86400 )); then
+            asn=$(jq -r '.asn // empty' "$cache_file" 2>/dev/null)   # cache may be malformed; empty asn triggers whois fallback
+        fi
+    fi
+    if [[ -z "$asn" ]] && command -v whois >/dev/null 2>&1; then
+        # Real whois would be: whois "$ip" | grep -Ei '^(origin|origin-?as):' | ...
+        # In test mode, $BL_DEFEND_ASN_CACHE is pre-populated by the fixture; whois shim is a no-op.
+        asn=$(whois "$ip" 2>/dev/null | grep -iE '^(origin|origin-as):' | awk '{print $2}' | head -n1)   # whois network failure; empty asn → fail-open below
+        if [[ -n "$asn" ]]; then
+            printf '{"asn":"%s","cached_at":"%s"}' "$asn" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$cache_file" 2>/dev/null || true   # cache write best-effort; read-only cache dir non-fatal (fall-through to check)
+        fi
+    fi
+    [[ -z "$asn" ]] && return "$BL_EX_OK"   # unknown ASN = allow (fail-open for unavailability)
+
+    local cdn_asns="$_BL_DEFEND_CDN_ASNS ${BL_DEFEND_EXTRA_CDN_ASNS:-}"
+    local a
+    for a in $cdn_asns; do
+        if [[ "$asn" == "$a" ]]; then
+            bl_error_envelope defend "$ip belongs to CDN $asn; refused to block"
+            return "$BL_EX_TIER_GATE_DENIED"
+        fi
+    done
+    return "$BL_EX_OK"
+}
+
+_bl_defend_firewall_apply() {
+    # $1=backend $2=ip $3=case-id $4=reason
+    local backend="$1" ip="$2" case_id="$3" reason="$4"
+    local tag="bl-${case_id}:${reason}"
+    case "$backend" in
+        apf)       apf -d "$ip" -c "$tag" ;;
+        csf)       csf -d "$ip" "$tag" ;;
+        nft)       nft add rule inet filter input ip saddr "$ip" drop comment "\"$tag\"" ;;
+        iptables)  iptables -I INPUT -s "$ip" -j DROP -m comment --comment "$tag" ;;
+        *)         bl_error_envelope defend "unsupported backend: $backend"; return "$BL_EX_USAGE" ;;
+    esac
+}
 
 bl_defend_firewall() {
-    bl_error_envelope defend "firewall sub-verb not yet implemented (M6 P3)"
-    return "$BL_EX_USAGE"
+    # bl_defend_firewall <ip> [--backend auto|apf|csf|nft|iptables]
+    #                        [--case <id>] [--reason <str>] [--retire <duration>]
+    local ip="" backend="auto" case_override="" reason="agent-payload" retire="30d"
+    while (( $# > 0 )); do
+        case "$1" in
+            --backend)  backend="$2"; shift 2 ;;
+            --case)     case_override="$2"; shift 2 ;;
+            --reason)   reason="$2"; shift 2 ;;
+            --retire)   retire="$2"; shift 2 ;;
+            -*)         bl_error_envelope defend "unknown flag: $1"; return "$BL_EX_USAGE" ;;
+            *)          ip="$1"; shift ;;
+        esac
+    done
+    [[ -z "$ip" ]] && { bl_error_envelope defend "missing <ip>"; return "$BL_EX_USAGE"; }
+
+    local case_id="$case_override"
+    [[ -z "$case_id" ]] && case_id=$(bl_case_current)
+    [[ -z "$case_id" ]] && case_id="CASE-0000-0000"
+
+    bl_init_workdir || return $?
+
+    if [[ "$backend" == "auto" ]]; then
+        backend=$(_bl_defend_firewall_detect_backend) || return $?
+    fi
+
+    # CDN safe-list check BEFORE apply: refusal is not an "applied action",
+    # so it does NOT write to ledger as defend_applied. It writes defend_refused.
+    local safelist_rc=0
+    _bl_defend_firewall_cdn_safelist_check "$ip" || safelist_rc=$?
+    if (( safelist_rc != 0 )); then
+        # shellcheck disable=SC2016  # $i is a jq --arg variable name, not a shell variable
+        _bl_defend_ledger_emit "$case_id" "defend_refused" \
+            '{verb:"defend.firewall", ip:$i, reason:"cdn_safelist"}' \
+            --arg i "$ip"
+        return "$BL_EX_TIER_GATE_DENIED"
+    fi
+
+    if ! _bl_defend_firewall_apply "$backend" "$ip" "$case_id" "$reason"; then
+        # shellcheck disable=SC2016  # $i,$b are jq --arg variable names, not shell variables
+        _bl_defend_ledger_emit "$case_id" "defend_rollback" \
+            '{verb:"defend.firewall", ip:$i, backend:$b, reason:"backend_apply_fail"}' \
+            --arg i "$ip" --arg b "$backend"
+        bl_error_envelope defend "$backend apply failed for $ip"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+
+    # shellcheck disable=SC2016  # $i,$b,$r,$re are jq --arg variable names, not shell variables
+    _bl_defend_ledger_emit "$case_id" "defend_applied" \
+        '{verb:"defend.firewall", ip:$i, backend:$b, result:"ok", retire_hint:$r, reason:$re}' \
+        --arg i "$ip" --arg b "$backend" --arg r "$retire" --arg re "$reason"
+
+    printf 'bl-defend-firewall: blocked %s via %s (retire: %s)\n' "$ip" "$backend" "$retire" >&2
+    return "$BL_EX_OK"
 }
 
 # ---- sig (M6 P4 target) ---------------------------------------------------
