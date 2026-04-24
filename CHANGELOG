@@ -3,6 +3,13 @@ Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
 
+- M9 P1 | Apr 24 2026 — fence primitive + hardening test scaffold:
+[New] src/bl.d/26-fence.sh — fence primitive (M9 P1): bl_fence_derive/wrap/unwrap/kind;
+      token-bound close tag per DESIGN.md §13.2.
+[New] tests/09-hardening.bats — M9 test scaffold (28 @tests, 8 G1 live, 20 skip-gated
+      pending handlers; Phase 7 appends a 29th).
+[Change] src/bl.d/00-header.sh — added FD registry comment block (200/201/202).
+
 - M5.5 | Apr 24 2026 — src/bl.d/ component extraction:
 [New] src/bl.d/ — decompose bl (3048 LOC) into 14 numbered NN-*.sh parts
       assembled at build time by make bl; drift guard via make bl-check.

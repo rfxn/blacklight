@@ -63,6 +63,14 @@ readonly BL_AGENT_ID_FILE="$BL_STATE_DIR/agent-id"
 readonly BL_CASE_CURRENT_FILE="$BL_STATE_DIR/case.current"
 
 # ----------------------------------------------------------------------------
+# Named FDs (in-process serialization — flock targets):
+#   200 = /var/lib/bl/ledger/<case>.jsonl  (25-ledger.sh bl_ledger_append)
+#   201 = /var/lib/bl/state/case-id-counter (50-consult.sh bl_consult_allocate_case_id)
+#   202 = /var/lib/bl/outbox/.counter      (27-outbox.sh bl_outbox_enqueue)
+# New FD users must allocate >=203 and update this registry.
+# ----------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
 # Logging helpers — stderr, per-level, $BL_LOG_LEVEL-filtered
 # Order: debug < info < warn < error. Default: info.
 # ----------------------------------------------------------------------------
@@ -366,6 +374,94 @@ bl_ledger_append() {
     return "$BL_EX_OK"
 }
 
+
+# --- src/bl.d/26-fence.sh ---
+# ----------------------------------------------------------------------------
+# Fence primitive — DESIGN.md §13.2 prompt-injection hardening.
+# Token derivation: sha256(case_id || payload || nonce)[:16] (64-bit entropy).
+# Wrap envelope: <untrusted fence="TOKEN" kind="KIND" case="CASE">…</untrusted-TOKEN>
+# Closing tag is token-bound — fixed </untrusted> would permit payload escape.
+# ----------------------------------------------------------------------------
+
+readonly BL_FENCE_MAX_REDERIVE=4
+readonly BL_FENCE_TOKEN_LEN=16
+
+bl_fence_derive() {
+    # bl_fence_derive <case-id> <payload> [nonce] — 0/*
+    local case_id="$1" payload="$2" nonce="${3:-}"
+    if [[ -z "$nonce" ]]; then
+        # bash 4.1+ floor: never use $EPOCHREALTIME/$EPOCHSECONDS (bash 5.0+, prohibited)
+        nonce="$(date +%s%N)-$RANDOM$RANDOM"
+    fi
+    printf '%s%s%s' "$case_id" "$payload" "$nonce" | sha256sum | cut -c1-"$BL_FENCE_TOKEN_LEN"
+}
+
+bl_fence_wrap() {
+    # bl_fence_wrap <case-id> <kind> <payload-file> — 0/71 (collision)
+    local case_id="$1" kind="$2" payload_file="$3"
+    [[ -r "$payload_file" ]] || { bl_error_envelope fence "payload not readable: $payload_file"; return "$BL_EX_PREFLIGHT_FAIL"; }
+    local payload token attempts=0
+    payload=$(command cat "$payload_file")   # preserves bytes incl. trailing newline semantics
+    while (( attempts < BL_FENCE_MAX_REDERIVE )); do
+        token=$(bl_fence_derive "$case_id" "$payload")
+        # Collision scan: token-literal AND close-tag-literal
+        if ! printf '%s' "$payload" | grep -qF "$token" && \
+           ! printf '%s' "$payload" | grep -qF "</untrusted-$token>"; then
+            printf '<untrusted fence="%s" kind="%s" case="%s">%s</untrusted-%s>\n' \
+                "$token" "$kind" "$case_id" "$payload" "$token"
+            return "$BL_EX_OK"
+        fi
+        attempts=$((attempts + 1))
+        bl_debug "bl_fence_wrap: collision attempt $attempts/$BL_FENCE_MAX_REDERIVE (token=$token)"
+    done
+    bl_error_envelope fence "fence-collision after $BL_FENCE_MAX_REDERIVE attempts"
+    # shellcheck disable=SC2154  # BL_EX_CONFLICT defined in 00-header.sh
+    return "$BL_EX_CONFLICT"
+}
+
+bl_fence_unwrap() {
+    # bl_fence_unwrap <envelope> — stdout payload / 0/67
+    # Envelope may be multi-line; sed single-line mode cannot span — use awk.
+    local envelope="$1"
+    # Extract TOKEN from opening tag (first line match is fine — open tag is single-line)
+    local token
+    token=$(printf '%s' "$envelope" | awk 'match($0, /<untrusted fence="[a-f0-9]{16}"/) { s=substr($0,RSTART+18,16); print s; exit }')   # +18: length("<untrusted fence=\"")
+    [[ -z "$token" || ! "$token" =~ ^[a-f0-9]{16}$ ]] && { bl_error_envelope fence "malformed envelope: no fence attr"; return "$BL_EX_SCHEMA_VALIDATION_FAIL"; }
+    # Validate matching close tag </untrusted-TOKEN> appears anywhere in envelope
+    printf '%s' "$envelope" | grep -qF "</untrusted-$token>" || {
+        bl_error_envelope fence "open-fence != close-fence suffix (token=$token)"
+        return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+    }
+    # Extract payload between open tag's closing `>` and close tag's opening `<` — awk multi-line extraction.
+    # Algorithm: strip from start through the first `>` that closes the <untrusted ...> open tag;
+    #            then strip from the start of </untrusted-TOKEN> to end.
+    printf '%s' "$envelope" | awk -v tok="$token" '
+        BEGIN { opened=0 }
+        {
+            if (!opened) {
+                idx = index($0, "<untrusted fence=\"" tok "\"")
+                if (idx > 0) {
+                    gt = index(substr($0, idx), ">")
+                    if (gt > 0) { $0 = substr($0, idx + gt); opened=1 }
+                    else next
+                } else next
+            }
+            close_tag = "</untrusted-" tok ">"
+            ci = index($0, close_tag)
+            if (ci > 0) { printf "%s", substr($0, 1, ci - 1); exit }
+            printf "%s\n", $0
+        }'
+    return "$BL_EX_OK"
+}
+
+bl_fence_kind() {
+    # bl_fence_kind <envelope> — stdout kind / 0/67
+    local envelope="$1" kind
+    kind=$(printf '%s' "$envelope" | sed -n 's/.*<untrusted [^>]*kind="\([^"]*\)".*/\1/p' | head -n1)
+    [[ -z "$kind" ]] && { bl_error_envelope fence "malformed envelope: no kind attr"; return "$BL_EX_SCHEMA_VALIDATION_FAIL"; }
+    printf '%s' "$kind"
+    return "$BL_EX_OK"
+}
 
 # --- src/bl.d/30-preflight.sh ---
 bl_preflight() {

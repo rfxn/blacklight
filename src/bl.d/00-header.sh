@@ -58,6 +58,14 @@ readonly BL_AGENT_ID_FILE="$BL_STATE_DIR/agent-id"
 readonly BL_CASE_CURRENT_FILE="$BL_STATE_DIR/case.current"
 
 # ----------------------------------------------------------------------------
+# Named FDs (in-process serialization — flock targets):
+#   200 = /var/lib/bl/ledger/<case>.jsonl  (25-ledger.sh bl_ledger_append)
+#   201 = /var/lib/bl/state/case-id-counter (50-consult.sh bl_consult_allocate_case_id)
+#   202 = /var/lib/bl/outbox/.counter      (27-outbox.sh bl_outbox_enqueue)
+# New FD users must allocate >=203 and update this registry.
+# ----------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
 # Logging helpers — stderr, per-level, $BL_LOG_LEVEL-filtered
 # Order: debug < info < warn < error. Default: info.
 # ----------------------------------------------------------------------------
