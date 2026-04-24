@@ -265,7 +265,7 @@ Any test delta = refactor introduced a bug; bisect the drift by comparing pre/po
 **Merge gate before Wave 3:** Wave 3 (M6+M7+M8) cannot dispatch until M5.5 merges. Wave 3 engineer briefs explicitly name the target part file (`src/bl.d/82-defend.sh` for M6, etc.); briefs also mandate `git commit -- src/bl.d/<part> bl Makefile` to keep commit attribution scoped (lesson from `57a699e` Wave 1 violation).
 
 **Ends when:**
-- `src/bl.d/` populated with 13 numbered part files (plus three stubs updated later by M6/M7/M8).
+- `src/bl.d/` populated with 14 numbered part files (three of which — `bl_defend`/`bl_clean`/`bl_setup` inside `80-stubs.sh` — are temporary stubs replaced by M6/M7/M8 via dedicated `82-defend.sh`/`83-clean.sh`/`84-setup.sh` files).
 - `bl` regenerates byte-exact from `make bl`; committed.
 - `make bl-check` + `make bl-lint` green.
 - Existing `tests/00–05-*.bats` green on debian12 + rocky9 without change.
