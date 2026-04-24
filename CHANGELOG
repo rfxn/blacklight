@@ -3,6 +3,18 @@ Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
 
+- M9 P2 | Apr 24 2026 — ledger schema + validated append:
+[New] schemas/ledger-event.json — canonical JSONL record per DESIGN.md §13.3;
+      18 kinds enum (plan §Phase-2 specified 14; enum extended to cover live
+      call sites — case_attached from 50-consult.sh, clean_apply/clean_undo/
+      clean_unquarantine from 83-clean.sh; length >= 14 accept criterion holds).
+[Change] src/bl.d/25-ledger.sh — bl_ledger_append now schema-validates via
+      bl_jq_schema_check; direct-printf schema_reject bypass (no recursion;
+      plan §4.5 rule 3).
+[New] tests/fixtures/ledger-event-{valid,invalid-kind}.json — ledger schema fixtures.
+[Change] tests/09-hardening.bats — G3 schema-rejection @test unskipped; pattern
+      matches G1 (`|| true` suppresses set -e from sourced bl main return).
+
 - M9 P1 | Apr 24 2026 — fence primitive + hardening test scaffold:
 [New] src/bl.d/26-fence.sh — fence primitive (M9 P1): bl_fence_derive/wrap/unwrap/kind;
       token-bound close tag per DESIGN.md §13.2.

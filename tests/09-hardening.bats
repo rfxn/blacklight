@@ -112,7 +112,13 @@ _source_bl() { source "$BL_SOURCE" >/dev/null 2>&1 || true; }
 # ─── G3: Ledger schema (Phase 2) ────────────────────────────────────────────
 
 @test "bl_ledger_append rejects non-schema-conformant record with exit 67" {
-    skip "handler not landed until Phase 2"
+    local invalid_record='{"ts":"2026-04-24T20:00:00Z","case":"CASE-2026-0001","kind":"made-up-kind","payload":{}}'
+    # `|| true` matches G1 pattern — bl's `set -euo pipefail` makes main's return 64 (no-args) terminate
+    # the bash -c shell via set -e unless suppressed; bl_ledger_append would never run otherwise.
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_ledger_append CASE-2026-0001 '$invalid_record'"
+    [ "$status" -eq 67 ]
+    # schema_reject notice must have been written (direct printf bypass)
+    grep -q 'schema_reject' "$BL_VAR_DIR/ledger/CASE-2026-0001.jsonl"
 }
 
 @test "bl_ledger_append calls mirror_remote on success" {

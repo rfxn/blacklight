@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfxn.github.io/blacklight/schemas/ledger-event.json",
+  "title": "blacklight ledger JSONL event",
+  "description": "Canonical append-only record for /var/lib/bl/ledger/<case>.jsonl. Dual-write mirror key uses <event-id>=sha256(ts||case||kind)[:16]; same-second same-kind events may upsert-collide remotely (local ledger retains both).",
+  "type": "object",
+  "required": ["ts", "case", "kind"],
+  "properties": {
+    "ts": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "case": {"type": "string", "pattern": "^(CASE-[0-9]{4}-[0-9]{4}|global)$"},
+    "kind": {"type": "string", "enum": [
+      "case_opened", "case_attached", "case_closed", "case_reopened",
+      "schema_reject", "unknown_tier_deny", "preflight_fail",
+      "operator_decline", "step_run",
+      "clean_apply", "clean_undo", "clean_unquarantine",
+      "outbox_drain", "outbox_retry", "outbox_quarantine",
+      "backpressure_reject", "fence_collision_deny",
+      "result_schema_reject"
+    ]},
+    "step_id": {"type": "string"},
+    "verb": {"type": "string"},
+    "tier": {"type": "string", "enum": ["read-only","auto","suggested","destructive","unknown"]},
+    "rc": {"type": "integer"},
+    "payload": {"type": "object"}
+  }
+}
