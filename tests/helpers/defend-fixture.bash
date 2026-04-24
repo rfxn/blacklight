@@ -19,7 +19,11 @@ bl_defend_fixture_init() {
 }
 
 bl_defend_fixture_mock_apachectl() {
-    # $1 = pass|fail — controls apachectl -t exit code
+    # $1 = pass|fail — controls apachectl -t exit code.
+    # Installs both apachectl and apache2ctl shims so that
+    # _bl_defend_modsec_binary() always resolves to our mock regardless of
+    # which binary the system provides (Debian installs apache2ctl; RHEL
+    # installs apachectl).
     local mode="$1"
     cat > "$BL_DEFEND_SCANNER_BIN/apachectl" <<EOF
 #!/bin/bash
@@ -29,8 +33,10 @@ case "\$1" in
     *)              exit 0 ;;
 esac
 EOF
-    chmod +x "$BL_DEFEND_SCANNER_BIN/apachectl"
-    # PATH-inject BEFORE system paths
+    # Symlink apache2ctl -> apachectl so both names resolve to the same mock
+    cp "$BL_DEFEND_SCANNER_BIN/apachectl" "$BL_DEFEND_SCANNER_BIN/apache2ctl"
+    chmod +x "$BL_DEFEND_SCANNER_BIN/apachectl" "$BL_DEFEND_SCANNER_BIN/apache2ctl"
+    # PATH-inject BEFORE system paths so our mocks shadow system binaries
     export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
 }
 

@@ -9,4 +9,5 @@
 
 
 # ---- bl_defend (M6 target: src/bl.d/82-defend.sh) --------------------------
+# shellcheck disable=SC2317  # stub overridden by 82-defend.sh in assembled bl; unreachable-in-shellcheck is expected
 bl_defend()  { bl_error_envelope defend  "not yet implemented (M6)"; return "$BL_EX_USAGE"; }

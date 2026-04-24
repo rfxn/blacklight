@@ -62,20 +62,20 @@ teardown() {
     [[ "$output" == *"ANTHROPIC_API_KEY not set"* ]]
 }
 
-@test "bl observe is a real router; defend stub returns exit 64 with not-yet-implemented; clean is real router" {
+@test "bl observe + defend + clean are all real routers (post-M6+M7)" {
     # Pre-seed agent-id so preflight passes for non-setup verbs
     mkdir -p "$BL_VAR_DIR/state"
     printf '%s' "agent_test_stub" > "$BL_VAR_DIR/state/agent-id"
     export ANTHROPIC_API_KEY="sk-ant-test"
-    # M4 landed: 'observe' is a real router (exits 64 with "missing sub-verb" not "not yet implemented")
+    # M4 landed: 'observe' is a real router (exits 64 with "missing sub-verb")
     run "$BL_SOURCE" observe
     [ "$status" -eq 64 ] || { echo "FAIL: observe returned $status"; return 1; }
     [[ "$output" == *"missing sub-verb"* ]] || { echo "FAIL: observe missing sub-verb msg"; return 1; }
-    # M6 defend stub: still not-yet-implemented
+    # M6 landed: 'defend' is a real router (exits 64 with "no sub-verb")
     run "$BL_SOURCE" defend
     [ "$status" -eq 64 ] || { echo "FAIL: defend returned $status"; return 1; }
-    [[ "$output" == *"not yet implemented"* ]] || { echo "FAIL: defend missing stub msg"; return 1; }
-    # M7 clean: real router landed — exits 64 with "missing subcommand" (not stub message)
+    [[ "$output" == *"no sub-verb"* ]] || { echo "FAIL: defend missing no-sub-verb msg (got: $output)"; return 1; }
+    # M7 landed: 'clean' is a real router (exits 64 with "missing subcommand")
     run "$BL_SOURCE" clean
     [ "$status" -eq 64 ] || { echo "FAIL: clean returned $status"; return 1; }
     [[ "$output" == *"missing subcommand"* ]] || { echo "FAIL: clean missing subcommand msg"; return 1; }
