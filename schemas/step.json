@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfxn.github.io/blacklight/schemas/step.json",
+  "title": "blacklight step envelope",
+  "type": "object",
+  "required": ["step_id", "verb", "action_tier", "reasoning", "args", "diff", "patch"],
+  "properties": {
+    "step_id": {
+      "type": "string"
+    },
+    "verb": {
+      "type": "string",
+      "enum": [
+        "observe.file",
+        "observe.log_apache",
+        "observe.log_modsec",
+        "observe.log_journal",
+        "observe.cron",
+        "observe.proc",
+        "observe.htaccess",
+        "observe.fs_mtime_cluster",
+        "observe.fs_mtime_since",
+        "observe.firewall",
+        "observe.sigs",
+        "defend.modsec",
+        "defend.modsec_remove",
+        "defend.firewall",
+        "defend.sig",
+        "clean.htaccess",
+        "clean.cron",
+        "clean.proc",
+        "clean.file",
+        "case.close",
+        "case.reopen"
+      ]
+    },
+    "action_tier": {
+      "type": "string",
+      "enum": ["read-only", "auto", "suggested", "destructive", "unknown"]
+    },
+    "reasoning": {
+      "type": "string"
+    },
+    "args": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "value"],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "diff": {
+      "type": ["string", "null"]
+    },
+    "patch": {
+      "type": ["string", "null"]
+    }
+  }
+}

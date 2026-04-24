@@ -462,12 +462,7 @@ EOF
 
 `bl setup` performs these operations idempotently. Each step checks for existing state before creating.
 
-1. **Create agent** `bl-curator` via `POST /v1/agents` with:
-   - `model: "claude-opus-4-7"`
-   - `system`: loaded from `prompts/curator-agent.md`
-   - `tools: [{"type": "agent_toolset_20260401"}]` — the Managed Agents built-in toolset bundle (includes `bash`, file-edit, `read`, `write`, `glob`, `grep`)
-   - `output_config.format = {type: "json_schema", schema: <step-emit schema>}` — structured output for step emissions
-   - `thinking: {type: "adaptive", display: "summarized"}`
+1. **Create agent** `bl-curator` via `POST /v1/agents`. Full shape in §12.1. Summary: model `claude-opus-4-7`, system prompt from `prompts/curator-agent.md`, tools array = `agent_toolset_20260401` plus three custom tools (`report_step`, `synthesize_defense`, `reconstruct_intent`) with input_schemas loaded from `schemas/*.json` (top-level `$schema`/`$id`/`title` stripped). No `output_config` and no `thinking` fields — both rejected by the managed-agents-2026-04-01 create endpoint (HTTP 400, verified 2026-04-24); neither applies to the Managed Agents surface.
 2. **Create environment** `bl-curator-env`:
    - `type: cloud`
    - `packages.apt: [apache2, libapache2-mod-security2, modsecurity-crs, yara, jq, zstd, duckdb]`
@@ -671,40 +666,108 @@ Every `bl clean` subcommand supports `--dry-run`. Dry-run shows the full diff an
 
 ## 12. Model calls
 
-Three distinct model calls, all Opus 4.7. Defined precisely so the implementation doesn't drift.
+**One model, one agent, three tool-channelled reasoning modes.** v2 runs a single `bl-curator` agent record — Opus 4.7, 1M context, adaptive thinking model-internal — with three custom tools that specialise its emit surface: `report_step` (wrapper actions), `synthesize_defense` (rule/firewall/sig authoring), `reconstruct_intent` (shell-sample analysis). "Synthesizer" and "Intent reconstructor" are NOT separate agents or separate model calls in v2; they are structured-emit modes of the same curator session. This collapse is deliberate — PIVOT-v2.md §4.2 explicitly cuts multi-session hunter dispatch in favor of a single 1M-context curator.
 
-### 12.1 Curator (the session)
+**Agent-create constraint (verified 2026-04-24 against `managed-agents-2026-04-01`):** `POST /v1/agents` rejects `thinking` and `output_config` as extra inputs (HTTP 400 `invalid_request_error`). The only create-time shape-controls on Managed Agents today are `name`, `model`, `system`, `tools`, `mcp_servers`, `skills`, `callable_agents`, `description`, `metadata`. Thinking is model-internal and not operator-configurable; structured output ships through custom tools.
+
+**Custom-tool `input_schema` subset (verified same probe):** `additionalProperties` and per-field `description` keywords are rejected inside `input_schema`. Accepted keywords for the blacklight schemas: `type`, `properties`, `required`, `enum`, `items`, type-array unions like `["string", "null"]`. The wire-format files in `schemas/*.json` are minimal-subset; per-field documentation lives in companion `schemas/*.md` files. `bl setup` strips top-level metadata (`$schema`, `$id`, `title`) before submit.
+
+### 12.1 Curator — agent-create shape
 
 - Model: `claude-opus-4-7`
 - Context: 1M
-- Thinking: `{type: "adaptive", display: "summarized"}`
-- Structured output: `output_config.format = {type: "json_schema", schema: <step-emit schema>}` — used when emitting to `bl-case/pending/*.json`
-- Tools: `[{"type": "agent_toolset_20260401"}]` — Managed Agents built-in bundle (bash, file-edit, read, write, glob, grep)
-- Memory stores: `bl-skills` (read-only) + `bl-case` (read-write), attached at session creation
-- Lifetime: one session per case; resumable across 30-day checkpoint window; files can hot-swap via `/v1/sessions/:sid/resources`
+- System prompt: `prompts/curator-agent.md` (curator voice + IR playbook anchors + untrusted-content fence taxonomy from §13.2)
+- Tools: `agent_toolset_20260401` built-in bundle + three custom tools:
+  ```json
+  [
+    {"type": "agent_toolset_20260401"},
+    {"type": "custom", "name": "report_step",         "description": "<§12.1.1>", "input_schema": "<schemas/step.json stripped of $schema/$id/title>"},
+    {"type": "custom", "name": "synthesize_defense",  "description": "<§12.2>",   "input_schema": "<schemas/defense.json>"},
+    {"type": "custom", "name": "reconstruct_intent",  "description": "<§12.3>",   "input_schema": "<schemas/intent.json>"}
+  ]
+  ```
+- Memory stores: `bl-skills` (read-only) + `bl-case` (read-write), attached at session creation as `resources[]`.
+- Lifetime: one session per case; resumable across 30-day checkpoint window; files hot-swap via `/v1/sessions/:sid/resources`.
+- Thinking behavior: Opus 4.7 applies adaptive thinking internally. The `agent.thinking` event stream surfaces thinking content at runtime; blacklight does not control depth or effort — those are model-internal on 4.7.
 
-### 12.2 Synthesizer (defense authoring call)
+`schemas/defense.json` and `schemas/intent.json` are stubs as of this commit (authored alongside `report_step`'s wire form when §12.2 / §12.3 land in the build stream).
 
-Invoked by the curator via `sessions.events.send` with a synthesize-this-defense prompt, scoped to specific case memory files. Produces `{rules: [...], firewall: [...], sigs: [...]}` schema-valid JSON.
+### 12.1.1 `report_step` custom tool (step-emit surface)
 
-- Model: `claude-opus-4-7`
-- Thinking: on when rule authoring requires correlation across multiple evidence items; off for trivial emissions
-- Output: json_schema-valid
-- Reason for structured over tool_choice: Opus 4.7 rejects forced `tool_choice` when thinking is on (HTTP 400, verified 2026-04-22)
-- `budget_tokens` is **not** used (retired on Opus 4.7); depth controlled by `output_config.effort`
+The curator emits each proposed wrapper action as one `agent.custom_tool_use` event invoking `report_step`. Tool shape:
 
-### 12.3 Intent reconstructor (shell analysis)
+```
+name:        report_step
+description: Emit a proposed blacklight wrapper action. One call per step.
+             The wrapper validates the input against schemas/step.json,
+             persists it to bl-case/<case-id>/pending/<step_id>.json, then
+             replies with user.custom_tool_result containing
+             {status: queued|rejected, step_id, reason?}. Do not batch multiple
+             actions into one call — every step needs its own invocation so
+             operator gates can apply per-step. Do not repeat step_id values
+             within a case; the wrapper's allocator hands them out via
+             bl-case/<case-id>/STEP_COUNTER — request a fresh id before emit.
+input_schema: contents of schemas/step.json (wire form, post-strip)
+```
 
-Invoked on a specific shell-sample file (polyglot, binary, obfuscated PHP). Runs with extended thinking to peel obfuscation layers and map observed vs dormant capabilities.
+Flow:
 
-- Model: `claude-opus-4-7`
-- Thinking: adaptive + deep effort
-- Input: file mounted via `sessions.resources.add`
-- Output: attribution artifact → `bl-case/<case>/attribution.md`
+1. Curator invokes `report_step` with the step envelope as `input`.
+2. Platform validates `input` against `input_schema`, emits `agent.custom_tool_use` with `custom_tool_use_id`; session status → `idle` + `stop_reason: requires_action`.
+3. Wrapper consumes the event stream (or polls `bl-case/<case-id>/pending/` for the filesystem-materialised copy). For each emit:
+   - Re-validate against `schemas/step.json` as defense-in-depth — the platform subset cannot enforce `additionalProperties: false`, so the wrapper jq-checks unknown keys and verb-specific arg-key conformance (see `schemas/step.md`).
+   - On pass: write `bl-case/<case-id>/pending/<step_id>.json`; reply with `user.custom_tool_result` carrying `{status: "queued", step_id}`.
+   - On fail: reply with `{status: "rejected", step_id, reason: "<validation error>"}` so the curator revises and re-emits. No partial writes, no silent drops.
+4. Session returns to `running`. Curator may emit additional `report_step` calls or move to `end_turn`.
+5. Operator runs `bl run <step_id>` (or `bl run --batch`); wrapper executes under the gate defined by `action_tier`; result lands in `bl-case/<case-id>/results/<step_id>.json`; `bl` sends a `user.message` wake event referencing the new result records.
+
+Why a custom tool instead of free-form JSON in a message:
+
+- **Platform-side structural enforcement.** The Managed Agents runtime validates `input` against `input_schema` before emit. The wrapper does not have to parse and discard malformed JSON from natural-language output.
+- **Permission policy slot.** Custom tools carry an optional `permission_policy` for platform-level confirmation gating (unused in v2; reserved for P2 posture arc).
+- **Event-stream correlation.** Every step carries a platform-allocated `custom_tool_use_id` the wrapper cites in its result reply. The audit trail is a platform primitive, not something the wrapper synthesises from filenames.
+- **Managed-Agents-native.** `output_config.format` structured-output lives on `messages.create` (non-Managed-Agents surface). Inside a Managed Agents session, structured emit means tools.
+
+`schemas/step.json` is the single wire-format source of truth: platform-side `input_schema` value and wrapper-side pre-write validation (plus defense-in-depth checks documented in `schemas/step.md`).
+
+### 12.2 `synthesize_defense` custom tool (defense-authoring surface)
+
+The curator invokes `synthesize_defense` when a case has enough correlated evidence to justify authoring a defensive payload (ModSec rule body, firewall entry set, scanner signature). One invocation per defense proposal; the wrapper reads the payload, writes it under `bl-case/<case-id>/actions/pending/<act-id>.yaml`, runs the FP-gate (`apachectl configtest` for ModSec, benign-corpus scan for signatures, CDN safe-list for firewall), and replies with the gate result. Tool shape:
+
+```
+name:         synthesize_defense
+description:  Propose a defensive payload for this case. Payload kind is one
+              of modsec (rule text), firewall (IP+backend+optional ASN-safelist
+              check), sig (LMD/ClamAV/YARA body). The wrapper runs the
+              kind-specific FP-gate inside the curator's sandbox before
+              promoting to bl-case/<case-id>/actions/pending/. Reply with
+              gate_status={pass, fail, deferred} and the action-id to the
+              curator; on fail, reason carries the exact gate output.
+input_schema: schemas/defense.json
+```
+
+Thinking during synthesis is model-internal. The curator's sandbox runs `apachectl -t` on synthesized ModSec rules and FP-scans sigs against `/var/lib/bl/fp-corpus/` before the action is promoted — the validation is sandbox-side, not operator-side. (Schema stub; authored in the §12.2 build stream.)
+
+### 12.3 `reconstruct_intent` custom tool (sample-analysis surface)
+
+The curator invokes `reconstruct_intent` when it wants a focused pass on a specific shell sample mounted via `sessions.resources.add` — polyglot, binary, obfuscated PHP. The tool input names the mounted file_id and the analysis depth (`shallow` / `deep`); the wrapper receives the tool call, reads the attribution artifact the curator wrote to `bl-case/<case>/attribution.md`, and replies with `{status: queued, attribution_id}`. Tool shape:
+
+```
+name:         reconstruct_intent
+description:  Walk the obfuscation layers of a mounted shell sample and
+              separate observed capability from dormant capability. Writes
+              a structured attribution artifact to
+              bl-case/<case>/attribution.md keyed by sample file_id.
+              Depth=shallow for routine polyglot (chr-ladder + base64 +
+              gzinflate shapes); depth=deep for novel obfuscation.
+input_schema: schemas/intent.json
+```
+
+The curator is responsible for attaching the sample via `sessions.resources.add` before invoking the tool. Intent reconstruction runs inside the curator's own reasoning — no separate session, no separate model call. (Schema stub; authored in the §12.3 build stream.)
 
 ### 12.4 When Sonnet 4.6 is used (rare in v2)
 
-Hunter parallelism is available but not load-bearing in v2 — the 1M-context curator does single-session correlation directly. If a future case has a correlation scope exceeding the curator's turn budget (thousands of records), spawn Sonnet 4.6 hunters via direct `messages.create` with forced `tool_choice` and thinking off. v2 does not exercise this path by default.
+Hunter parallelism is not load-bearing in v2 — the 1M-context curator does single-session correlation directly. If a future case has a correlation scope exceeding the curator's turn budget (thousands of records), the P3 roadmap spawns Sonnet 4.6 hunters via direct `messages.create` calls OUTSIDE the Managed Agents surface (no session, no memory stores). `messages.create` is where `output_config.format` and forced `tool_choice` live — they apply to that call, not to the curator's agent-create shape. v2 does not exercise this path by default.
 
 ---
 
