@@ -123,15 +123,7 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl run validates schema, evaluates tier, dispatches verb (handler not yet landed exits 64)" {
-    bl_case_fixture_seed CASE-2026-0001
-    # URL uses %2F encoding; pattern matches encoded form
-    # Default catch-all first; specific step URL override takes priority (matched first)
-    bl_curator_mock_set_response 'files-api-upload.json' 200
-    bl_curator_mock_add_route 'pending%2Fs-0001' 'memstore-step-read-only.json' 200
-    run "$BL_SOURCE" run s-0001
-    # observe.log_apache handler not yet landed → exit 64 per R8
-    [ "$status" -eq 64 ]
-    [[ "$output" == *"handler not yet landed"* ]]
+    skip "R8 pre-merge contract — post-M4-merge observe.log_apache IS a real handler. Re-target to an M6/M7 stubbed verb (defend.firewall, clean.htaccess) when those motions are in-flight, or retire the test once all verbs are landed."
 }
 
 @test "bl run on malformed step exits 67 without execution" {
