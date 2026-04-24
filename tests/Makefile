@@ -8,3 +8,13 @@ BATSMAN_RUN_TESTS := ./run-tests.sh
 PARALLEL_JOBS     := 3
 
 include infra/include/Makefile.tests
+
+# M5.5: drift-guard prerequisite. `make bl-check` (root Makefile) fails if
+# src/bl.d/*.sh parts drifted from committed bl. Runs BEFORE batsman's
+# container build so drift is caught fast. Post-include so this augments
+# (not replaces) the include's test / test-rocky9 / test-all targets.
+test test-rocky9 test-all: _bl-drift-check
+
+.PHONY: _bl-drift-check
+_bl-drift-check:
+	@$(MAKE) --no-print-directory -C .. bl-check

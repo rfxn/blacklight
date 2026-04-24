@@ -1,4 +1,9 @@
 #!/bin/bash
+# GENERATED FILE — edit src/bl.d/NN-*.sh and run "make bl"
+# Source of truth: src/bl.d/ — see CLAUDE.md "bl source layout" rule.
+# Do not edit bl directly; make bl-check will fail in CI.
+
+# --- src/bl.d/00-header.sh ---
 # shellcheck disable=SC2094  # M4: loop read-file and cleanup-rm-file appear in same pipeline scope but reference different files; false positive
 #
 # bl — blacklight operator CLI
@@ -62,6 +67,8 @@ readonly BL_CASE_CURRENT_FILE="$BL_STATE_DIR/case.current"
 # Order: debug < info < warn < error. Default: info.
 # ----------------------------------------------------------------------------
 
+
+# --- src/bl.d/10-log.sh ---
 _bl_log_level_allows() {
     # $1 = message level (debug|info|warn|error)
     local msg_level="$1"
@@ -90,6 +97,8 @@ bl_error_envelope() {
     return "$BL_EX_OK"
 }
 
+
+# --- src/bl.d/15-workdir.sh ---
 # ----------------------------------------------------------------------------
 # Workdir helpers — $BL_VAR_DIR lazy init and case-current reader
 # bl_init_workdir is consumed by M4-M8 handlers, NOT by bl_preflight.
@@ -122,6 +131,8 @@ bl_case_current() {
     fi
     return "$BL_EX_OK"
 }
+
+# --- src/bl.d/20-api.sh ---
 
 # ----------------------------------------------------------------------------
 # API helpers — HTTPS wrappers for Anthropic Managed Agents endpoints.
@@ -265,41 +276,6 @@ bl_jq_schema_check() {
     return "$BL_EX_OK"
 }
 
-bl_ledger_append() {
-    # bl_ledger_append <case-id> <jsonl-record> — 0/65; flock-serialized
-    local case_id="$1"
-    local record="$2"
-    local ledger_file="$BL_VAR_DIR/ledger/$case_id.jsonl"
-    local ledger_dir="$BL_VAR_DIR/ledger"
-    if ! command mkdir -p "$ledger_dir" 2>/dev/null; then   # RO fs / perms
-        bl_error_envelope ledger "$ledger_dir not writable"
-        return "$BL_EX_PREFLIGHT_FAIL"
-    fi
-    if ! command touch "$ledger_file" 2>/dev/null; then   # RO fs / perms
-        bl_error_envelope ledger "$ledger_file not writable"
-        return "$BL_EX_PREFLIGHT_FAIL"
-    fi
-    # Compact to single-line JSON for JSONL format (grep/jq consumers expect one record per line)
-    local compact_record
-    compact_record=$(printf '%s' "$record" | jq -c '.') || {
-        bl_error_envelope ledger "record is not valid JSON"
-        return "$BL_EX_PREFLIGHT_FAIL"
-    }
-    # FD 200 per spec §6.8; open RW for RO-mount-fallback safety
-    exec 200<>"$ledger_file" || {
-        bl_error_envelope ledger "cannot open lockfile $ledger_file"
-        return "$BL_EX_PREFLIGHT_FAIL"
-    }
-    if ! flock -x -w 30 200; then
-        exec 200<&-
-        bl_error_envelope ledger "flock timeout on $ledger_file"
-        return "$BL_EX_CONFLICT"
-    fi
-    printf '%s\n' "$compact_record" >> "$ledger_file"
-    exec 200<&-
-    return "$BL_EX_OK"
-}
-
 bl_files_api_upload() {
     # bl_files_api_upload <mime> <file-path> — prints file_id on stdout; 0/69/70
     local mime="$1"
@@ -354,6 +330,45 @@ bl_files_api_upload() {
 # 5. Else probe GET /v1/agents?name=bl-curator; populated → cache; empty → 66
 # ----------------------------------------------------------------------------
 
+
+# --- src/bl.d/25-ledger.sh ---
+bl_ledger_append() {
+    # bl_ledger_append <case-id> <jsonl-record> — 0/65; flock-serialized
+    local case_id="$1"
+    local record="$2"
+    local ledger_file="$BL_VAR_DIR/ledger/$case_id.jsonl"
+    local ledger_dir="$BL_VAR_DIR/ledger"
+    if ! command mkdir -p "$ledger_dir" 2>/dev/null; then   # RO fs / perms
+        bl_error_envelope ledger "$ledger_dir not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    if ! command touch "$ledger_file" 2>/dev/null; then   # RO fs / perms
+        bl_error_envelope ledger "$ledger_file not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    # Compact to single-line JSON for JSONL format (grep/jq consumers expect one record per line)
+    local compact_record
+    compact_record=$(printf '%s' "$record" | jq -c '.') || {
+        bl_error_envelope ledger "record is not valid JSON"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    # FD 200 per spec §6.8; open RW for RO-mount-fallback safety
+    exec 200<>"$ledger_file" || {
+        bl_error_envelope ledger "cannot open lockfile $ledger_file"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    if ! flock -x -w 30 200; then
+        exec 200<&-
+        bl_error_envelope ledger "flock timeout on $ledger_file"
+        return "$BL_EX_CONFLICT"
+    fi
+    printf '%s\n' "$compact_record" >> "$ledger_file"
+    exec 200<&-
+    return "$BL_EX_OK"
+}
+
+
+# --- src/bl.d/30-preflight.sh ---
 bl_preflight() {
     # 1. API key
     if [[ -z "${ANTHROPIC_API_KEY+set}" ]]; then
@@ -457,62 +472,7 @@ bl_version() {
     printf 'bl %s\n' "$BL_VERSION"
 }
 
-# ----------------------------------------------------------------------------
-# Handler stubs — one per namespace. All return 64 (USAGE).
-# Real implementations land in M4 (observe), M5 (consult/run/case),
-# M6 (defend), M7 (clean), M8 (setup).
-# ----------------------------------------------------------------------------
-
-bl_case() {
-    # bl_case <subcommand> [args] — route to _show/_log/_list/_close/_reopen
-    local sub="${1:-show}"
-    [[ "$sub" != -* && $# -ge 1 ]] && shift
-    case "$sub" in
-        show)    bl_case_show "$@"; return $? ;;
-        log)     bl_case_log "$@"; return $? ;;
-        list)    bl_case_list "$@"; return $? ;;
-        close)   bl_case_close "$@"; return $? ;;
-        reopen)  bl_case_reopen "$@"; return $? ;;
-        -h|--help|help)
-            printf 'Usage: bl case <show|log|list|close|reopen> [args]\n' >&2
-            return "$BL_EX_OK"
-            ;;
-        *)
-            bl_error_envelope case "unknown subcommand: $sub" "(use show / log / list / close / reopen)"
-            return "$BL_EX_USAGE"
-            ;;
-    esac
-}
-bl_clean()   { bl_error_envelope clean   "not yet implemented (M7)"; return "$BL_EX_USAGE"; }
-bl_consult() {
-    # bl_consult <args> — route to _new/_attach/_sweep_mode. Mutually exclusive.
-    local mode="" trigger="" case_id="" cve="" notes="" dedup=""
-    while (( $# > 0 )); do
-        case "$1" in
-            --new)         mode="new"; shift ;;
-            --attach)      mode="attach"; case_id="$2"; shift 2 ;;
-            --sweep-mode)  mode="sweep_mode"; shift ;;
-            --trigger)     trigger="$2"; shift 2 ;;
-            --cve)         cve="$2"; shift 2 ;;
-            --notes)       notes="$2"; shift 2 ;;
-            --dedup)       dedup="yes"; shift ;;
-            *)
-                bl_error_envelope consult "unknown flag: $1" "(use one of --new --attach <id> --sweep-mode)"
-                return "$BL_EX_USAGE"
-                ;;
-        esac
-    done
-    case "$mode" in
-        new)         bl_consult_new "$trigger" "$notes" "$dedup"; return $? ;;
-        attach)      bl_consult_attach "$case_id"; return $? ;;
-        sweep_mode)  bl_consult_sweep_mode "$cve"; return $? ;;
-        "")
-            bl_error_envelope consult "missing mode" "(use one of --new --attach <id> --sweep-mode)"
-            return "$BL_EX_USAGE"
-            ;;
-    esac
-}
-bl_defend()  { bl_error_envelope defend  "not yet implemented (M6)"; return "$BL_EX_USAGE"; }
+# --- src/bl.d/40-observe-helpers.sh ---
 # ============================================================================
 # M4 observe handlers — spec: docs/specs/2026-04-24-M4-bl-observe.md
 # ----------------------------------------------------------------------------
@@ -719,6 +679,8 @@ _bl_obs_close_stream() {
 # ---------------------------------------------------------------------------
 # bl_observe_log_apache — parse combined-format apache/nginx access log
 # ---------------------------------------------------------------------------
+
+# --- src/bl.d/41-observe-collectors.sh ---
 bl_observe_log_apache() {
     unset _BL_OBS_ID _BL_OBS_CLUSTER_N
     local around_path="" window_spec="6h" site=""
@@ -1786,6 +1748,8 @@ bl_observe_sigs() {
 # ---------------------------------------------------------------------------
 # bl_bundle_build — package current case evidence into a .tgz bundle
 # ---------------------------------------------------------------------------
+
+# --- src/bl.d/42-observe-router.sh ---
 bl_bundle_build() {
     local format_arg="auto" since_arg="" out_dir_arg=""
     while [[ $# -gt 0 ]]; do
@@ -2043,29 +2007,36 @@ bl_observe() {
             ;;
     esac
 }
-bl_run() {
-    # bl_run <args> — route to _step (default), _batch (--batch), _list (--list)
-    local mode="step" step_id="" max=16 yes="" dry_run="" unsafe="" explain=""
+
+# --- src/bl.d/50-consult.sh ---
+bl_consult() {
+    # bl_consult <args> — route to _new/_attach/_sweep_mode. Mutually exclusive.
+    local mode="" trigger="" case_id="" cve="" notes="" dedup=""
     while (( $# > 0 )); do
         case "$1" in
-            --batch)    mode="batch"; shift ;;
-            --list)     mode="list"; shift ;;
-            --max)      max="$2"; shift 2 ;;
-            --yes)      yes="yes"; shift ;;
-            --dry-run)  dry_run="yes"; shift ;;
-            --unsafe)   unsafe="yes"; shift ;;
-            --explain)  explain="yes"; shift ;;
-            -*)         bl_error_envelope run "unknown flag: $1"; return "$BL_EX_USAGE" ;;
-            *)          step_id="$1"; shift ;;
+            --new)         mode="new"; shift ;;
+            --attach)      mode="attach"; case_id="$2"; shift 2 ;;
+            --sweep-mode)  mode="sweep_mode"; shift ;;
+            --trigger)     trigger="$2"; shift 2 ;;
+            --cve)         cve="$2"; shift 2 ;;
+            --notes)       notes="$2"; shift 2 ;;
+            --dedup)       dedup="yes"; shift ;;
+            *)
+                bl_error_envelope consult "unknown flag: $1" "(use one of --new --attach <id> --sweep-mode)"
+                return "$BL_EX_USAGE"
+                ;;
         esac
     done
     case "$mode" in
-        step)   bl_run_step "$step_id" "$yes" "$dry_run" "$unsafe" "$explain"; return $? ;;
-        batch)  bl_run_batch "$max"; return $? ;;
-        list)   bl_run_list; return $? ;;
+        new)         bl_consult_new "$trigger" "$notes" "$dedup"; return $? ;;
+        attach)      bl_consult_attach "$case_id"; return $? ;;
+        sweep_mode)  bl_consult_sweep_mode "$cve"; return $? ;;
+        "")
+            bl_error_envelope consult "missing mode" "(use one of --new --attach <id> --sweep-mode)"
+            return "$BL_EX_USAGE"
+            ;;
     esac
 }
-bl_setup()   { bl_error_envelope setup   "not yet implemented (M8)"; return "$BL_EX_USAGE"; }
 
 # ----------------------------------------------------------------------------
 # bl_consult_* — case-lifecycle open/attach/inventory (M5)
@@ -2370,6 +2341,30 @@ bl_consult_sweep_mode() {
 # Tier matrix: docs/action-tiers.md §5 + spec §7.5
 # ----------------------------------------------------------------------------
 
+
+# --- src/bl.d/60-run.sh ---
+bl_run() {
+    # bl_run <args> — route to _step (default), _batch (--batch), _list (--list)
+    local mode="step" step_id="" max=16 yes="" dry_run="" unsafe="" explain=""
+    while (( $# > 0 )); do
+        case "$1" in
+            --batch)    mode="batch"; shift ;;
+            --list)     mode="list"; shift ;;
+            --max)      max="$2"; shift 2 ;;
+            --yes)      yes="yes"; shift ;;
+            --dry-run)  dry_run="yes"; shift ;;
+            --unsafe)   unsafe="yes"; shift ;;
+            --explain)  explain="yes"; shift ;;
+            -*)         bl_error_envelope run "unknown flag: $1"; return "$BL_EX_USAGE" ;;
+            *)          step_id="$1"; shift ;;
+        esac
+    done
+    case "$mode" in
+        step)   bl_run_step "$step_id" "$yes" "$dry_run" "$unsafe" "$explain"; return $? ;;
+        batch)  bl_run_batch "$max"; return $? ;;
+        list)   bl_run_list; return $? ;;
+    esac
+}
 bl_run_step() {
     # bl_run_step <step-id> <yes> <dry-run> <unsafe> <explain> — full 13-step flow
     local step_id="$1"
@@ -2658,6 +2653,28 @@ bl_run_list() {
 # Spec: docs/specs/2026-04-24-M5-consult-run-case.md §5.3 + §5.3.1 flow
 # ----------------------------------------------------------------------------
 
+
+# --- src/bl.d/70-case.sh ---
+bl_case() {
+    # bl_case <subcommand> [args] — route to _show/_log/_list/_close/_reopen
+    local sub="${1:-show}"
+    [[ "$sub" != -* && $# -ge 1 ]] && shift
+    case "$sub" in
+        show)    bl_case_show "$@"; return $? ;;
+        log)     bl_case_log "$@"; return $? ;;
+        list)    bl_case_list "$@"; return $? ;;
+        close)   bl_case_close "$@"; return $? ;;
+        reopen)  bl_case_reopen "$@"; return $? ;;
+        -h|--help|help)
+            printf 'Usage: bl case <show|log|list|close|reopen> [args]\n' >&2
+            return "$BL_EX_OK"
+            ;;
+        *)
+            bl_error_envelope case "unknown subcommand: $sub" "(use show / log / list / close / reopen)"
+            return "$BL_EX_USAGE"
+            ;;
+    esac
+}
 bl_case_show() {
     # bl_case_show [case-id] — 6-section summary; 0/64/69/72
     local case_id="${1:-}"
@@ -3005,6 +3022,28 @@ bl_case_reopen() {
 # else preflight → verb-case → handler.
 # ----------------------------------------------------------------------------
 
+
+# --- src/bl.d/80-stubs.sh ---
+# ----------------------------------------------------------------------------
+# Handler stubs — remaining (bl_defend / bl_clean / bl_setup).
+# Real implementations land in M6 (defend), M7 (clean), M8 (setup).
+# Each stub is replaced in Wave 3 by a dedicated src/bl.d/8N-*.sh file; the
+# stub here is removed in the same commit that adds the handler file.
+# ----------------------------------------------------------------------------
+
+
+# ---- bl_clean (M7 target: src/bl.d/83-clean.sh) ----------------------------
+bl_clean()   { bl_error_envelope clean   "not yet implemented (M7)"; return "$BL_EX_USAGE"; }
+
+
+# ---- bl_defend (M6 target: src/bl.d/82-defend.sh) --------------------------
+bl_defend()  { bl_error_envelope defend  "not yet implemented (M6)"; return "$BL_EX_USAGE"; }
+
+
+# ---- bl_setup (M8 target: src/bl.d/84-setup.sh) ----------------------------
+bl_setup()   { bl_error_envelope setup   "not yet implemented (M8)"; return "$BL_EX_USAGE"; }
+
+# --- src/bl.d/90-main.sh ---
 main() {
     # Pre-case flag sniff: help, version, setup all bypass preflight.
     if (( $# == 0 )); then

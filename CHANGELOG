@@ -3,6 +3,22 @@ Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
 
+- M5.5 | Apr 24 2026 — src/bl.d/ component extraction:
+[New] src/bl.d/ — decompose bl (3048 LOC) into 14 numbered NN-*.sh parts
+      assembled at build time by make bl; drift guard via make bl-check.
+      14 parts: 00-header / 10-log / 15-workdir / 20-api / 25-ledger /
+      30-preflight / 40-observe-helpers (11 helpers) / 41-observe-collectors
+      (11 collectors) / 42-observe-router / 50-consult / 60-run / 70-case /
+      80-stubs (bl_clean/bl_defend/bl_setup) / 90-main.
+[Change] bl — regenerated from src/bl.d/ via make bl; byte-exact to
+         scripts/assemble-bl.sh output. Zero behavior change — all 75
+         functions preserved, shellcheck parity (0 findings) maintained.
+[Change] tests/Makefile — wire _bl-drift-check as prereq of test /
+         test-rocky9 / test-all; drift in src/bl.d/ fails test run
+         before container build. Closes PLAN.md §M5.5 "Ends when".
+[New] Wave 3 unblocked: M6 owns src/bl.d/82-defend.sh, M7 owns
+      83-clean.sh, M8 owns 84-setup.sh — disjoint part-file parallelism.
+
 - M5 | Apr 24 2026 — bl consult / bl run / bl case:
 [New] bl consult/run/case handlers (G1-G15 gates): case-id allocation in
       CASE-YYYY-NNNN format with flock-serialized counter, --attach /
