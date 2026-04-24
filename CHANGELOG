@@ -124,45 +124,31 @@ https://github.com/rfxn/blacklight
 
 - v2 pivot | Apr 24 2026 — skills-first clean-room rewrite:
 
-Rationale. v1 (Apr 21-23) shipped a Python/Flask curator fronting a
-SQLite evidence.db, hunter plugins (fs/log/timeline), and a bl-agent
-pull/apply/report fleet — a scan-side framework wrapped around the
-model. Three days in, the shape was upside-down: hunters duplicated
-reasoning a Managed Agent with well-authored skills already does
-natively, the "live IR" framing didn't match the operator reality
-(post-incident forensics on known-bad hosts that already tripped a
-signature), and the Python surface was eating attention that belonged
-on the case layout and the skills bundle. v2 inverts the stack: a
-bash `bl` CLI for operator motions (consult/run/case/observe/defend/
-clean/setup/doctor), a Managed Agents curator holding case state
-across sim-days, a 9-file per-case layout on disk + memory store,
-safety-tier gates on every action, and a judge-skim-sized skills
-bundle (≥20 files, public-source authoring only).
+Rationale. v1 (Apr 21-23) wrapped Opus 4.7 in a Python/Flask curator
++ SQLite evidence.db + fs/log/timeline hunters + bl-agent fleet.
+Three days in, the shape was upside-down: hunters duplicated
+reasoning a Managed Agent with authored skills does natively, "live
+IR" framing didn't fit the post-incident operator reality (known-bad
+hosts, signature already fired), and the Python surface was eating
+attention owed to case layout and skills. v2 inverts — bash `bl`
+CLI, Managed Agents curator holding case state across sim-days,
+9-file per-case layout, safety-tier gates, ≥20-file public-source
+skills bundle.
 
-Discarded. Python/Flask curator + server; SQLite evidence.db + CRUD;
-fs / log / timeline hunters + prompts; orchestrator with split-on-
-unrelated helper; case_engine Opus 4.7 + revise() + apply_revision();
-bl-agent pull/apply/report + SHA-256 sidecar verify + manifest-parse
-install; bl-ctl operator view; synthesizer + apachectl configtest
-wrapper; demo/time_compression 4-beat sim runner; compose 7-host
-fleet; audit pipeline (P0/P1/P2/M-1..M-4); 6 v1 curator prompts.
+Discarded. Flask curator; SQLite evidence.db; fs/log/timeline
+hunters; orchestrator + case_engine + revise/apply_revision; bl-agent
+pull/apply/report + bl-ctl; synthesizer + apachectl wrapper;
+demo/time_compression sim runner; compose 7-host fleet; audit
+pipeline (P0-P2, M-1..M-4); 6 v1 curator prompts.
 
-Kept or migrated. The Managed Agents curator pattern itself — rebuilt
-in v2 around explicit session wiring, files-API brief rendering (MD +
-HTML + PDF), and persisted case state, not the v1 Flask first-contact
-scaffold. APSB25-94 PolyShell exhibit knowledge — reconstructed from
-the public Adobe advisory into v2 test fixtures; no v1 artifact
-copied forward. Skills-bundle discipline — 20-file floor and public-
-source authoring held across the rewrite; 19 of ~28 v1 skills were
-reconciled into the v2 shape, the rest rewritten or retired.
-batsman submodule at tests/infra/ (v1 used pytest; v2 is BATS-only).
-docs/managed-agents.md beta reference, carried forward as the v2
-working reference.
+Rebuilt forward. Managed Agents curator (v2 adds session wiring,
+Files-API brief rendering, persisted case state). APSB25-94 PolyShell
+knowledge, reconstructed into v2 fixtures from the public Adobe
+advisory — no v1 artifact copied. Skills discipline (20-file floor,
+public-source); 19/~28 v1 skills reconciled, rest rewritten or
+retired. batsman submodule for tests (v1 used pytest).
 
-Archive. v1 source preserved at git tag `legacy-pre-pivot`;
-recoverable via `git checkout legacy-pre-pivot`. legacy/ was dropped
-from main after tag cut to keep the submission tree clean. Per
-project CLAUDE.md §License, no v1 runtime code ships in bl or the v2
-skills bundle — clean-room on runtime; shared rfxn infrastructure
-(batsman for tests, pkg_lib for packaging) is permitted at the
-boundary.
+Archive. v1 preserved at tag `legacy-pre-pivot` (`git checkout
+legacy-pre-pivot`); legacy/ dropped from main after tag cut.
+Clean-room on runtime per project CLAUDE.md §License — shared rfxn
+infra (batsman, pkg_lib) permitted at the boundary only.
