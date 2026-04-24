@@ -444,7 +444,7 @@ _bl_defend_sig_fp_gate() {
             # lacking a trailing newline bypasses the FP-gate entirely
             # (bash `read` returns non-zero on EOF-without-newline, so the
             # while body never executes for a single unterminated line).
-            local line md5 size
+            local md5 size
             while IFS=: read -r md5 size _ || [[ -n "$md5" ]]; do
                 [[ -z "$md5" || "$md5" =~ ^# ]] && continue
                 local f

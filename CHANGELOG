@@ -2,6 +2,35 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+- M6 | Apr 24 2026 — bl defend (modsec / firewall / sig):
+[New] bl defend modsec — apply path: versioned rule file copy, apachectl
+      configtest, atomic symlink swap, graceful reload; rollback on
+      configtest fail; --remove --yes by-id with rule-block strip.
+      Apache binary detection (apache2ctl / apachectl) + conf.d path
+      resolution (Debian /etc/apache2/mods-enabled vs RHEL
+      /etc/httpd/conf.d).
+[New] bl defend firewall — backend auto-detection (APF > CSF > nftables >
+      iptables); hardcoded CDN ASN allowlist (Cloudflare, Fastly, AWS,
+      Akamai x2, FB) + optional $BL_DEFEND_EXTRA_CDN_ASNS; RFC1918/loopback
+      pass-through; whois + 24h ASN cache; case-tagged block comment;
+      --retire flag (default 30d) emitted as ledger retire_hint.
+[New] bl defend sig — scanner detection (LMD/ClamAV/YARA); per-scanner
+      FP-corpus gate against /var/lib/bl/fp-corpus/; append to custom.hdb /
+      custom.ndb / custom.yar; best-effort reload (clamdscan --reload);
+      --scanner all fan-out; defend_sig_rejected ledger entry on gate trip.
+[New] schemas/ledger-entry.json — JSONL record schema consumed by M6+
+      (kinds: defend_applied / defend_rollback / defend_refused /
+      defend_sig_rejected + pre-existing M5 kinds).
+[New] tests/06-defend.bats — 14 fixture-driven scenarios (6 modsec, 4
+      firewall, 4 sig) including FP-gate trip, CDN-safelist refusal,
+      configtest rollback, ledger schema conformance.
+[Change] src/bl.d/80-stubs.sh — file removed (last remaining stub
+         bl_defend replaced by 82-defend.sh; M7 + M8 had previously
+         removed bl_clean and bl_setup stubs).
+[Change] tests/Dockerfile + tests/Dockerfile.rocky9 — apache2 /
+         mod_security2 / iptables / nftables / yara / whois; LMD+ClamAV
+         mock shims at /usr/local/; FP-corpus seeded at /var/lib/bl/.
+[Change] bl — regenerated from src/bl.d/ via make bl.
 
 - M9 P9 | Apr 24 2026 — sentinel fixup (post-impl review cleanup):
 [Fix] src/bl.d/60-run.sh — bl_run_step now preserves /tmp/bl-step-<id>.out
