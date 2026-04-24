@@ -4400,6 +4400,13 @@ bl_setup_local_preflight() {
 
 bl_setup_provision() {
     # Per setup-flow.md §3 happy path, idempotent per §5.
+    # Snapshot state-completeness BEFORE any ensure_* writes id files. Without
+    # this snapshot, first-run ensure_* calls would write all four ids to disk
+    # and a post-ensure check would mis-classify first-run as an idempotent
+    # re-run, diverting full-seed to sync (404 on empty MANIFEST → first-run
+    # hard-fail).
+    local was_complete=""
+    bl_setup_state_is_complete && was_complete="yes"
     # agent_id/env_id/case_id are populated via printf -v indirection inside the
     # ensure_* helpers; shellcheck cannot trace name-ref writes through $_out.
     # shellcheck disable=SC2034  # set indirectly via printf -v "$_out"
@@ -4408,9 +4415,40 @@ bl_setup_provision() {
     bl_setup_ensure_env env_id            || return $?
     bl_setup_ensure_memstore skills_id "bl-skills"  'setup-memstore-create-skills.json' || return $?
     bl_setup_ensure_memstore case_id   "bl-case"    'setup-memstore-create-case.json'   || return $?
+    if [[ "$was_complete" == "yes" ]]; then
+        # All four ids existed on entry → re-run path.
+        bl_info "bl setup: workspace already provisioned — skills sync only"
+        bl_setup_seed_skills_or_sync "$skills_id" || return $?
+        printf '\n'
+        printf 'bl setup: no-op (workspace already provisioned)\n'
+        printf '  agent           %s\n' "$agent_id"
+        printf '  env             %s\n' "$env_id"
+        printf '  memstore-skills %s\n' "$skills_id"
+        printf '  memstore-case   %s\n' "$case_id"
+        bl_setup_print_exports
+        return "$BL_EX_OK"
+    fi
+    # First-run or partial-resume → full seed via POST per skill.
     bl_setup_seed_skills "$skills_id"     || return $?
     bl_setup_print_exports
     return "$BL_EX_OK"
+}
+
+# bl_setup_state_is_complete — 0 if all four id files exist + non-empty.
+bl_setup_state_is_complete() {
+    local f
+    for f in agent-id env-id memstore-skills-id memstore-case-id; do
+        [[ -r "$BL_STATE_DIR/$f" ]] && [[ -s "$BL_STATE_DIR/$f" ]] || return 1
+    done
+    return 0
+}
+
+# bl_setup_seed_skills_or_sync <skills-id> — re-run path: prefer incremental
+# sync over full re-seed; delegates to bl_setup_sync.
+bl_setup_seed_skills_or_sync() {
+    local skills_id="$1"
+    bl_setup_sync ""
+    return $?
 }
 
 # bl_setup_ensure_agent <out-var> — populates out-var with id; returns 0/65/69/70/71.
@@ -4653,19 +4691,91 @@ bl_setup_post_manifest() {
     return $rc
 }
 
-# bl_setup_resolve_source — Phase 4 replaces with cwd / $BL_REPO_URL / clone resolution
-# per DESIGN.md §8.3. Phase 3 returns BL_REPO_ROOT (or readlink-derived dir of $0)
-# so seed_skills / sync work under test.
+# bl_setup_resolve_source — DESIGN.md §8.3 ordering:
+#   0. honor BL_REPO_ROOT override (test infra + dev iteration)
+#   1. cwd has skills/ + prompts/         → use cwd
+#   2. $BL_REPO_URL set                   → shallow clone to $XDG_CACHE_HOME/blacklight/repo
+#   3. default                            → clone https://github.com/rfxn/blacklight to cache
+# Returns repo-root path on stdout; 0 on success, 65/69 on failure.
 bl_setup_resolve_source() {
-    local resolved
-    resolved=$(readlink -f "$0" 2>/dev/null || printf '.')   # readlink -f may fail when $0 is relative / sourced — fallback to cwd
-    local rr="${BL_REPO_ROOT:-$(dirname "$resolved")}"
-    printf '%s' "$rr"
+    if [[ -n "${BL_REPO_ROOT:-}" ]] && [[ -d "$BL_REPO_ROOT/skills" ]] && [[ -f "$BL_REPO_ROOT/prompts/curator-agent.md" ]]; then
+        printf '%s' "$BL_REPO_ROOT"
+        return "$BL_EX_OK"
+    fi
+    if [[ -d "./skills" ]] && [[ -f "./prompts/curator-agent.md" ]]; then
+        printf '%s' "$(pwd)"
+        return "$BL_EX_OK"
+    fi
+    local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/blacklight/repo"
+    if [[ -n "${BL_REPO_URL:-}" ]]; then
+        if [[ ! -d "$cache_dir/.git" ]]; then
+            command mkdir -p "$(dirname "$cache_dir")"
+            if ! git clone --depth 1 "$BL_REPO_URL" "$cache_dir" >/dev/null 2>&1; then   # network may be down — warn and fall through to default GitHub clone
+                bl_warn "bl setup: BL_REPO_URL clone failed; falling through to default GitHub source"
+            fi
+        fi
+        if [[ -d "$cache_dir/skills" ]] && [[ -f "$cache_dir/prompts/curator-agent.md" ]]; then
+            printf '%s' "$cache_dir"
+            return "$BL_EX_OK"
+        fi
+    fi
+    if [[ ! -d "$cache_dir/.git" ]]; then
+        command mkdir -p "$(dirname "$cache_dir")"
+        if ! git clone --depth 1 https://github.com/rfxn/blacklight "$cache_dir" >/dev/null 2>&1; then   # network may be down — operator-facing remediation hint follows
+            bl_error_envelope setup "default GitHub clone failed; check connectivity or set BL_REPO_URL"
+            return "$BL_EX_UPSTREAM_ERROR"
+        fi
+    fi
+    if [[ ! -d "$cache_dir/skills" ]] || [[ ! -f "$cache_dir/prompts/curator-agent.md" ]]; then
+        bl_error_envelope setup "$cache_dir lacks skills/ + prompts/ after clone"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    printf '%s' "$cache_dir"
     return "$BL_EX_OK"
 }
 
-# bl_setup_check — Phase 4 replaces with real implementation.
-bl_setup_check() { bl_error_envelope setup "--check not yet implemented (Phase 4)"; return "$BL_EX_USAGE"; }
+# bl_setup_check — emit per-resource status; exit 0 if all 4 ids cached, else 65.
+bl_setup_check() {
+    local missing=0
+    local rr rr_label rr_canon pwd_canon
+    rr=$(bl_setup_resolve_source 2>/dev/null) || rr="<unresolved>"   # check is operator-facing; never block on resolution
+    # Label the discovery mechanism for operator clarity. Canonicalize both sides
+    # so BL_REPO_ROOT="tests/.." resolves to the same path as pwd after cd.
+    if [[ "$rr" == "<unresolved>" ]]; then
+        rr_label="$rr"
+    else
+        rr_canon=$( cd "$rr" 2>/dev/null && pwd )   # cd may fail on bad path — fallback to raw label
+        pwd_canon=$(pwd)
+        if [[ -n "$rr_canon" && "$rr_canon" == "$pwd_canon" ]]; then
+            rr_label="cwd ($rr)"
+        else
+            rr_label="$rr"
+        fi
+    fi
+    printf 'bl setup --check (state=%s, source=%s):\n' "$BL_STATE_DIR" "$rr_label"
+    local slot id_file
+    for slot in agent env memstore-skills memstore-case; do
+        # Map slot label → id-file basename. Dedicated case (no dead pre-assignment).
+        case "$slot" in
+            agent)             id_file="$BL_STATE_DIR/agent-id" ;;
+            env)               id_file="$BL_STATE_DIR/env-id" ;;
+            memstore-skills)   id_file="$BL_STATE_DIR/memstore-skills-id" ;;
+            memstore-case)     id_file="$BL_STATE_DIR/memstore-case-id" ;;
+        esac
+        if [[ -r "$id_file" ]] && [[ -s "$id_file" ]]; then
+            printf '  %s: ok (%s)\n' "$slot" "$(command cat "$id_file")"
+        else
+            printf '  %s: missing\n' "$slot"
+            missing=$((missing + 1))
+        fi
+    done
+    if (( missing > 0 )); then
+        printf '\n%d resource(s) missing — run "bl setup" to provision.\n' "$missing"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    printf '\nall four resources provisioned.\n'
+    return "$BL_EX_OK"
+}
 
 # bl_setup_sync <prune?> — diff local skills sha256 vs remote MANIFEST; POST/PATCH/DELETE
 # only changed paths. --prune required to actually delete (default warn-only). Updates

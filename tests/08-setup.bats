@@ -44,7 +44,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup: pre-seeded state → no-op summary, zero create calls" {
-    skip "blocked on Phase 4"
     mkdir -p "$BL_VAR_DIR/state"
     printf '%s' "agent_M8_TEST"           > "$BL_VAR_DIR/state/agent-id"
     printf '%s' "env_M8_TEST"             > "$BL_VAR_DIR/state/env-id"
@@ -62,7 +61,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup --check: empty state → reports all four resources missing" {
-    skip "blocked on Phase 4"
     run "$BL_SOURCE" setup --check
     [ "$status" -ne 0 ]
     [[ "$output" == *"agent: missing"* ]]
@@ -72,7 +70,6 @@ teardown() {
 }
 
 @test "bl setup --check: agent-only → reports env + memstores missing" {
-    skip "blocked on Phase 4"
     mkdir -p "$BL_VAR_DIR/state"; printf '%s' "agent_M8_TEST" > "$BL_VAR_DIR/state/agent-id"
     run "$BL_SOURCE" setup --check
     [ "$status" -ne 0 ]
@@ -83,7 +80,6 @@ teardown() {
 }
 
 @test "bl setup --check: agent+env → reports memstores missing" {
-    skip "blocked on Phase 4"
     mkdir -p "$BL_VAR_DIR/state"
     printf '%s' "agent_M8_TEST" > "$BL_VAR_DIR/state/agent-id"
     printf '%s' "env_M8_TEST"   > "$BL_VAR_DIR/state/env-id"
@@ -96,7 +92,6 @@ teardown() {
 }
 
 @test "bl setup --check: agent+env+one-memstore → reports remaining memstore missing" {
-    skip "blocked on Phase 4"
     mkdir -p "$BL_VAR_DIR/state"
     printf '%s' "agent_M8_TEST"      > "$BL_VAR_DIR/state/agent-id"
     printf '%s' "env_M8_TEST"        > "$BL_VAR_DIR/state/env-id"
@@ -108,7 +103,6 @@ teardown() {
 }
 
 @test "bl setup --check: all four resources present → exits 0 with green summary" {
-    skip "blocked on Phase 4"
     mkdir -p "$BL_VAR_DIR/state"
     printf '%s' "agent_M8_TEST"      > "$BL_VAR_DIR/state/agent-id"
     printf '%s' "env_M8_TEST"        > "$BL_VAR_DIR/state/env-id"
@@ -224,7 +218,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup: cwd has skills/ + prompts/ → uses cwd (no clone)" {
-    skip "blocked on Phase 4"
     cd "$BL_REPO_ROOT"
     bl_curator_mock_set_response 'setup-memstore-list-empty.json' 200
     bl_curator_mock_add_route '/v1/agents\?' 'setup-agents-list-hit.json' 200
