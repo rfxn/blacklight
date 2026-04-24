@@ -1,0 +1,15 @@
+# tests/Dockerfile.rocky9 — blacklight test image (Rocky Linux 9)
+# Layers blacklight runtime deps on the batsman rocky9 base image.
+# Base already provides: bash findutils diffutils procps-ng gawk sed grep gzip tar wget curl ca-certificates util-linux hostname parallel bats-core, plus EPEL.
+# Missing and required by blacklight: jq zstd ShellCheck.
+ARG BASE_IMAGE=blacklight-base-rocky9
+FROM ${BASE_IMAGE}
+
+RUN microdnf install -y jq zstd ShellCheck && microdnf clean all
+
+COPY . /opt/blacklight-src
+COPY tests/ /opt/tests/
+COPY bl /opt/bl
+RUN chmod +x /opt/bl
+
+WORKDIR /opt/tests
