@@ -7,10 +7,6 @@
 # ----------------------------------------------------------------------------
 
 
-# ---- bl_clean (M7 target: src/bl.d/83-clean.sh) ----------------------------
-bl_clean()   { bl_error_envelope clean   "not yet implemented (M7)"; return "$BL_EX_USAGE"; }
-
-
 # ---- bl_defend (M6 target: src/bl.d/82-defend.sh) --------------------------
 bl_defend()  { bl_error_envelope defend  "not yet implemented (M6)"; return "$BL_EX_USAGE"; }
 
