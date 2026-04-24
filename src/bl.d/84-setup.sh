@@ -494,7 +494,7 @@ bl_setup_sync() {
         [[ -z "$rel" ]] && continue
         path="$skills_dir/$rel"
         sha=$(command sha256sum "$path" | command awk '{print $1}')
-        bl_setup_post_memory "$skills_id" "$rel" "$path" "$sha" || bl_warn "bl setup --sync: PATCH failed for $rel"
+        bl_setup_post_memory "$skills_id" "$rel" "$path" "$sha" || bl_warn "bl setup --sync: POST (modify) failed for $rel"
     done < <(printf '%s' "$diff_json" | jq -r '.modify[]')
     if [[ "$prune" == "yes" ]]; then
         local key_enc
