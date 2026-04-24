@@ -1,0 +1,157 @@
+blacklight — Defensive forensics, post-incident, operator-facing
+Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
+https://github.com/rfxn/blacklight
+
+
+- M5 | Apr 24 2026 — bl consult / bl run / bl case:
+[New] bl consult/run/case handlers (G1-G15 gates): case-id allocation in
+      CASE-YYYY-NNNN format with flock-serialized counter, --attach /
+      --sweep-mode / --dedup modes, trigger-fingerprint sha256[:16] dedup
+      against open cases in INDEX.md, step dispatch with tier-0/1/2 gating
+      and unknown-tier deny, --batch with halt-at-tier-boundary, case show
+      (6 sections), case log (JSONL), case list (--open/--closed/--all),
+      case reopen with required --reason.
+[New] tests/05-consult-run-case.bats — 20 active gate tests across G1-G15
+      plus 2 deferred skips (R8 post-M4 retarget, G15 full-lifecycle
+      integration).
+[New] tests/helpers/curator-mock.bash — curl-shim routing by URL-regex
+      against tests/fixtures/*.json; no live Anthropic API in CI.
+[New] tests/helpers/case-fixture.bash — per-test case-tree seeder +
+      closed-variant; materializes $BL_VAR_DIR/{state,ledger,backups,
+      quarantine,outbox} and bl-case/<case-id>/ from case-templates/.
+[New] tests/helpers/assert-jsonl.bash — ledger JSONL kind/payload assertions.
+[New] tests/fixtures/ — 28 memstore/step/pending/hypothesis fixtures
+      including seeded INDEX.md roster and hypothesis.md with matching
+      trigger_fingerprint for the G13 dedup fingerprint path.
+[Change] tests/01-cli-surface.bats — split stub test for M5 handlers
+         landing.
+[Change] tests/Dockerfile + Dockerfile.rocky9 — ship schemas/ and
+         case-templates/ into /opt/ so repo_root resolves under test.
+[Change] docs/setup-flow.md §4.3 — add pandoc + weasyprint to apt array
+         for Files API brief rendering (MD + HTML + PDF per DESIGN §5.6).
+[Fix] bl — resolve sentinel I1: swap ${ans,,} bashism to
+      tr '[:upper:]' '[:lower:]' for CentOS 6 bash 4.1 floor.
+[Fix] bl — drop duplicate bl_run stub left after M4+M5 merge.
+[Fix] tests/05-consult-run-case.bats — skip R8 pre-merge contract test
+      post-M4 (observe.log_apache is now a real handler; retarget to a
+      later stubbed verb in M6/M7 or retire once all verbs are landed).
+
+- M4 | Apr 24 2026 — bl observe:
+[New] bl observe router + 11 read-only evidence handlers: fs, apache-log,
+      modsec, iptables, nftables, journal, auth, cron, proc, triage,
+      bundle.
+[New] bl_bundle_build — deterministic evidence bundle builder with codec
+      auto-detect (zstd preferred, gzip fallback), sha256 sidecar, and
+      manifest.json.
+[New] docs/specs/2026-04-24-M4-bl-observe.md — architecture-grade spec.
+[Fix] tests/Dockerfile — drop redundant deps + fix awk→gawk package
+      mapping.
+[New] tests/Dockerfile.rocky9 — Rocky 9 test-image variant (dnf dep set,
+      usr-merge path assumptions verified).
+[Fix] bl — SC2034 comment accuracy on BL_EX_UPSTREAM_ERROR +
+      BL_EX_RATE_LIMITED (shellcheck disable-comment drift).
+
+- M3 | Apr 24 2026 — skills knowledge surface:
+[New] prompts/curator-agent.md v2 — Managed Agents curator system prompt
+      (injection hardening, banned-action gate, per-case read-first
+      protocol, tool-call crossbeam).
+[New] 23 skills files across 5 new subtrees (ir-playbook/, false-positives/,
+      ic-brief-format/, linux-forensics/, apsb25-94/); 19 v1 skills
+      reconciled to v2 shape.
+[Remove] 6 v1 curator prompts superseded by prompts/curator-agent.md v2.
+[Change] skills/INDEX.md — router regenerated against v2 skill surface
+         (20-file floor per PIVOT-v2.md).
+[New] M3 gap-fills (G1/G2/G3 closed): skills/ir-playbook/escalation-
+      routing.md, skills/false-positives/assessment-discipline.md,
+      skills/ic-brief-format/operator-addendum-compliance.md.
+[Change] skills/ir-playbook/case-lifecycle.md — fold in M3 gap-fill
+         cross-references.
+
+- M2 | Apr 24 2026 — case-templates:
+[New] case-templates/ — per-case skeletons: hypothesis.md, open-
+      questions.md, attribution.md, ip-clusters.md, url-patterns.md,
+      file-patterns.md, defense-hits.md. Each carries a writer/when/
+      lifecycle/cap/src header per docs/case-layout.md §3.
+[New] case-templates/INDEX.md — workspace-wide case roster (one row per
+      case, wrapper-maintained, WRAPPER-APPEND anchor for dedup-safe
+      concurrent append).
+[New] case-templates/README.md — manifest + 8-file on-open template set
+      contract.
+[New] docs/specs/2026-04-24-M2-case-templates.md.
+
+- M1 | Apr 24 2026 — bl skeleton:
+[New] bl — executable skeleton with CLI surface (consult/run/case/observe/
+      defend/clean/setup/doctor), bl_preflight (agent-id seeding, curator
+      readiness probe, dep check: curl/jq/sha256sum/flock), bl_api_call
+      (Anthropic v1 endpoint with 2xx/4xx/5xx/429 retry + backoff),
+      bl_ledger_append (flock-serialized JSONL per case), bl_info/warn/
+      debug/error/error_envelope logging with level gating.
+[New] docs/specs/2026-04-24-M1-bl-skeleton-design.md — architecture-grade
+      spec.
+[New] tests/01-cli-surface.bats + tests/02-preflight.bats — bl behavior
+      coverage (CLI shape, preflight exit codes, mock-curl injection).
+[New] tests/ scaffold — batsman v1.4.2 submodule at tests/infra/, Makefile
+      wiring (test / test-rocky9 / test-all), Debian 12 Dockerfile,
+      preflight mock.
+[Change] scorched earth — remove bl-ctl (v1 stale, dead references).
+[Fix] DESIGN.md §5.8 + §8.1 — align preflight return codes with
+      docs/exit-codes.md §1.
+[Fix] M1 test suite — preflight mock HTTP status + error-envelope
+      substring + PATH-isolation scoping.
+
+- M0 | Apr 24 2026 — contract lockdown:
+[New] docs/action-tiers.md — tier-0 (read-only) / tier-1 (suggested) /
+      tier-2 (destructive) taxonomy + gate semantics.
+[New] docs/setup-flow.md — first-run setup contract (API key resolution,
+      curator readiness, signal files, dep install).
+[New] docs/case-layout.md — per-case file writer/when/lifecycle/cap/src
+      contract (9-file layout: hypothesis + 6 evidence files + closed +
+      INDEX workspace-wide).
+[New] docs/exit-codes.md — normalized 64..72 exit-code table shared by bl
+      CLI + tests.
+[Change] DESIGN.md §7.2 — contract lockdown (writer-owner discipline,
+         append-mostly vs mutable-with-history).
+[New] schemas/ — shared v2 JSON contracts (step.schema.json,
+      pending-poll.schema.json, bundle-manifest.schema.json,
+      case-show.schema.json) pre three-stream fanout.
+[New] docs/demo-fixture-spec.md — fixture shape contract for demo/test
+      alignment.
+[Change] DESIGN.md §12 — curator custom-tool input_schema subset per live
+         Managed Agents probe: agents.create rejects thinking/
+         output_config; input_schema rejects additionalProperties and
+         description at property level.
+[New] docs/specs/2026-04-24-M0-contracts-lockdown.md — M0 spec.
+
+- v2 pivot | Apr 24 2026 — skills-first rewrite:
+[New] PIVOT-v2.md — skills-first defensive agent rewrite plan (curator =
+      Managed Agent, not a feature; case state persists across sim-days;
+      post-incident framing over live IR).
+[New] DESIGN.md — v2 architecture + command surface (bl bash CLI +
+      Managed Agents curator + 9-file case layout + safety-tier gates +
+      skills bundle ≥20 files).
+[New] PLAN.md — canonical v2 master plan (motion map M0-M7 + milestone
+      cuts + adversarial-review gates).
+[New] README.md — v2 positioning stub (hosting providers, MSPs, post-
+      incident forensics; AI framing second).
+[Change] DESIGN.md §15 — drop "multi-tenant hosting" non-goal (operator-
+         local scope only, no tenant isolation primitives).
+[Change] scorched earth — archive v1 Python/curator/tests/compose/
+         planning to legacy/; v1 source preserved at tag
+         legacy-pre-pivot; legacy/ dropped from main (recoverable via
+         `git checkout legacy-pre-pivot`).
+
+- v1 pre-pivot | Apr 21-23 2026 — Python curator + hunters (archived):
+v1 stack preserved at the `legacy-pre-pivot` git tag. Contained:
+Python/Flask curator with Managed Agents first-contact scaffold, SQLite
+evidence.db schema + CRUD, fs/log/timeline hunters with public-source
+prompts, orchestrator → evidence.db → CASE allocation with split-on-
+unrelated helper, case_engine Opus 4.7 system prompt + adaptive thinking
+revise(), bl-agent bash scaffolds (pull/apply/report with SHA-256 sidecar
+verify and manifest-parse install + apachectl configtest), Docker compose
+7-host fleet simulation, host-2 APSB25-94 PolyShell staged exhibit with
+PHP-compatible raw DEFLATE payload, demo/time_compression 4-beat sim
+runner, 20-file skills bundle with injection hardening, managed_agents
+session wiring (agent_setup + session_runner + live smoke probe), audit
+pipeline (P0/P1/P2/M-1..M-4), docs/managed-agents.md beta reference. v2
+is a clean-room rewrite; no v1 runtime code ships in bl or the v2 skills
+bundle.
