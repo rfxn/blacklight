@@ -5,7 +5,7 @@
 ARG BASE_IMAGE=blacklight-base-rocky9
 FROM ${BASE_IMAGE}
 
-RUN microdnf install -y jq zstd ShellCheck && microdnf clean all
+RUN microdnf install -y jq zstd ShellCheck patch cronie && microdnf clean all
 
 COPY . /opt/blacklight-src
 COPY tests/ /opt/tests/

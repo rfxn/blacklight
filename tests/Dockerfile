@@ -6,7 +6,7 @@ ARG BASE_IMAGE=blacklight-base-debian12
 FROM ${BASE_IMAGE}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    jq zstd shellcheck \
+    jq zstd shellcheck patch cron \
     && rm -rf /var/lib/apt/lists/*
 
 # Project source at /opt/blacklight-src (reference); test files at /opt/tests/

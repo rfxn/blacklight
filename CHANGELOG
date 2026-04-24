@@ -10,6 +10,34 @@ https://github.com/rfxn/blacklight
       pending handlers; Phase 7 appends a 29th).
 [Change] src/bl.d/00-header.sh — added FD registry comment block (200/201/202).
 
+- M7 | Apr 24 2026 — bl clean remediation surface:
+[New] src/bl.d/83-clean.sh — 10 private helpers + 7 public handlers + top-
+      level dispatcher for DESIGN.md §5.5 + §11 remediation. Verbs:
+      htaccess (diff-confirmed + backup + patch apply), cron (--user crontab
+      patch + backup), proc (capture /proc + lsof → SIGTERM → grace → SIGKILL),
+      file (quarantine, never unlink). Restore paths: --undo <backup-id>
+      (htaccess/cron), --unquarantine <entry> (file). --dry-run contract
+      enforced on all four apply verbs; TTL BL_CLEAN_DRYRUN_TTL_SECS default
+      300s. Proc grace BL_CLEAN_PROC_GRACE_SECS default 5s.
+[New] schemas/backup-manifest.{json,md} + schemas/quarantine-manifest.{json,md}
+      — sidecar meta schemas; jq-validated at undo/unquarantine time +
+      cross-validated by tests/07-clean.bats.
+[New] tests/07-clean.bats — 22 BATS tests across dispatcher, dry-run gate,
+      roundtrip-byte-identity per verb, schema-validation, overwrite-refuse,
+      proc grace window. Fixture-driven (zero live API calls); runs green
+      on debian12 + rocky9. Closes PLAN.md §M7 "Ends when".
+[New] tests/helpers/clean-fixture.bash + tests/fixtures/{htaccess-clean-
+      target, crontab-clean-target.txt} — case-tree seeder + target fixtures.
+[Change] tests/Dockerfile + Dockerfile.rocky9 — add patch + cron/cronie
+         binaries (apt: patch cron; microdnf: patch cronie). Required by
+         clean.htaccess and clean.cron BATS coverage.
+[Change] src/bl.d/80-stubs.sh — remove bl_clean stub (stub now replaced by
+         real src/bl.d/83-clean.sh); refresh stale header comment.
+         bl_defend (M6) + bl_setup (M8) stubs remain.
+[Change] tests/01-cli-surface.bats — drop stale "not yet implemented" stub
+         assertion for clean (Phase-3 oversight surfaced by Phase-4 tests).
+[Change] bl — regenerated; drift-guard green.
+
 - M5.5 | Apr 24 2026 — src/bl.d/ component extraction:
 [New] src/bl.d/ — decompose bl (3048 LOC) into 14 numbered NN-*.sh parts
       assembled at build time by make bl; drift guard via make bl-check.

