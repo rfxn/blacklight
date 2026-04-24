@@ -56,7 +56,7 @@ teardown() {
     unset ANTHROPIC_API_KEY
     run "$BL_SOURCE" setup
     [ "$status" -eq 64 ]
-    [[ "$output" == *"setup not yet implemented (M8)"* ]]
+    [[ "$output" == *"not yet implemented (M8)"* ]]
 }
 
 @test "bl observe/consult/run/defend/clean/case each dispatch to stub and exit 64 (parameterised)" {

@@ -19,9 +19,9 @@ bl_mock_init() {
 #!/bin/bash
 # bl-preflight-mock: curl shim
 case "$BL_MOCK_RESPONSE" in
-    empty)     printf '{"data": []}\n000'; exit 0 ;;
-    populated) printf '{"data": [{"id": "agent_test_stub"}]}\n000'; exit 0 ;;
-    bad_key)   printf '{"error": {"type": "authentication_error"}}\n401' >&2; exit 22 ;;
+    empty)     printf '{"data": []}\n200'; exit 0 ;;
+    populated) printf '{"data": [{"id": "agent_test_stub"}]}\n200'; exit 0 ;;
+    bad_key)   printf '{"error": {"type": "authentication_error"}}\n401'; exit 0 ;;  # curl -w emits status to stdout, not stderr; exit 0 matches successful HTTP with 4xx body
     *)         printf 'bl-preflight-mock: unknown response config: %s\n' "$BL_MOCK_RESPONSE" >&2; exit 1 ;;
 esac
 MOCKEOF

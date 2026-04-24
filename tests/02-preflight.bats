@@ -32,7 +32,7 @@ teardown() {
     run "$BL_SOURCE" observe
     # preflight passes (cached agent-id), handler stub returns 64
     [ "$status" -eq 64 ]
-    [[ "$output" == *"observe not yet implemented"* ]]
+    [[ "$output" == *"not yet implemented (M4)"* ]]
 }
 
 @test "bl_preflight on seeded workspace (API returns 1+ agent) caches agent-id and returns 0" {
@@ -65,8 +65,9 @@ teardown() {
     local real_jq
     real_jq=$(command -v jq) || skip "jq not installed in the test environment"
     cp "$real_jq" "$jq_only_dir/jq"
-    PATH="$jq_only_dir"
-    run "$BL_SOURCE" observe
+    local saved_path="$PATH"
+    PATH="$jq_only_dir" run "$BL_SOURCE" observe
+    PATH="$saved_path"
     rm -rf "$jq_only_dir"
     [ "$status" -eq 65 ]
     [[ "$output" == *"curl not found"* ]]
@@ -77,8 +78,9 @@ teardown() {
     local curl_only_dir
     curl_only_dir=$(mktemp -d)
     cp "$BL_MOCK_BIN/curl" "$curl_only_dir/curl"
-    PATH="$curl_only_dir"
-    run "$BL_SOURCE" observe
+    local saved_path="$PATH"
+    PATH="$curl_only_dir" run "$BL_SOURCE" observe
+    PATH="$saved_path"
     rm -rf "$curl_only_dir"
     [ "$status" -eq 65 ]
     [[ "$output" == *"jq not found"* ]]
