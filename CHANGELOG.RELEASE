@@ -1,4 +1,10 @@
-## 0.1.0 (unreleased)
+## 0.1.0 — 2026-04-26 — first public release
+
+First shippable cut of blacklight — agent-directed defensive forensics CLI
+built on the Managed Agents architecture. Single binary (`bl`), curl-pipe-
+bash installer, RPM + DEB packages validated on debian12 / ubuntu2404 /
+centos7 / rocky9. All motions (observe / consult / run / defend / clean /
+case / setup / flush) land in this release.
 
 [New] M10 P1 — install.sh curl-pipe-bash installer (bash≥4.1, curl, jq preflight; --local / remote modes; next-step prompt)
 [New] M10 P2 — uninstall.sh (binary removal + interactive/--yes/--keep-state state handling; timestamped backup at /var/lib/bl.bk.<ts>/)
@@ -9,3 +15,4 @@
 [New] M10 P10 — RPM build + install validation matrix (rocky9 + centos7)
 [New] M10 P11 — skills bundle integration: 4 new namespaces × 18 files (ride-the-substrate/, legacy-os-pitfalls/, shared-hosting-attack-shapes/, agentic-minutes-playbook/); INDEX.md routing extended; skill count 46 → 64
 [New] M10 P11 — DEB build + install validation matrix (debian12 + ubuntu2404)
+[New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit

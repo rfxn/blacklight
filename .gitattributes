@@ -5,6 +5,7 @@
 legacy/             export-ignore
 tests/              export-ignore
 docs/               export-ignore
+pkg/                export-ignore
 audit-output/       export-ignore
 work-output/        export-ignore
 .rdf/               export-ignore
