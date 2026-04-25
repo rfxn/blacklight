@@ -47,7 +47,7 @@ M0 Contracts (spec-only) ─┐
 | M9 | Security hardening pass — **DONE** (`6595cda..eb6e4f3`) | M4, M5, M3 | spec-then-plan | (solo) |
 | M10 | Ship-ready (README, install, packaging) — **DONE** (`ad600fa..ca00967`) | M9 | plan | (solo) |
 | M11 | Posture lift (credibility close-out — model routing, stub→real, doc/code reconciliation, negative tests, live-trace evidence) — **DONE** (`05a0f2a..f572fbb`+P10/P5/P14, 14 phases shipped; see PLAN-M11.md) | M10 | plan | (solo) |
-| M12 | Demo + narrative | M11 | deferred | — |
+| M12 | Demo readiness (thesis pivot + corpus + curator prompt + live-trace harness + API surface migration + README tightening + close-out) — **DONE** (`bd9e97e..457cd32`, 8 phases + P5.5 salvage shipped; see PLAN-M12.md) | M11 | done | (solo) |
 
 **File-ownership contract for parallel `bl` work:**
 - **Pre-M5.5 (M4 + M5):** each motion owns a disjoint function prefix (`bl_observe_*`, `bl_consult_*`, `bl_run_*`, `bl_case_*`) inside monolithic `bl`. Merge conflicts limited to shared helpers — resolvable, but real (commit `795bb5d` was a near-miss from the M4+M5 merge).
@@ -382,9 +382,43 @@ Any test delta = refactor introduced a bug; bisect the drift by comparing pre/po
 
 ---
 
-### M12 — Demo (deferred)
+### M12 — Demo readiness — **COMPLETE** (`bd9e97e..457cd32`)
 
-Picks up after M11. Fixture envelope + script + recording + 100–200 word summary. Scoped when we get there.
+Closes four execution gaps surfaced by the 2026-04-25 adversarial pre-demo audit:
+thesis carrying a structurally-false "thinking" claim, Managed Agents runtime not
+behaviorally verified, no bundle exists at the 1M-context scale, two README overclaims.
+Decomposition lives in `PLAN-M12.md` (8 phases + 1 mid-flight salvage). Headline deliverables:
+
+- **P1** Thesis pivot: "thinking" feature framing dropped across README/DESIGN/PIVOT-v2/curator
+  prompt; replaced with 1M context + Managed Agents persistence + cost-discipline routing.
+- **P2** `tools/synth-corpus.sh` + `exhibits/fleet-01/large-corpus/` — deterministic ~360k-token
+  APSB25-94 forensic bundle exercising 1M context with cross-stream attack needles.
+- **P3** `bl_outbox_should_drain` age-gate predicate + tests/08-setup.bats S12 sync-count
+  verification (count derived from find).
+- **P4** prompts/curator-agent.md strengthened — 1M-as-one-bundle discipline + bl-skills/
+  memstore key prefix + cross-stream correlation rule (HIGH/MEDIUM cite ≥2 distinct streams).
+- **P5** tests/live/ harness — `make live-trace` + 6-point grader + cost-cap targets.
+- **P5.5** (mid-flight salvage) Managed Agents API surface migration: P6 dispatch hit HTTP 400
+  on Scene 0 because `managed-agents-2026-04-01` beta replaced memory-store key/key_prefix
+  schema with path/path_prefix, removed PATCH-with-sha (now DELETE+POST), removed server-side
+  `?name=` filter on `/v1/agents`. `src/bl.d/20-api.sh` adds `bl_mem_*` adapter; cost-cap
+  wire-up (`BL_CURL_TRACE_LOG`) was silently broken — fixed. 11 src/bl.d/ files migrated;
+  test impact 24 → 15 mock-fidelity failures (test-quick still 19/19; tracked as M12 P5.6
+  follow-up before next release tag).
+- **P6** Live-trace PARTIAL evidence at `tests/live/evidence/live-trace-20260425-2208.md`.
+  Hermetic Scenes 0/1/2 against real API: workspace setup, case allocation, observe
+  fs+file against synth-corpus exhibits. Scene 3 hypothesis poll timed out — wake events
+  queue but session-creation surface drifted (same root cause as P5.5; tracked as M12.5).
+  Cost on the run ≈ $0 (no Opus turn reached). Runner pivoted to hermetic verbs because
+  `bl observe apache/crons` hardcode `/var/log` paths.
+- **P7** README — per-bundle "20 markdown files" → aggregate "65 across 20 domains";
+  new "Who this is for" (LMD/APF/BFD adopter framing); new "Proof" section linking
+  live-trace + corpus; distro claim downgraded to provable per-commit Debian 12 + Rocky 9.
+- **P8** Milestone close-out + full regression on debian12 + rocky9.
+
+Demo recording is the next motion (separate from M12), picking up an already-defensible product.
+M12.5 follow-ups: (a) curator session-creation API drift fix, (b) `bl observe apache/crons/proc/log auth`
+gain `--source / --root` flags for hermetic operator-side runs, (c) P5.6 mock-fidelity gap closure.
 
 ---
 
