@@ -195,6 +195,22 @@ _source_bl() { source "$BL_SOURCE" >/dev/null 2>&1 || true; }
 
 # ─── G5: Backpressure (Phase 3) ─────────────────────────────────────────────
 
+@test "bl_outbox_drain: retry-exhausted entry logs bl_error and moves to failed/" {
+    mkdir -p "$BL_VAR_DIR/outbox"
+    # Seed an outbox entry already at retry=3 (BL_OUTBOX_RETRY_MAX). Filename
+    # convention: TS-NNNN-kind-case.json with -r3 retry suffix BEFORE .json.
+    local stale="$BL_VAR_DIR/outbox/20260101T000000Z-0001-wake-CASE-2026-0001-r3.json"
+    printf '{"type":"user.message","case":"CASE-2026-0001","content":[]}' > "$stale"
+    # Drain with no live session → wake handler returns rc=69 (defer); since
+    # retry_n is already 3, retry-exhausted branch fires.
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_outbox_drain --max 4 --deadline 5 2>&1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[bl] ERROR:"* ]]
+    [[ "$output" == *"exhausted retries"* ]]
+    [ -f "$BL_VAR_DIR/outbox/failed/$(basename "$stale")" ]
+    [ ! -f "$stale" ]
+}
+
 @test "bl_outbox_enqueue returns 70 at depth=1000" {
     # Seed 1000 dummy entries to hit watermark
     local i

@@ -1071,6 +1071,7 @@ bl_outbox_drain() {
             if (( retry_n >= BL_OUTBOX_RETRY_MAX )); then
                 command mkdir -p "$outbox_dir/failed"
                 command mv "$f" "$outbox_dir/failed/"
+                bl_error "outbox: $basename_part exhausted retries (rc=$rc); moved to failed/"
                 failed=$((failed + 1))
             else
                 new_f=$(printf '%s' "$f" | command sed "s/\(\.json\)$/-r$((retry_n + 1))\1/")
