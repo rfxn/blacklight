@@ -1,0 +1,14 @@
+#!/bin/bash
+# blacklight postrm — minimal single-binary package
+set -e
+
+case "$1" in
+    purge)
+        # Full removal — clean runtime state (ledger, outbox, state)
+        rm -rf /var/lib/bl 2>/dev/null || true   # state dir may already be absent
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

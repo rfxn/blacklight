@@ -1,0 +1,41 @@
+# blacklight — Package Manifest
+# Consumed by pkg_gen.sh to generate RPM spec, DEB debian/, Docker, CI artifacts.
+
+PKG_NAME="blacklight"
+PKG_VERSION="0.1.0"
+PKG_RELEASE="1"
+PKG_SUMMARY="blacklight — agent-directed defensive forensics for Linux"
+PKG_DESCRIPTION="blacklight is a single-file bash wrapper directed by a skills-native Managed Agent. It supercharges fifteen years of Linux OSS defensive primitives (iptables, mod_security, ClamAV, LMD, APF, YARA, Apache logs, .htaccess walks, crontab audits) with an always-on curator that persists case state across sim-days. No platform buy-in. No fleet migration."
+PKG_LICENSE="GPLv2+"
+PKG_URL="https://github.com/rfxn/blacklight"
+PKG_MAINTAINER="R-fx Networks <proj@rfxn.com>"
+PKG_INSTALL_PATH="/usr/bin"
+PKG_BIN_NAME="bl"
+PKG_BIN_PATH="/usr/bin/bl"
+PKG_BIN_LEGACY=""
+PKG_SECTION="8"
+PKG_COPYRIGHT_START="2026"
+PKG_VERSION_CMD="grep -oE 'readonly BL_VERSION=\"[^\"]+\"' \$(PROJDIR)/bl | head -1 | awk -F'\"' '{print \$2}'"
+PKG_GROUP="System Environment/Base"
+
+# Feature flags — blacklight is intentionally minimal
+PKG_HAS_SYSTEMD_SERVICE="0"
+PKG_HAS_SYSV_INIT="0"
+PKG_HAS_CRON_D="0"
+PKG_HAS_LOGROTATE="0"
+PKG_HAS_MAN_PAGE="0"
+PKG_HAS_BASH_COMPLETION="0"
+
+# Dependencies
+PKG_DEP_RPM="bash >= 4.1, coreutils, curl, jq"
+PKG_DEP_DEB="bash (>= 4.1), coreutils, curl, jq"
+
+# Conflicts — none
+PKG_CONFLICTS_RPM=""
+PKG_CONFLICTS_DEB=""
+
+# Documentation
+PKG_DOCS="README.md CHANGELOG LICENSE"
+
+# Docker — blacklight is unprivileged
+PKG_DOCKER_FLAGS=""

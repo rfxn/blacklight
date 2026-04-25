@@ -1,0 +1,15 @@
+#!/bin/bash
+# blacklight preinst — minimal single-binary package
+# No legacy migration: blacklight 0.1.0 has no prior install.sh-based installations.
+set -e
+
+case "$1" in
+    install|upgrade)
+        # Nothing required
+        :
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

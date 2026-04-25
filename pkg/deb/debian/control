@@ -1,0 +1,18 @@
+Source: blacklight
+Section: admin
+Priority: optional
+Maintainer: R-fx Networks <proj@rfxn.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/rfxn/blacklight
+
+Package: blacklight
+Architecture: all
+Depends: bash (>= 4.1), coreutils, curl, jq, ${misc:Depends}
+Description: blacklight — agent-directed defensive forensics for Linux
+ blacklight is a single-file bash wrapper directed by a skills-native
+ Managed Agent. It supercharges fifteen years of Linux OSS defensive
+ primitives (iptables, mod_security, ClamAV, LMD, APF, YARA, Apache
+ logs, .htaccess walks, crontab audits) with an always-on curator that
+ persists case state across sim-days. No platform buy-in. No fleet
+ migration.

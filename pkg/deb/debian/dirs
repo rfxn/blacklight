@@ -1,0 +1,6 @@
+usr/bin
+var/lib/bl
+var/lib/bl/state
+var/lib/bl/ledger
+var/lib/bl/outbox
+usr/share/doc/blacklight

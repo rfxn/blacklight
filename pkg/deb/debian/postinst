@@ -1,0 +1,14 @@
+#!/bin/bash
+# blacklight postinst — minimal single-binary package
+set -e
+
+case "$1" in
+    configure)
+        # Nothing required — bl self-provisions /var/lib/bl on first run
+        :
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
