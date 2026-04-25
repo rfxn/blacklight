@@ -3002,20 +3002,60 @@ bl_run_dispatch_verb() {
 }
 
 bl_run_writeback_result() {
-    # bl_run_writeback_result <step-id> <rc> <stdout-path> <case-id> — 0/69/70
+    # bl_run_writeback_result <step-id> <rc> <stdout-path> <case-id> — 0/67/69/70
     local step_id="$1"
     local rc="$2"
     local stdout_path="$3"
     local case_id="$4"
-    local stdout_content now
-    stdout_content=$(command cat "$stdout_path" 2>/dev/null || printf '')   # missing → empty
+    local now
     now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    # M9 P6: fence-wrap stdout (adversary-reachable — full stdout of observe.*)
+    local fenced_stdout
+    if [[ -s "$stdout_path" ]]; then
+        fenced_stdout=$(bl_fence_wrap "$case_id" evidence "$stdout_path") || {
+            bl_error_envelope run "fence wrap failed for step $step_id"
+            return "$BL_EX_CONFLICT"
+        }
+    else
+        # Empty/missing stdout: wrap empty payload so result envelope schema stays uniform.
+        local empty_file
+        empty_file=$(mktemp)
+        : > "$empty_file"
+        fenced_stdout=$(bl_fence_wrap "$case_id" evidence "$empty_file") || {
+            command rm -f "$empty_file"
+            bl_error_envelope run "fence wrap failed for empty stdout (step $step_id)"
+            return "$BL_EX_CONFLICT"
+        }
+        command rm -f "$empty_file"
+    fi
+
     local pending_tmp
     pending_tmp=$(mktemp)
     bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fpending%2F$step_id.json" 2>/dev/null | jq -r '.content' > "$pending_tmp" || true   # transient miss
+
     local result_content
-    result_content=$(jq -n --slurpfile pending "$pending_tmp" --argjson rc "$rc" --arg stdout "$stdout_content" --arg now "$now" \
+    result_content=$(jq -n --slurpfile pending "$pending_tmp" --argjson rc "$rc" --arg stdout "$fenced_stdout" --arg now "$now" \
         '$pending[0] + {result: {rc:$rc, stdout:$stdout, applied_at:$now}}')
+
+    # M9 P6: validate composed result envelope against schemas/result.json before POST.
+    local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"
+    local schema_file="$repo_root/schemas/result.json"
+    [[ -r "$schema_file" ]] || schema_file="schemas/result.json"
+    if [[ -r "$schema_file" ]]; then
+        local result_tmp
+        result_tmp=$(mktemp)
+        printf '%s' "$result_content" > "$result_tmp"
+        if ! bl_jq_schema_check "$schema_file" "$result_tmp"; then
+            command rm -f "$result_tmp" "$pending_tmp"
+            bl_ledger_append "$case_id" \
+                "$(jq -n --arg ts "$now" --arg c "$case_id" --arg s "$step_id" \
+                    '{ts:$ts, case:$c, kind:"result_schema_reject", payload:{step_id:$s}}')"
+            return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+        fi
+        command rm -f "$result_tmp"
+    fi
+
     local body_file
     body_file=$(mktemp)
     jq -n --arg k "bl-case/$case_id/results/$step_id.json" --arg c "$result_content" \

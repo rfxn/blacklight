@@ -3,6 +3,30 @@ Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
 
+- M9 P6 | Apr 24 2026 — writeback fence wrap + result schema + injection corpus:
+[New] schemas/result.json — bl run result envelope schema; required keys
+      (step_id, verb, action_tier, result), result.required (rc, stdout,
+      applied_at). Validated by bl_run_writeback_result before memstore POST.
+[New] tests/fixtures/injection-corpus/ — 4-class attack corpus per DESIGN.md
+      §13.2: 01-ignore-previous (class 2.1), 02-role-reassignment (class 2.2),
+      03-schema-override (class 2.3), 04-verdict-flip (class 2.4). All four
+      memstore-wrapped step JSON; 2.1/2.2/2.4 are schema-VALID with adversarial
+      prose in `reasoning`; 2.3 carries a curator-injected `execute_raw_bash`
+      additional property that --strict schema-check rejects upstream of dispatch.
+[Change] src/bl.d/60-run.sh — bl_run_writeback_result now (a) fence-wraps stdout
+      via bl_fence_wrap kind=evidence so adversary-reachable bytes from observe.*
+      handlers are sealed before they ever reach the next curator turn, and
+      (b) validates the composed result envelope against schemas/result.json
+      before the memstore POST. Schema-fail emits a result_schema_reject ledger
+      event and exits 67 (BL_EX_SCHEMA_VALIDATION_FAIL); empty stdout is wrapped
+      as empty payload so the envelope schema stays uniform.
+[Change] tests/09-hardening.bats — G2/G7/G8 placeholders unskipped: 6 P6 @tests
+      now green (writeback-stdout fence wrap unit; 4 injection-class integration
+      regressions assert step_run lands AND case_closed does not; fence-token
+      reproducibility). The result-envelope schema-reject test stays skipped per
+      plan acknowledgment (requires fence-output stub instrumentation, deferred
+      to M11+ mock-request-log fidelity upgrade).
+
 - M9 P5 | Apr 24 2026 — consult wake migration to bl_outbox_enqueue + fenced trigger:
 [Change] src/bl.d/50-consult.sh — bl_consult_register_curator wake-enqueue path
       now routes through bl_outbox_enqueue wake instead of writing

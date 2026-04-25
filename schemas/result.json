@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfxn.github.io/blacklight/schemas/result.json",
+  "title": "blacklight step result envelope",
+  "type": "object",
+  "required": ["step_id", "verb", "action_tier", "result"],
+  "properties": {
+    "step_id": {"type": "string"},
+    "verb": {"type": "string"},
+    "action_tier": {"type": "string"},
+    "reasoning": {"type": "string"},
+    "args": {"type": "array"},
+    "diff": {"type": ["string", "null"]},
+    "patch": {"type": ["string", "null"]},
+    "result": {
+      "type": "object",
+      "required": ["rc", "stdout", "applied_at"],
+      "properties": {
+        "rc": {"type": "integer"},
+        "stdout": {"type": "string", "description": "fence-wrapped envelope: <untrusted fence=\"TOKEN\" kind=\"evidence\" case=\"CASE-…\">…</untrusted-TOKEN>"},
+        "applied_at": {"type": "string"}
+      }
+    }
+  }
+}
