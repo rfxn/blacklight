@@ -283,7 +283,11 @@ EOF
     grep -q '"reason":"fp_gate_trip"' "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
 }
 
-@test "bl defend sig clamav scanner-error (rc=2) returns BL_EX_PREFLIGHT_FAIL (65)" {
+@test "bl defend sig clamav scanner-error (rc=2) collapses to TIER_GATE_DENIED at apply" {
+    # Internal: _bl_defend_sig_fp_gate returns BL_EX_PREFLIGHT_FAIL (65) on rc=2.
+    # User-visible: bl_defend_sig collapses any non-zero gate result to
+    # BL_EX_TIER_GATE_DENIED (68) for explicit-single --scanner mode (per
+    # 82-defend.sh apply layer). Test the user-visible exit code.
     export BL_LMD_SIG_DIR="$BL_VAR_DIR/lmd-sigs"
     export BL_CLAMAV_SIG_DIR="$BL_VAR_DIR/clamav-sigs"
     mkdir -p "$BL_LMD_SIG_DIR" "$BL_CLAMAV_SIG_DIR"
@@ -294,9 +298,9 @@ EOF
     chmod +x "$BL_DEFEND_SCANNER_BIN/clamscan"
     export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
     run "$BL_SOURCE" defend sig "$BATS_TEST_DIRNAME/fixtures/defend-sig-clean.hdb" --scanner clamav
-    [ "$status" -eq 68 ]   # bl_defend_sig collapses non-zero gate to TIER_GATE_DENIED at apply layer
-    [[ "$output" == *"clamscan FP-gate error (rc=2)"* ]] || \
-        grep -q 'clamscan FP-gate error' "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl" || true   # bl_warn writes to stderr; either capture path is acceptable
+    [ "$status" -eq 68 ]
+    # ClamAV sig file must NOT have been appended on rc=2
+    [ ! -s "$BL_CLAMAV_SIG_DIR/custom.ndb" ]
 }
 
 @test "bl defend sig --scanner all fans out to each detected scanner" {

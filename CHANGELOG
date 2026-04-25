@@ -16,6 +16,24 @@ https://github.com/rfxn/blacklight
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
 === M10 complete — blacklight v0.1.0 ship-ready ===
 
+- M9.5 P9 | Apr 25 2026 — sentinel fixup (chown-time TOCTOU close + test rename):
+[Fix] src/bl.d/83-clean.sh — bl_clean_unquarantine now applies chown /
+      chmod / touch to the *staged inode* before the final `mv -T`,
+      not after. Closes the residual chown-time TOCTOU window: GNU
+      chown/chmod follow symlinks by default, so post-rename
+      ownership/mode application could be redirected onto an
+      attacker-raced symlink target between rename(2) and chown.
+      Rename-after-prep is the standard pattern (sentinel SHOULD-FIX-1).
+      Post-rename `[[ -L ]]` retained as warning — restored inode is
+      already correctly attributed; the warn surfaces parent-dir
+      hostile activity for operator audit.
+[Fix] tests/06-defend.bats — clamav rc=2 test renamed from "returns
+      BL_EX_PREFLIGHT_FAIL (65)" to "collapses to TIER_GATE_DENIED at
+      apply"; the gate-internal rc=65 is correctly intercepted by the
+      apply layer and surfaced as 68 to the operator (sentinel INFO-1).
+      Test assertion was already correct; only the name was misleading.
+[Change] bl — regenerated.
+
 - M9.5 P8 | Apr 25 2026 — hygiene cleanup (mktemp, magic encoding, wake-outbox case):
 [Fix] src/bl.d/60-run.sh — bl_run_step stdout buffer allocated via
       mktemp instead of predictable /tmp/bl-step-$step_id.out;

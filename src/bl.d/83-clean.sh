@@ -768,18 +768,28 @@ bl_clean_unquarantine() {
         bl_error_envelope clean "post-stage TOCTOU detected at $original_path; staged file preserved at $stage_path"
         return "$BL_EX_CONFLICT"
     fi
+    # Apply ownership / mode / mtime to the *staged inode* before the final
+    # atomic rename. GNU chown/chmod follow symlinks by default, so applying
+    # them to $original_path AFTER the rename leaves a chown-time TOCTOU
+    # window: an attacker with parent-dir write perms can `unlink + ln -s
+    # /etc/sudoers.d/...` between rename(2) and chown, redirecting ownership
+    # onto the symlink target. Rename-after-prep is the standard pattern
+    # (sentinel SHOULD-FIX-1).
+    command chown "$uid:$gid" "$stage_path" || bl_warn "chown failed on staged file (non-root invocation?)"
+    command chmod "$perms" "$stage_path" || bl_warn "chmod failed on staged file"
+    command touch -d "@$mtime" "$stage_path" 2>/dev/null || bl_warn "mtime restore failed on staged file"   # BSD touch lacks -d; non-fatal
     command mv -T "$stage_path" "$original_path" || {
         command rm -f "$stage_path"
         bl_error_envelope clean "unquarantine final mv failed: $stage_path → $original_path"
         return "$BL_EX_PREFLIGHT_FAIL"
     }
-    # Final paranoia: confirm post-rename target is not a symlink.
+    # Post-rename symlink check: if $original_path is a symlink now, an
+    # attacker raced a symlink in AFTER our rename. The file content + mode +
+    # owner are at the rename target inode (not the symlink target), so the
+    # restored file is recoverable; just emit a warning so operators can audit.
     if [[ -L "$original_path" ]]; then
-        bl_warn "post-rename symlink at $original_path; restored file may be elsewhere — operator should audit"
+        bl_warn "post-rename symlink at $original_path detected — restored inode is intact; operator should audit dir for foreign actor"
     fi
-    command chown "$uid:$gid" "$original_path" || bl_warn "chown failed (non-root invocation?)"
-    command chmod "$perms" "$original_path" || bl_warn "chmod failed on $original_path"
-    command touch -d "@$mtime" "$original_path" 2>/dev/null || bl_warn "mtime restore failed on $original_path"   # BSD touch lacks -d; non-fatal
     command rm -f "$found_meta"
     bl_ledger_append "$found_case" \
         "$(jq -n --arg ts "$(_bl_clean_ts_iso8601)" --arg c "$found_case" --arg e "$entry_id" --arg op "$original_path" \
