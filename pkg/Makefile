@@ -25,7 +25,7 @@ TARBALL := $(NAME)-$(VERSION).tar.gz
 BUILDDIR := $(CURDIR)/build
 
 .PHONY: source rpm deb clean rpm-el7 rpm-el9 deb-debian12 \
-        test-rpm-rocky9 test-rpm-centos7 test-deb-debian12
+        test-rpm-rocky9 test-rpm-centos7 test-deb-debian12 test-deb-ubuntu2404
 
 # --- Source tarball ---
 
@@ -90,7 +90,9 @@ rpm-el9:
 deb-debian12:
 	docker build -t $(NAME)-deb -f $(CURDIR)/docker/Dockerfile.deb $(PROJDIR)
 	mkdir -p $(BUILDDIR)/debs
-	docker run --rm -v $(BUILDDIR)/debs:/output $(NAME)-deb
+	docker create --name $(NAME)-deb-extract $(NAME)-deb
+	docker cp $(NAME)-deb-extract:/src/blacklight/pkg/build/deb-build/blacklight_$(VERSION)-1_all.deb $(BUILDDIR)/debs/
+	docker rm $(NAME)-deb-extract
 
 # --- Package install tests ---
 
@@ -112,8 +114,15 @@ test-rpm-centos7: rpm-el7
 test-deb-debian12: deb-debian12
 	cp $(CURDIR)/test/test-pkg-install.sh $(BUILDDIR)/debs/
 	docker build -t $(NAME)-test-deb-debian12 \
-	    -f $(CURDIR)/test/Dockerfile.test-deb-debian12 $(BUILDDIR)/debs
-	docker run --rm --privileged $(NAME)-test-deb-debian12
+	    -f $(CURDIR)/docker/Dockerfile.test-deb $(BUILDDIR)/debs
+	docker run --rm $(NAME)-test-deb-debian12
+
+test-deb-ubuntu2404: deb-debian12
+	cp $(CURDIR)/test/test-pkg-install.sh $(BUILDDIR)/debs/
+	docker build -t $(NAME)-test-deb-ubuntu2404 \
+	    --build-arg BASE_IMAGE=ubuntu:24.04 \
+	    -f $(CURDIR)/docker/Dockerfile.test-deb $(BUILDDIR)/debs
+	docker run --rm $(NAME)-test-deb-ubuntu2404
 
 # --- Clean ---
 

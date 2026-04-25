@@ -20,6 +20,16 @@ override_dh_auto_install:
 	install -d -m 750 $${DESTDIR}/var/lib/bl/ledger; \
 	install -d -m 750 $${DESTDIR}/var/lib/bl/outbox
 
+override_dh_fixperms:
+	dh_fixperms
+	chmod 750 debian/blacklight/var/lib/bl
+	chmod 750 debian/blacklight/var/lib/bl/state
+	chmod 750 debian/blacklight/var/lib/bl/ledger
+	chmod 750 debian/blacklight/var/lib/bl/outbox
+
+override_dh_compress:
+	dh_compress -X README.md
+
 override_dh_auto_test:
 	# Skip — tests require privileged Docker environment
 
