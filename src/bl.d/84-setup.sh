@@ -70,7 +70,7 @@ bl_setup_provision() {
     if [[ "$was_complete" == "yes" ]]; then
         # All four ids existed on entry → re-run path.
         bl_info "bl setup: workspace already provisioned — skills sync only"
-        bl_setup_seed_skills_or_sync "$skills_id" || return $?
+        bl_setup_sync "" || return $?
         printf '\n'
         printf 'bl setup: no-op (workspace already provisioned)\n'
         printf '  agent           %s\n' "$agent_id"
@@ -93,14 +93,6 @@ bl_setup_state_is_complete() {
         [[ -r "$BL_STATE_DIR/$f" ]] && [[ -s "$BL_STATE_DIR/$f" ]] || return 1
     done
     return 0
-}
-
-# bl_setup_seed_skills_or_sync <skills-id> — re-run path: prefer incremental
-# sync over full re-seed; delegates to bl_setup_sync.
-bl_setup_seed_skills_or_sync() {
-    local skills_id="$1"
-    bl_setup_sync ""
-    return $?
 }
 
 # bl_setup_ensure_agent <out-var> — populates out-var with id; returns 0/65/69/70/71.
