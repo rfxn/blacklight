@@ -47,3 +47,12 @@ bl-lint:
 
 test test-rocky9 test-all:
 	@$(MAKE) -C tests $@
+
+.PHONY: live-trace live-trace-grade
+
+live-trace:
+	@bash tests/live/trace-runner.sh
+
+live-trace-grade:
+	@test -n "$(EVIDENCE)" || { echo 'usage: make live-trace-grade EVIDENCE=path' >&2; exit 64; }
+	@bash tests/live/trace-grader.sh $(EVIDENCE)
