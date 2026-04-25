@@ -10,6 +10,16 @@ collapses that arc into agent-directed motions on the same Linux substrate the d
 already runs. No platform buy-in. No fleet migration. No analyst retraining. The curator
 agent holds the case across days; the operator runs the steps it prescribes.
 
+## Who this is for
+
+Hosting providers, MSPs, and security teams already running the R-fx Networks
+defensive OSS stack — [LMD](https://github.com/rfxn/linux-malware-detect)
+(~tens of thousands of installs), [APF](https://github.com/rfxn/advanced-policy-firewall)
+(~hundreds of thousands of installs), [BFD](https://github.com/rfxn/brute-force-detection).
+blacklight is the agentic-defensive-era release in that family — same Linux substrate,
+same install discipline, same operator vocabulary. No platform buy-in, no fleet
+migration, no analyst retraining.
+
 ## Install
 
 One-liner (curl-pipe-bash safe):
@@ -20,8 +30,9 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 bl setup
 ```
 
-Requires: bash 4.1+, curl, jq. Tested on Debian 12, Ubuntu 20.04 / 22.04 / 24.04,
-CentOS 7, Rocky 8 / 9.
+Requires: bash 4.1+, curl, jq. Per-commit CI gate: Debian 12 + Rocky 9 (full BATS
+suite, both green). Release-matrix targets: Ubuntu 20.04 / 22.04 / 24.04, CentOS 7,
+Rocky 8 (verified via packaging scripts; full BATS run before each release tag).
 
 `bl setup` provisions a Managed Agent session in the operator's Anthropic workspace
 (one-time per workspace). Subsequent `bl` invocations reuse that session.
@@ -134,8 +145,8 @@ entirely from the public Adobe security advisory.
 
 ## Skills architecture
 
-Each defensive motion ships as a skill bundle: a directory of ~20 markdown files
-authored from public sources — Adobe security advisories, ModSecurity grammar
+Defensive motions ship as a skill bundle — 65 markdown files across 20 defensive
+domains, authored from public sources: Adobe security advisories, ModSecurity grammar
 documentation, Magento developer docs, Linux hosting-stack documentation, public
 YARA rule repositories. The curator agent loads these skill bundles as read-only
 memory store content at session creation via `bl setup --sync`. The operator never
@@ -165,6 +176,23 @@ FP-gating calls are frequent and cheap by design — they carry only the step pa
 or the candidate signature. Using the same model everywhere would either make
 investigations prohibitively expensive or leave the reasoning-intensive curator
 step under-resourced.
+
+## Proof
+
+Behavioral verification is committed evidence, not a claim. Two artifacts:
+
+- **Live-trace evidence:** [`tests/live/evidence/`](tests/live/evidence/) — `make live-trace`
+  exercises the end-to-end CLI walkthrough against the real Anthropic Managed Agents API.
+  The committed trace shows workspace setup, case allocation, observation substrate
+  assembly, and per-API-call cost capture. The current run (2026-04-25) is partial —
+  Scenes 0/1/2 hermetic and green; the curator session-creation surface drifted in the
+  `managed-agents-2026-04-01` beta and is being tracked for follow-up. Re-run locally
+  with `make live-trace` (requires `ANTHROPIC_API_KEY` in `.secrets/env`).
+- **Stress corpus:** [`exhibits/fleet-01/README.md`](exhibits/fleet-01/README.md) —
+  a deterministic, byte-identical, ~360k-token APSB25-94 forensic bundle (apache +
+  modsec + fs + cron + proc + journal + maldet) with attack needles buried in
+  realistic noise. Regenerate with `tools/synth-corpus.sh --seed 42`. Sources
+  documented; no operator-local data.
 
 ## Roadmap
 
