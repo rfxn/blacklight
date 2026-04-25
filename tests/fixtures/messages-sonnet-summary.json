@@ -1,0 +1,11 @@
+{
+  "id": "msg_test_sonnet_001",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-4-6",
+  "content": [
+    {"type": "text", "text": "# Bundle summary\n\n**Case:** CASE-2026-0042\n**Host:** test-host\n**Generated:** 2026-04-25T00:00:00Z\n\n## Trigger / hypothesis\nAPSB25-94 polyshell on a.php\n\n## Top-line findings\n- 203.0.113.42 GETs the .php/.gif polyglot 14:22-14:31\n- mtime cluster on .cache/ products 23:58Z\n\n## Jump points\n- jq -r '.client_ip' apache.transfer.jsonl | sort -u\n\n## Attention-worthy\n- One POST to a.php at 14:23:51Z (no GET preceding)\n"}
+  ],
+  "stop_reason": "end_turn",
+  "usage": {"input_tokens": 1200, "output_tokens": 180}
+}

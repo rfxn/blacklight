@@ -1,0 +1,9 @@
+{
+  "id": "msg_test_haiku_fail_001",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-haiku-4-5",
+  "content": [{"type": "text", "text": "verdict: match\nreason: corpus sample 3 contains the eval-base64-decode pattern the sig anchors on"}],
+  "stop_reason": "end_turn",
+  "usage": {"input_tokens": 800, "output_tokens": 22}
+}

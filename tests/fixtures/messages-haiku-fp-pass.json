@@ -1,0 +1,9 @@
+{
+  "id": "msg_test_haiku_pass_001",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-haiku-4-5",
+  "content": [{"type": "text", "text": "verdict: pass\nreason: signature targets specific double-extension polyglot path; no corpus sample matches"}],
+  "stop_reason": "end_turn",
+  "usage": {"input_tokens": 800, "output_tokens": 25}
+}
