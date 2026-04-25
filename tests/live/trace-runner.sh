@@ -124,23 +124,22 @@ printf '## Scene 1 — Open case\n\n```bash\n'
     --notes "APSB25-94 — Magento polyglot webshell suspected on magento-prod-01"
 printf '```\n\n'
 
-CASE_ID="$(/usr/bin/cat /var/lib/bl/state/active-case 2>/dev/null || /usr/bin/echo "CASE-2026-LIVETRACE")" # file absent on first run; fallback is safe
+CASE_ID="$(/usr/bin/cat /var/lib/bl/state/case.current 2>/dev/null || /usr/bin/echo "CASE-2026-0001")" # 2>/dev/null: file absent on first run; fallback matches CASE-YYYY-NNNN format guard
 
-# ── Scene 2 — Substrate handoff (6 observation streams) ──────────────────────
+# ── Scene 2 — Substrate handoff (mixed observe verbs against synthetic exhibit) ──
+# Hermetic isolation: every observe verb here either accepts --root pointing at
+# the synth corpus, or operates on an explicit file path. No verb in this scene
+# reads system defaults (no /var/log, no /etc/cron.d, no /var/spool/cron) — the
+# data fence is enforced by the verb selection itself, not by additional flags.
+# bl observe apache/crons hardcode /var/log paths and CANNOT be safely run
+# against the synth exhibit without a CLI-surface change (tracked as M12.5).
 printf '## Scene 2 — Substrate handoff\n\n```bash\n'
-"$REPO_ROOT/bl" observe log apache --window 30d \
-    --vhost magento.example.com \
-    --source exhibits/fleet-01/large-corpus/apache.access.log
-"$REPO_ROOT/bl" observe modsec --since 2026-03-15 \
-    --source exhibits/fleet-01/large-corpus/modsec_audit.log
-"$REPO_ROOT/bl" observe fs --mtime-since --since 2026-03-15 \
-    --under exhibits/fleet-01/large-corpus/fs.mtime.txt
-"$REPO_ROOT/bl" observe cron --all-users \
-    --source exhibits/fleet-01/large-corpus/cron.snapshot
-"$REPO_ROOT/bl" observe proc --rss-min 32M \
-    --source exhibits/fleet-01/large-corpus/proc.snapshot
-"$REPO_ROOT/bl" observe log auth --window 30d \
-    --source exhibits/fleet-01/large-corpus/journal/auth.log
+"$REPO_ROOT/bl" observe fs --mtime-since --since 2026-01-01 --under "$REPO_ROOT/exhibits/fleet-01/large-corpus"
+"$REPO_ROOT/bl" observe file "$REPO_ROOT/exhibits/fleet-01/large-corpus/apache.access.log"
+"$REPO_ROOT/bl" observe file "$REPO_ROOT/exhibits/fleet-01/large-corpus/modsec_audit.log"
+"$REPO_ROOT/bl" observe file "$REPO_ROOT/exhibits/fleet-01/large-corpus/cron.snapshot"
+"$REPO_ROOT/bl" observe file "$REPO_ROOT/exhibits/fleet-01/large-corpus/journal/auth.log"
+"$REPO_ROOT/bl" observe file "$REPO_ROOT/exhibits/fleet-01/large-corpus/proc.snapshot"
 printf '```\n\n'
 
 # ── Scene 3 — Wake curator (Opus 4.7 + 1M context, single turn) ─────────────
@@ -154,7 +153,7 @@ printf '```\n\n**Wall-clock for hypothesis turn:** %ds\n\n' "$((T1-T0))"
 HYPO_TIMEOUT=120
 HYPO_FOUND=0
 for i in $(seq 1 "$HYPO_TIMEOUT"); do
-    if "$REPO_ROOT/bl" case --show "$CASE_ID" 2>/dev/null | /usr/bin/grep -q "HIGH\|MEDIUM"; then # 2>/dev/null: case state may not exist during poll warm-up; stderr is noisy but non-fatal
+    if "$REPO_ROOT/bl" case show "$CASE_ID" 2>/dev/null | /usr/bin/grep -q "HIGH\|MEDIUM"; then # 2>/dev/null: case state may not exist during poll warm-up; stderr is noisy but non-fatal
         HYPO_FOUND=1
         printf '**Hypothesis received after %ds polling**\n\n' "$i"
         break
@@ -170,7 +169,7 @@ bl_check_cost_cap
 
 # ── Scene 4 — Auto tier ───────────────────────────────────────────────────────
 printf '## Scene 4 — Auto tier\n\n```bash\n'
-"$REPO_ROOT/bl" run --case "$CASE_ID" --tier auto || true # non-zero exit is non-fatal in trace
+"$REPO_ROOT/bl" run --tier auto || true # non-zero exit is non-fatal in trace; --case removed (uses current case from state)
 printf '```\n\n'
 
 # ── Scenes 5-6 — Suggested + destructive (operator-confirm required; skipped) ─
@@ -180,7 +179,7 @@ printf 'harness skips to avoid auto-applying defenses to the synthetic exhibit.\
 
 # ── Scene 7 — Case state ──────────────────────────────────────────────────────
 printf '## Scene 7 — Case state\n\n```bash\n'
-"$REPO_ROOT/bl" case --show "$CASE_ID"
+"$REPO_ROOT/bl" case show "$CASE_ID"
 printf '```\n\n'
 
 # ── Scene 8 — Sim-day-2 (Managed Agents persistence proof) ───────────────────
@@ -199,8 +198,8 @@ bl_check_cost_cap
 # ── Trace summary ─────────────────────────────────────────────────────────────
 TOTAL_REQUESTS="$(/usr/bin/wc -l < "$TRACE_LOG" 2>/dev/null || /usr/bin/echo 0)" # trace log absent if no API calls were made (dry-run path); default to 0
 printf '## Trace summary\n\n'
-printf '- Total API requests: %d\n' "$TOTAL_REQUESTS"
-printf '- Trace log: `%s`\n' "$TRACE_LOG"
-printf '- Evidence file: `%s`\n\n' "$EVIDENCE_FILE"
+printf -- '- Total API requests: %d\n' "$TOTAL_REQUESTS"   # printf '--' ends option parsing — leading '-' in fmt would otherwise trigger 'invalid option'
+printf -- '- Trace log: `%s`\n' "$TRACE_LOG"
+printf -- '- Evidence file: `%s`\n\n' "$EVIDENCE_FILE"
 
 printf 'Run grader: `make live-trace-grade EVIDENCE=%s`\n' "$EVIDENCE_FILE"
