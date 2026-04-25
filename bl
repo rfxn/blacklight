@@ -2893,14 +2893,39 @@ bl_observe_substrate() {
 # ---------------------------------------------------------------------------
 
 # --- src/bl.d/42-observe-router.sh ---
+
+# _bl_obs_render_summary_deterministic stage_dir case_id host_label now_ts hypothesis ts_min ts_max — fallback summary.md (Sonnet bypass / failure path).
+# File scope (not nested) — bash function definitions inside another function leak to global on each invocation.
+_bl_obs_render_summary_deterministic() {
+    local stage_dir="$1" case_id="$2" host_label="$3" now_ts="$4"
+    local hypothesis="$5" ts_min="$6" ts_max="$7"
+    {
+        printf '# Bundle summary\n\n'
+        printf '**Case:** %s\n' "$case_id"
+        printf '**Host:** %s\n' "$host_label"
+        printf '**Generated:** %s\n\n' "$now_ts"
+        printf '## Trigger / hypothesis\n\n%s\n\n' "$hypothesis"
+        printf '## Evidence window\n\n- From: %s\n- To:   %s\n\n' "$ts_min" "$ts_max"
+        printf '## Sources present\n\n'
+        local sf sname rcnt
+        while IFS= read -r sf; do
+            sname=$(command basename "$sf" .jsonl)
+            rcnt=$(command wc -l < "$sf" | command awk '{print $1}')
+            printf -- '- %s (%s records)\n' "$sname" "$rcnt"
+        done < <(command find "$stage_dir" -maxdepth 1 -name '*.jsonl' -type f 2>/dev/null | command sort)   # EACCES on stage jsonl files — partial entries acceptable
+    } > "$stage_dir/summary.md"
+}
+
 bl_bundle_build() {
     local format_arg="auto" since_arg="" out_dir_arg=""
+    local no_llm=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --format)  format_arg="$2"; shift 2 ;;
-            --since)   since_arg="$2"; shift 2 ;;
-            --out-dir) out_dir_arg="$2"; shift 2 ;;
-            *)         bl_error_envelope observe "bundle: unknown option: $1"; return "$BL_EX_USAGE" ;;
+            --format)         format_arg="$2"; shift 2 ;;
+            --since)          since_arg="$2"; shift 2 ;;
+            --out-dir)        out_dir_arg="$2"; shift 2 ;;
+            --no-llm-summary) no_llm="yes"; shift ;;
+            *)                bl_error_envelope observe "bundle: unknown option: $1"; return "$BL_EX_USAGE" ;;
         esac
     done
 
@@ -3019,22 +3044,49 @@ bl_bundle_build() {
     local host_label
     host_label="$(_bl_obs_host_label)"
 
-    {
-        printf '# Bundle summary\n\n'
-        printf '**Case:** %s\n' "$case_id"
-        printf '**Host:** %s\n' "$host_label"
-        printf '**Generated:** %s\n\n' "$now_ts"
-        printf '## Trigger / hypothesis\n\n%s\n\n' "$hypothesis"
-        printf '## Evidence window\n\n- From: %s\n- To:   %s\n\n' "${ts_min:-unknown}" "${ts_max:-unknown}"
-        printf '## Sources present\n\n'
-        while IFS= read -r sf; do
-            local sname
-            sname=$(command basename "$sf" .jsonl)
-            local rcnt
-            rcnt=$(command wc -l < "$sf" | command awk '{print $1}')
-            printf -- '- %s (%s records)\n' "$sname" "$rcnt"
-        done < <(command find "$stage_dir" -maxdepth 1 -name '*.jsonl' -type f 2>/dev/null | command sort)   # EACCES on stage jsonl files — partial entries acceptable
-    } > "$stage_dir/summary.md"
+    # Sonnet 4.6 path: render summary.md via bl_messages_call (M11 P3).
+    # Falls back to deterministic helper on --no-llm-summary, BL_DISABLE_LLM=1,
+    # missing system prompt, or any non-zero rc / empty output from the API.
+    if [[ "$no_llm" == "yes" || "${BL_DISABLE_LLM:-}" == "1" ]]; then
+        _bl_obs_render_summary_deterministic "$stage_dir" "$case_id" "$host_label" "$now_ts" "$hypothesis" "${ts_min:-unknown}" "${ts_max:-unknown}"
+    else
+        local repo_root="${BL_REPO_ROOT:-$(command dirname "$(readlink -f "$0" 2>/dev/null || printf '.')" 2>/dev/null)}"   # 2>/dev/null: readlink may fail under bash -c with empty $0 → cwd fallback
+        local sys_prompt="$repo_root/prompts/bundle-summary-system.md"
+        if [[ ! -r "$sys_prompt" ]]; then
+            bl_warn "bundle: prompts/bundle-summary-system.md missing — fallback to deterministic summary"
+            _bl_obs_render_summary_deterministic "$stage_dir" "$case_id" "$host_label" "$now_ts" "$hypothesis" "${ts_min:-unknown}" "${ts_max:-unknown}"
+        else
+            local user_msg
+            user_msg=$(command mktemp)
+            {
+                printf 'Case: %s\nHost: %s\nGenerated: %s\nHypothesis: %s\nWindow: %s → %s\n\nSources present:\n' \
+                    "$case_id" "$host_label" "$now_ts" "$hypothesis" "${ts_min:-unknown}" "${ts_max:-unknown}"
+                while IFS= read -r sf; do
+                    local sname rcnt
+                    sname=$(command basename "$sf" .jsonl)
+                    rcnt=$(command wc -l < "$sf" | command awk '{print $1}')
+                    printf -- '- %s (%s records)\n' "$sname" "$rcnt"
+                done < <(command find "$stage_dir" -maxdepth 1 -name '*.jsonl' -type f 2>/dev/null | command sort)   # EACCES on stage jsonl files — partial entries acceptable
+                printf '\nFirst 50 records (concatenated, JSONL):\n'
+                command find "$stage_dir" -maxdepth 1 -name '*.jsonl' -type f 2>/dev/null \
+                    | command sort | command head -1 \
+                    | { while IFS= read -r f; do command head -50 "$f"; done; }
+            } > "$user_msg"
+            local sonnet_out="" sonnet_rc=0
+            # `|| sonnet_rc=$?` neutralizes set -e for the API call so non-zero
+            # rc (auth/5xx/429) routes through the explicit fallback below.
+            sonnet_out=$(bl_messages_call claude-sonnet-4-6 "$sys_prompt" "$user_msg" 1500) || sonnet_rc=$?
+            command rm -f "$user_msg"
+            if (( sonnet_rc == 0 )) && [[ -n "$sonnet_out" ]]; then
+                # Truncate at line boundary near 2KB to avoid mid-UTF-8 byte split (DESIGN.md §10.3 size budget).
+                printf '%s\n' "$sonnet_out" | command awk 'BEGIN{n=0} {if (n+length($0)+1 <= 2048) {print; n+=length($0)+1} else exit}' > "$stage_dir/summary.md"
+                bl_debug "bundle: summary.md rendered by claude-sonnet-4-6"
+            else
+                bl_warn "bundle: Sonnet summary unavailable (rc=$sonnet_rc) — fallback to deterministic"
+                _bl_obs_render_summary_deterministic "$stage_dir" "$case_id" "$host_label" "$now_ts" "$hypothesis" "${ts_min:-unknown}" "${ts_max:-unknown}"
+            fi
+        fi
+    fi
 
     # Build entries array for MANIFEST
     local entries_json='[]'
