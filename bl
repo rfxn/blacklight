@@ -4373,21 +4373,22 @@ _bl_defend_ledger_emit() {
 }
 
 bl_defend_modsec() {
-    # bl_defend_modsec <rule-file-or-id> [--remove] [--yes] [--reason <str>]
+    # bl_defend_modsec <rule-file-or-id> [--remove] [--yes] [--reason <str>] [--from-action <act-id>]
     local target=""
     local remove="no"
     local yes="no"
     local reason=""
+    local from_action=""
     while (( $# > 0 )); do
         case "$1" in
-            --remove)  remove="yes"; shift ;;
-            --yes)     yes="yes"; shift ;;
-            --reason)  reason="$2"; shift 2 ;;
-            -*)        bl_error_envelope defend "unknown flag: $1"; return "$BL_EX_USAGE" ;;
-            *)         target="$1"; shift ;;
+            --remove)       remove="yes"; shift ;;
+            --yes)          yes="yes"; shift ;;
+            --reason)       reason="$2"; shift 2 ;;
+            --from-action)  from_action="$2"; shift 2 ;;
+            -*)             bl_error_envelope defend "unknown flag: $1"; return "$BL_EX_USAGE" ;;
+            *)              target="$1"; shift ;;
         esac
     done
-    [[ -z "$target" ]] && { bl_error_envelope defend "missing <rule-file> or <rule-id>"; return "$BL_EX_USAGE"; }
 
     local case_id
     case_id=$(bl_case_current)
@@ -4400,11 +4401,54 @@ bl_defend_modsec() {
     bl_init_workdir || return $?
 
     if [[ "$remove" == "yes" ]]; then
+        [[ -z "$target" ]] && { bl_error_envelope defend "missing <rule-id> for --remove"; return "$BL_EX_USAGE"; }
         _bl_defend_modsec_remove "$target" "$yes" "$reason" "$case_id" "$apachectl" "$confdir"
         return $?
     fi
 
-    # Apply path: target is a rule-file
+    # M11 P7: --from-action <act-id> sources the rule body from the curator's
+    # synthesize_defense payload at bl-case/<case>/actions/pending/<act-id>.json.
+    # File-path mode (positional arg) remains the primary path. The .json
+    # extension matches schemas/defense.json — bl_jq_schema_check is JSON-strict
+    # via --slurpfile (DESIGN.md §12.2).
+    if [[ -n "$from_action" ]]; then
+        if ! [[ "$from_action" =~ ^act-[A-Za-z0-9_-]{1,64}$ ]]; then
+            bl_error_envelope defend "from-action: malformed act_id (expected act-... pattern)"
+            return "$BL_EX_USAGE"
+        fi
+        [[ -z "$case_id" || "$case_id" == "CASE-0000-0000" ]] && {
+            bl_error_envelope defend "from-action: no active case"
+            return "$BL_EX_NOT_FOUND"
+        }
+        local memstore_id
+        memstore_id="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state file may be absent on first invocation; fall through to default id
+        local action_body action_payload action_kind action_rule_body
+        action_body=$(bl_api_call GET "/v1/memory_stores/$memstore_id/memories/bl-case%2F$case_id%2Factions%2Fpending%2F$from_action.json") || return $?
+        action_payload=$(printf '%s' "$action_body" | jq -r '.content')
+        local payload_tmp
+        payload_tmp=$(command mktemp)
+        printf '%s' "$action_payload" > "$payload_tmp"
+        local repo_root="${BL_REPO_ROOT:-$(command dirname "$(readlink -f "$0" 2>/dev/null || printf '.')" 2>/dev/null || printf '.')}"   # 2>/dev/null × 2: readlink may fail under bash -c (BASH_SOURCE empty); dirname of stale arg → fall back to '.'
+        if ! bl_jq_schema_check "$repo_root/schemas/defense.json" "$payload_tmp"; then
+            command rm -f "$payload_tmp"
+            return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+        fi
+        action_kind=$(printf '%s' "$action_payload" | jq -r '.kind')
+        if [[ "$action_kind" != "modsec" ]]; then
+            command rm -f "$payload_tmp"
+            bl_error_envelope defend "from-action: kind '$action_kind' != modsec"
+            return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+        fi
+        action_rule_body=$(printf '%s' "$action_payload" | jq -r '.body')
+        target=$(command mktemp)
+        printf '%s' "$action_rule_body" > "$target"
+        command rm -f "$payload_tmp"
+        bl_debug "bl_defend_modsec: rule body sourced from $from_action"
+    fi
+
+    [[ -z "$target" ]] && { bl_error_envelope defend "missing <rule-file> or --from-action <act-id>"; return "$BL_EX_USAGE"; }
+
+    # Apply path: target is a rule-file (positional, or mktemp from --from-action)
     if [[ ! -r "$target" ]]; then
         bl_error_envelope defend "rule file not readable: $target"
         return "$BL_EX_NOT_FOUND"
@@ -4809,7 +4853,7 @@ _bl_defend_sig_fp_gate() {
             esac
             ;;
         yara)
-            if yara -q "$sig_file" "$corpus" 2>/dev/null | grep -q .; then   # yara stderr: rule parse errors are fail-closed below; 2>/dev/null silences per-file parse noise on mixed corpora
+            if yara --no-warnings "$sig_file" "$corpus" 2>/dev/null | grep -q .; then   # --no-warnings (-w) is portable across yara 4.2.3 (debian12, lacks -q) and 4.5.2 (rocky9); 2>/dev/null silences per-file parse noise on mixed corpora — rule parse errors fall through to fail-closed below
                 bl_warn "FP-gate hit: yara matched sig against FP-corpus"
                 return "$BL_EX_TIER_GATE_DENIED"
             fi

@@ -38,9 +38,9 @@ bl-case/
 │   ├── results/                      # wrapper-written step results
 │   │   └── s-<id>.json
 │   ├── actions/
-│   │   ├── pending/<act-id>.yaml     # awaiting operator approval
-│   │   ├── applied/<act-id>.yaml     # applied; carries retire-hint
-│   │   └── retired/<act-id>.yaml     # closed; no longer active
+│   │   ├── pending/<act-id>.json     # awaiting operator approval
+│   │   ├── applied/<act-id>.json     # applied; carries retire-hint
+│   │   └── retired/<act-id>.json     # closed; no longer active
 │   ├── defense-hits.md               # running log of blocks that fired
 │   ├── closed.md                     # present iff case closed: brief file_ids + retirement schedule
 │   └── STEP_COUNTER                  # wrapper-managed step-id allocator (see §3 note)
@@ -73,9 +73,9 @@ bl-case/
 | `bl-case/CASE-<id>/open-questions.md` | curator | on-hypothesis-revision (gates case-close) | 15 KB | mutable; must be empty (or explicit "none") for case-close |
 | `bl-case/CASE-<id>/pending/s-<id>.json` | curator (via `report_step`) | on-step-emit | 10 KB | mutable until `bl run`; then the wrapper moves the file to `results/` and clears `pending/` |
 | `bl-case/CASE-<id>/results/s-<id>.json` | wrapper | on-step-run | 50 KB | immutable-after-write |
-| `bl-case/CASE-<id>/actions/pending/<act-id>.yaml` | curator (via `synthesize_defense`) | on-step-emit (from `synthesize_defense` tool) | 40 KB | mutable until operator `bl run --yes`; then wrapper moves to `applied/` |
-| `bl-case/CASE-<id>/actions/applied/<act-id>.yaml` | wrapper | on-action-apply | 40 KB | immutable-after-write; carries `applied_at`, `backup_path`, `retire_hint` |
-| `bl-case/CASE-<id>/actions/retired/<act-id>.yaml` | wrapper | on-retire (manual removal, case-close, or retire_hint trigger) | 40 KB | immutable-after-close |
+| `bl-case/CASE-<id>/actions/pending/<act-id>.json` | curator (via `synthesize_defense`) | on-step-emit (from `synthesize_defense` tool) | 40 KB | mutable until operator `bl run --yes`; then wrapper moves to `applied/` |
+| `bl-case/CASE-<id>/actions/applied/<act-id>.json` | wrapper | on-action-apply | 40 KB | immutable-after-write; carries `applied_at`, `backup_path`, `retire_hint` |
+| `bl-case/CASE-<id>/actions/retired/<act-id>.json` | wrapper | on-retire (manual removal, case-close, or retire_hint trigger) | 40 KB | immutable-after-close |
 | `bl-case/CASE-<id>/defense-hits.md` | wrapper | on-evidence-ingest (when a new block-hit record ingests for an applied action) | 30 KB | append-only |
 | `bl-case/CASE-<id>/closed.md` | wrapper | on-close | 20 KB | present-iff-closed; immutable-after-close; carries brief `file_id`s + retirement schedule |
 | `bl-case/CASE-<id>/STEP_COUNTER` | wrapper | allocated-on-demand (pre-step-emit); incremented at each allocation | 16 bytes | mutable; monotonic non-decreasing |
@@ -134,7 +134,7 @@ CASE-OPEN ─► ACTIVE ─► CLOSED
 
 - `bl case close` requires `open-questions.md` to be empty (or contain the literal `none`). Wrapper rejects with exit 68 otherwise.
 - `bl case close` requires every `pending/s-<id>.json` to have a paired `results/s-<id>.json` (no un-run steps).
-- `bl case close` requires every `actions/applied/<act-id>.yaml` to have a `retire_hint` field (even if the hint is `manual`).
+- `bl case close` requires every `actions/applied/<act-id>.json` to have a `retire_hint` field (even if the hint is `manual`).
 - Case cannot be re-opened after close — operator runs `bl case --new --split-from <closed-id>` to create a linked successor case.
 
 ---
@@ -202,9 +202,9 @@ Cross-writes are forbidden. The wrapper's system sanity check runs on every boot
 
 Three states, linear transitions:
 
-- `actions/pending/<act-id>.yaml` — written by the curator via `synthesize_defense` (`DESIGN.md §12.2`). Wrapper runs kind-specific FP-gate (modsec: `apachectl -t`; firewall: ASN safelist check; sig: FP-corpus scan) before promotion.
-- `actions/applied/<act-id>.yaml` — wrapper writes after `bl run --yes` successfully applies. Carries `applied_at`, `backup_path`, `retire_hint` (conditions under which the wrapper should retire the action — e.g., "retire if no defense-hits in 14 days").
-- `actions/retired/<act-id>.yaml` — wrapper writes when one of: (a) operator runs `bl defend <kind> --remove <id>`; (b) `retire_hint` fires; (c) case closes. The retired YAML preserves the full apply payload + retirement reason + `retired_at`.
+- `actions/pending/<act-id>.json` — written by the curator via `synthesize_defense` (`DESIGN.md §12.2`). Wrapper runs kind-specific FP-gate (modsec: `apachectl -t`; firewall: ASN safelist check; sig: FP-corpus scan) before promotion.
+- `actions/applied/<act-id>.json` — wrapper writes after `bl run --yes` successfully applies. Carries `applied_at`, `backup_path`, `retire_hint` (conditions under which the wrapper should retire the action — e.g., "retire if no defense-hits in 14 days").
+- `actions/retired/<act-id>.json` — wrapper writes when one of: (a) operator runs `bl defend <kind> --remove <id>`; (b) `retire_hint` fires; (c) case closes. The retired JSON preserves the full apply payload + retirement reason + `retired_at`.
 
 Retired actions stay in the store for the memstore's 30-day audit window. After that they age out of `memver_` but the local ledger (`/var/lib/bl/ledger/<case>.jsonl`) preserves the full history indefinitely.
 

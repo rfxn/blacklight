@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rfxn.github.io/blacklight/schemas/defense.json",
-  "title": "blacklight synthesize_defense custom-tool input",
+  "title": "blacklight synthesize_defense custom-tool input + reply",
   "type": "object",
   "required": ["kind", "body", "reasoning", "case_id"],
   "properties": {
@@ -36,6 +36,20 @@
     },
     "asn_safelist_checked": {
       "type": "boolean"
+    },
+    "act_id": {
+      "type": "string",
+      "pattern": "^act-[A-Za-z0-9_-]{1,64}$"
+    },
+    "gate_status": {
+      "type": "string",
+      "enum": ["pass", "fail", "deferred"]
+    },
+    "staged_path": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
     }
   }
 }

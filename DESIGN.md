@@ -385,9 +385,9 @@ bl-case/
 │   ├── results/                      # wrapper-written step results
 │   │   └── s-<id>.json
 │   ├── actions/
-│   │   ├── pending/<act-id>.yaml     # awaiting operator approval
-│   │   ├── applied/<act-id>.yaml     # applied; carries retire-hint
-│   │   └── retired/<act-id>.yaml     # closed; no longer active
+│   │   ├── pending/<act-id>.json     # awaiting operator approval
+│   │   ├── applied/<act-id>.json     # applied; carries retire-hint
+│   │   └── retired/<act-id>.json     # closed; no longer active
 │   ├── defense-hits.md               # running log of blocks that fired
 │   └── closed.md                     # present iff case closed: brief file_ids + retirement schedule
 ```
@@ -745,7 +745,7 @@ Why a custom tool instead of free-form JSON in a message:
 
 ### 12.2 `synthesize_defense` custom tool (defense-authoring surface)
 
-The curator invokes `synthesize_defense` when a case has enough correlated evidence to justify authoring a defensive payload (ModSec rule body, firewall entry set, scanner signature). One invocation per defense proposal; the wrapper reads the payload, writes it under `bl-case/<case-id>/actions/pending/<act-id>.yaml`, runs the FP-gate (`apachectl configtest` for ModSec, benign-corpus scan for signatures, CDN safe-list for firewall), and replies with the gate result. Tool shape:
+The curator invokes `synthesize_defense` when a case has enough correlated evidence to justify authoring a defensive payload (ModSec rule body, firewall entry set, scanner signature). One invocation per defense proposal; the wrapper reads the payload, writes it under `bl-case/<case-id>/actions/pending/<act-id>.json`, runs the FP-gate (`apachectl configtest` for ModSec, benign-corpus scan for signatures, CDN safe-list for firewall), and replies with the gate result. Tool shape:
 
 ```
 name:         synthesize_defense
