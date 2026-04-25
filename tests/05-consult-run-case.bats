@@ -142,6 +142,28 @@ teardown() {
 # G13: dedup fingerprint
 # ---------------------------------------------------------------------------
 
+@test "bl consult --new --dedup uses INDEX fp column fast path (no hypothesis.md GET)" {
+    # Audit M10: prior version did N sequential hypothesis.md GETs (one per
+    # active case). Fast path reads fp from INDEX row column. To verify the
+    # fast path resolves WITHOUT a per-hypothesis fan-out, route any
+    # hypothesis.md GET to a 404 — fast path must still attach successfully.
+    bl_case_fixture_seed CASE-2026-0001
+    rm -f "$BL_VAR_DIR/state/case.current"
+    local trigger
+    trigger=$(mktemp)
+    printf 'apsb25-94-dedup-fingerprint-test' > "$trigger"
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    # INDEX.md → new format with fp column populated
+    bl_curator_mock_add_route 'bl-case%2FINDEX\.md' 'memstore-index-with-fp.json' 200
+    # ANY hypothesis.md GET 404s — fast path must not need it
+    bl_curator_mock_add_route 'hypothesis\.md' 'memstore-case-not-found.json' 404
+    run "$BL_SOURCE" consult --new --dedup --trigger "$trigger"
+    rm -f "$trigger"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BL_VAR_DIR/state/case.current")" = "CASE-2026-0001" ]
+    grep -q '"kind":"case_attached"' "$BL_VAR_DIR/ledger/CASE-2026-0001.jsonl"
+}
+
 @test "bl consult --new --dedup with matching fingerprint attaches to existing case" {
     bl_case_fixture_seed CASE-2026-0001
     rm -f "$BL_VAR_DIR/state/case.current"   # dedup --attach must (re)write case.current

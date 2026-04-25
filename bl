@@ -3048,7 +3048,7 @@ bl_consult_materialize_case() {
         return "$BL_EX_UPSTREAM_ERROR"
     }
     command rm -f "$body_file"
-    bl_consult_update_index_row_append "$case_id" "$now" "$notes" || return $?
+    bl_consult_update_index_row_append "$case_id" "$now" "$notes" "$fp" || return $?
     return "$BL_EX_OK"
 }
 
@@ -3093,11 +3093,51 @@ bl_consult_register_curator() {
 
 bl_consult_find_open_case_by_fingerprint() {
     # bl_consult_find_open_case_by_fingerprint <16hex> — prints case-id or empty on miss; 0/69
+    # Fast path: parse the trigger-fingerprint column (col 7) directly from the
+    # INDEX.md row. Fallback to per-hypothesis GET only when the row lacks the
+    # fp column (legacy INDEX written before M9.5 P7) — keeps cross-version
+    # operator workspaces resolvable.
     local fp="$1"
     local index_body
     index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" 2>/dev/null) || return "$BL_EX_OK"   # missing INDEX → no prior cases
+    local index_content
+    index_content=$(printf '%s' "$index_body" | jq -r '.content')
+
+    # awk -F'|' on `| a | b | c | d | e |` gives NF=7 (1 empty leader + 5 cells
+    # + 1 empty trailer). 6-cell row → NF=8. We use NF as the legacy/new
+    # discriminator since the only-distinguishing-feature of the new schema
+    # is the trailing fingerprint column.
+    #
+    # Fast path: NF>=8 rows with non-empty $7 carry a fingerprint; match.
+    local case_id_match
+    case_id_match=$(printf '%s' "$index_content" | command awk -v want="$fp" -F'|' '
+        /^\| CASE-[0-9]{4}-[0-9]{4} \|/ {
+            status=$4; gsub(/^[ \t]+|[ \t]+$/, "", status)
+            if (status != "active") next
+            if (NF < 8) next   # legacy 5-cell row → fall through to slow path
+            cell=$7; gsub(/^[ \t]+|[ \t]+$/, "", cell)
+            if (cell == want) {
+                row=$2; gsub(/^[ \t]+|[ \t]+$/, "", row)
+                print row; exit
+            }
+        }')
+    if [[ -n "$case_id_match" ]]; then
+        printf '%s\n' "$case_id_match"
+        return "$BL_EX_OK"
+    fi
+
+    # Legacy fallback: rows without fp column (NF<8) → fan out per-case GET.
+    # Once all rows carry fp, this loop body never executes.
     local active_cases
-    active_cases=$(printf '%s' "$index_body" | jq -r '.content' | grep -E '^\| CASE-[0-9]{4}-[0-9]{4} \|.*\| active \|' | awk -F'|' '{print $2}' | tr -d ' ')
+    active_cases=$(printf '%s' "$index_content" \
+        | command awk -F'|' '
+            /^\| CASE-[0-9]{4}-[0-9]{4} \|/ {
+                status=$4; gsub(/^[ \t]+|[ \t]+$/, "", status)
+                if (status != "active") next
+                if (NF >= 8) next   # has fp column — fast path already handled
+                row=$2; gsub(/^[ \t]+|[ \t]+$/, "", row)
+                print row
+            }')
     local case_id hyp_body hyp_fp
     while IFS= read -r case_id; do
         [[ -z "$case_id" ]] && continue
@@ -3112,13 +3152,14 @@ bl_consult_find_open_case_by_fingerprint() {
 }
 
 bl_consult_update_index_row_append() {
-    # bl_consult_update_index_row_append <case-id> <iso-ts> <notes> — 0/69/70/71
+    # bl_consult_update_index_row_append <case-id> <iso-ts> <notes> [<fp>] — 0/69/70/71
     local case_id="$1"
     local ts="$2"
     local notes="${3:-investigation open, no hypothesis yet}"
+    local fp="${4:-}"
     local preview
     preview=$(printf '%.30s' "$notes")
-    local new_row="| $case_id | $ts | active | $preview | — |"
+    local new_row="| $case_id | $ts | active | $preview | — | ${fp:-—} |"
     local attempt=0 index_body current_content new_content body_file rc
     local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"
     while (( attempt < 3 )); do

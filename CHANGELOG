@@ -16,6 +16,25 @@ https://github.com/rfxn/blacklight
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
 === M10 complete — blacklight v0.1.0 ship-ready ===
 
+- M9.5 P7 | Apr 25 2026 — consult dedup INDEX fingerprint column (M10):
+[Change] case-templates/INDEX.md — added 6th `Fingerprint` column to row
+      schema. New cases written by `bl_consult_update_index_row_append`
+      carry trigger_fingerprint inline.
+[Change] src/bl.d/50-consult.sh — bl_consult_update_index_row_append
+      now accepts <fp> as 4th positional and includes it in the
+      written row; bl_consult_materialize_case passes fp through.
+[Fix] src/bl.d/50-consult.sh — bl_consult_find_open_case_by_fingerprint
+      reads fp from INDEX row column directly via single awk pass;
+      legacy fallback (per-hypothesis GET) only runs for pre-M9.5
+      INDEX rows lacking the fp column. Reduces dedup latency from
+      O(N active cases × rtt) to O(1) on new workspaces (audit M10).
+[New] tests/fixtures/memstore-index-with-fp.json — INDEX fixture in
+      new 6-column format.
+[New] tests/05-consult-run-case.bats — fast-path regression: dedup
+      resolves with hypothesis.md routes 404'd, proving no per-case
+      GET fan-out.
+[Change] bl — regenerated.
+
 - M9.5 P5 | Apr 25 2026 — journal observe streaming-jq rewrite (M9):
 [Fix] src/bl.d/41-observe-collectors.sh — bl_observe_log_journal
       replaces per-line `printf | jq -c` fanout with a single jq -cR
