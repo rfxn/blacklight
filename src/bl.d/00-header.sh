@@ -23,7 +23,7 @@
 # Version + exit-code constants (from docs/exit-codes.md §1)
 # ----------------------------------------------------------------------------
 
-readonly BL_VERSION="0.1.0"
+readonly BL_VERSION="0.2.0"
 
 readonly BL_EX_OK=0
 readonly BL_EX_USAGE=64

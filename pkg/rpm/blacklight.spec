@@ -2,7 +2,7 @@
 # Customized for single-binary layout: /usr/bin/bl + /var/lib/bl state dirs
 #
 %define name    blacklight
-%define version 0.1.0
+%define version 0.2.0
 %define release 1%{?dist}
 
 Name:           %{name}
@@ -65,5 +65,11 @@ fi
 %doc /usr/share/doc/blacklight/CHANGELOG
 
 %changelog
+* Sat Apr 25 2026 R-fx Networks <proj@rfxn.com> - 0.2.0-1
+- M11 posture lift: real three-tier model routing (Opus 4.7 / Sonnet 4.6 / Haiku 4.5),
+  bl_poll_pending GET-poll loop, synthesize_defense + reconstruct_intent custom-tool
+  consumption hooks, README walkthrough end-to-end correction, exhibits/fleet-01
+  beef-up to ~100K tokens, 5 negative tests + 8 model-routing tests, security-model
+  documentation, install-validation evidence; 250/250 BATS green debian12 + rocky9.
 * Fri Apr 24 2026 R-fx Networks <proj@rfxn.com> - 0.1.0-1
 - Initial package release

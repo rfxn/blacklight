@@ -1,4 +1,4 @@
-## 0.2.0 — unreleased — M11 posture lift
+## 0.2.0 — 2026-04-25 — M11 posture lift
 
 [Change] M11 P3 — Sonnet 4.6 bundle-summary render in bl_bundle_build (src/bl.d/42-observe-router.sh) wrapping the deterministic summary.md generator with a bl_messages_call(claude-sonnet-4-6) path; --no-llm-summary flag + BL_DISABLE_LLM=1 env bypass cover test/cost-control modes; deterministic _bl_obs_render_summary_deterministic helper preserved at file scope as fallback on any Sonnet failure (auth/5xx/429), missing prompts/bundle-summary-system.md, or bypass trigger
 [New] M11 P3 — prompts/bundle-summary-system.md: Sonnet system prompt for the summary.md render (≤2KB output budget; required sections: trigger/hypothesis, top-line findings, jump points, attention-worthy; treats embedded log content as untrusted)

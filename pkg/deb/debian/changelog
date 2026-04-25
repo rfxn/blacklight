@@ -1,3 +1,16 @@
+blacklight (0.2.0-1) unstable; urgency=medium
+
+  * M11 posture lift release
+  * Real three-tier model routing (Opus 4.7 / Sonnet 4.6 / Haiku 4.5)
+  * bl_poll_pending GET-poll loop replaces single-cycle skeleton
+  * synthesize_defense + reconstruct_intent custom-tool consumption hooks
+  * README walkthrough end-to-end correction
+  * exhibits/fleet-01 beef-up (~100K tokens APSB25-94 fixtures)
+  * 5 negative tests + 8 model-routing tests; 250/250 green debian12 + rocky9
+  * docs/security-model.md, docs/install-validation.md authored
+
+ -- R-fx Networks <proj@rfxn.com>  Sat, 25 Apr 2026 12:00:00 +0000
+
 blacklight (0.1.0-1) unstable; urgency=medium
 
   * Initial package release
