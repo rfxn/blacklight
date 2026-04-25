@@ -274,6 +274,31 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# S10 (M11 P9): partial-state recovery
+# Audit gap: only S1 (full-blank) and S2 (full-seeded) covered before. Operator
+# crash mid-provision leaves agent-id but env-id missing — bl setup must repair.
+# ---------------------------------------------------------------------------
+
+@test "bl setup recovers partial state — agent exists, env missing → repair" {
+    mkdir -p "$BL_VAR_DIR/state"
+    printf 'agent_test_stub' > "$BL_VAR_DIR/state/agent-id"
+    # Only agent-id is present; no env-id, no memstore-skills-id, no memstore-case-id
+    # Mock returns: agent listing hit (existing), env-create success, memstore-create successes.
+    # Memory_stores list must return empty so the create branch fires (per src/bl.d/84-setup.sh:200).
+    bl_curator_mock_set_response 'setup-agents-list-hit.json' 200
+    bl_curator_mock_add_route '/v1/environments$' 'setup-env-create-success.json' 201
+    bl_curator_mock_add_route '/v1/memory_stores\?name=' 'setup-memstore-list-empty.json' 200
+    bl_curator_mock_add_route '/v1/memory_stores$' 'setup-memstore-create-skills.json' 201
+    run "$BL_SOURCE" setup
+    [ "$status" -eq 0 ]
+    # Verify all four ids now cached
+    [ -r "$BL_VAR_DIR/state/agent-id" ]
+    [ -r "$BL_VAR_DIR/state/env-id" ]
+    [ -r "$BL_VAR_DIR/state/memstore-skills-id" ]
+    [ -r "$BL_VAR_DIR/state/memstore-case-id" ]
+}
+
+# ---------------------------------------------------------------------------
 # Helper: synthesize a current-manifest fixture from the live skills/ corpus.
 # Lets the matches-current test stay green even as new skills land.
 # ---------------------------------------------------------------------------

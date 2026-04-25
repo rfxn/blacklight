@@ -3,6 +3,7 @@
 [New] M11 P2 — src/bl.d/22-models.sh: bl_messages_call wrapper for Messages API (POST /v1/messages); 4-retry exponential backoff; foundation for Sonnet 4.6 (bundle summary) + Haiku 4.5 (FP-gate adjudication) routing
 [Change] M11 P6 — bl_poll_pending real GET-poll loop (src/bl.d/20-api.sh): seen-set dedup, --timeout / --interval flags, end_turn proxy via 3-empty-cycles, BL_POLL_DRY_RUN=1 bypass; replaces single-cycle skeleton from M1
 [New] M11 P6 — tests/03-poll.bats: 7 tests covering timeout, emit, dedup, end-of-pending, auth-fail propagation, dry-run, missing-case-id
+[New] M11 P9 — five highest-leverage negative tests (preflight 401-auth-fail / consult schema-reject / defend yara fp_gate_trip / clean dry-run-receipt-expired + concurrent flock atomicity / setup partial-state recovery) — closes audit gap "228 tests, 70% smoke"; 234/234 green on debian12 + rocky9
 
 ## 0.1.0 — 2026-04-26 — first public release
 

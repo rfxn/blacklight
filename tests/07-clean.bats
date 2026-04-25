@@ -524,3 +524,50 @@ EOF
     ! kill -0 "$SLEEPER_PID" 2>/dev/null
     SLEEPER_PID=""
 }
+
+# ---------------------------------------------------------------------------
+# M11 P9 — dry-run-receipt-expired rejection + concurrent flock atomicity
+# ---------------------------------------------------------------------------
+
+@test "bl clean htaccess — dry-run-receipt-expired forces re-dry-run before live apply" {
+    # Real path: $BL_VAR_DIR/state/dry-run/<verb>-<sha>.ok where sha is
+    # _bl_clean_sha256_path of target ($dir/.htaccess), verb=clean.htaccess.
+    # Format: single ISO-8601 line (per src/bl.d/83-clean.sh:80).
+    # TTL: BL_CLEAN_DRYRUN_TTL_SECS, default 300s (line 93).
+    # Expiry returns BL_EX_TIER_GATE_DENIED=68 deterministically (line 113).
+    mkdir -p "$BL_VAR_DIR/state/dry-run" "$BL_VAR_DIR/scratch"
+    printf 'CASE-2026-0042' > "$BL_VAR_DIR/state/case.current"
+    printf '<FilesMatch "\\.php$">Require all denied</FilesMatch>\n' > "$BL_VAR_DIR/scratch/.htaccess"
+    # Compute the receipt path the same way _bl_clean_sha256_path does
+    local target="$BL_VAR_DIR/scratch/.htaccess"
+    local sha
+    sha=$(printf '%s' "$target" | sha256sum | cut -c1-8)
+    local receipt="$BL_VAR_DIR/state/dry-run/clean.htaccess-${sha}.ok"
+    # Write a stale ISO-8601 timestamp that age-exceeds the 300s TTL deterministically
+    printf '2026-01-01T00:00:00Z\n' > "$receipt"
+    # Provide a real patch file — bl_clean_htaccess rejects with 64 if --patch missing
+    printf '%s\n' '--- a/.htaccess' '+++ b/.htaccess' '@@ -1 +0,0 @@' '-<FilesMatch "\.php$">Require all denied</FilesMatch>' > "$BL_VAR_DIR/scratch/clean.patch"
+    run "$BL_SOURCE" clean htaccess "$BL_VAR_DIR/scratch" --patch "$BL_VAR_DIR/scratch/clean.patch" --yes
+    [ "$status" -eq 68 ]   # BL_EX_TIER_GATE_DENIED — receipt expired path
+    [[ "$output" == *"receipt expired"* ]] || [[ "$output" == *"re-run with --dry-run"* ]]
+    # Receipt must have been removed by _bl_clean_dry_run_check on expiry detection
+    [ ! -r "$receipt" ]
+}
+
+@test "bl ledger — concurrent flock-protected appends produce monotonic records" {
+    printf 'CASE-2026-0042' > "$BL_VAR_DIR/state/case.current"
+    # Source the wrapper functions in a subshell to call bl_ledger_append twice in parallel
+    ( . "$BL_SOURCE" 2>/dev/null
+      bl_ledger_append CASE-2026-0042 '{"ts":"2026-04-25T00:00:01Z","case":"CASE-2026-0042","kind":"observe_emitted","payload":{"obs_id":"obs-A"}}' &
+      bl_ledger_append CASE-2026-0042 '{"ts":"2026-04-25T00:00:02Z","case":"CASE-2026-0042","kind":"observe_emitted","payload":{"obs_id":"obs-B"}}' &
+      wait
+    )
+    local ledger_file="$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+    [ -r "$ledger_file" ]
+    local count
+    count=$(wc -l < "$ledger_file")
+    [ "$count" -eq 2 ]
+    # Both records are valid jq lines (no torn writes)
+    jq -e '.kind' < <(head -1 "$ledger_file") > /dev/null
+    jq -e '.kind' < <(tail -1 "$ledger_file") > /dev/null
+}

@@ -95,6 +95,15 @@ teardown() {
     [[ "$output" == *"not been seeded"* ]]
 }
 
+@test "bl_preflight 401 (invalid API key) → exit 65 with auth error envelope" {
+    # Per src/bl.d/20-api.sh:35-39 (bl_api_call), 401/403 returns
+    # BL_EX_PREFLIGHT_FAIL=65 with "authentication failed (HTTP 401)".
+    bl_mock_set_response bad_key
+    run "$BL_SOURCE" observe
+    [ "$status" -eq 65 ]
+    [[ "$output" == *"authentication"* ]] || [[ "$output" == *"401"* ]]
+}
+
 @test "bl on bash <4.1 exits 65 with 'bash 4.1+ required' (best-effort source-under-patched-VERSINFO)" {
     # Attempt to source bl under a patched BASH_VERSINFO simulating bash 3.2.
     # If the patched assignment does not propagate, skip the test.

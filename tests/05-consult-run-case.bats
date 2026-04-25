@@ -372,3 +372,30 @@ teardown() {
 @test "full-lifecycle: new case → run-list → log shows events" {
     skip "comprehensive integration test; enable after G1/G4/G6/G8 all pass green"
 }
+
+# ---------------------------------------------------------------------------
+# G16: bl run rejects step that fails schemas/step.json (M11 P9)
+# Activates the bare tests/fixtures/step-schema-fail.json fixture by wrapping
+# its content inline into a memstore-shaped response at test time. Distinct
+# from G4 (which uses the pre-wrapped memstore-step-schema-fail.json) — this
+# test exercises the schema-validation gate against the bare-step canonical
+# fixture grep-trackable at tests/fixtures/step-schema-fail.json.
+# ---------------------------------------------------------------------------
+
+@test "bl run rejects malformed step (missing step_id) with exit 67" {
+    bl_case_fixture_seed CASE-2026-0001
+    printf 'CASE-2026-0001' > "$BL_VAR_DIR/state/case.current"
+    # Build a per-test wrapper fixture so we don't pollute the committed
+    # memstore-step-schema-fail.json. Cleanup at test end below.
+    local inline_fix="$BATS_TEST_DIRNAME/fixtures/memstore-step-schema-fail-inline.json"
+    local content
+    content=$(< "$BATS_TEST_DIRNAME/fixtures/step-schema-fail.json")
+    jq -n --arg c "$content" --arg k "bl-case/CASE-2026-0001/pending/s-fail.json" \
+        '{key:$k, content:$c, content_sha256:"abc"}' > "$inline_fix"
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    bl_curator_mock_add_route 'pending%2Fs-fail' 'memstore-step-schema-fail-inline.json' 200
+    run "$BL_SOURCE" run s-fail
+    rm -f "$inline_fix"
+    [ "$status" -eq 67 ]   # BL_EX_SCHEMA_VALIDATION_FAIL
+    [[ "$output" == *"schema"* ]] || [[ "$output" == *"validation"* ]] || [[ "$output" == *"step_id"* ]]
+}

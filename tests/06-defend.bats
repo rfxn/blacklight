@@ -337,3 +337,36 @@ EOF
     last=$(tail -n1 "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl")
     printf '%s' "$last" | jq -e '.payload.retire_hint == "30d"' >/dev/null
 }
+
+# ---------------------------------------------------------------------------
+# M11 P9 — fp_gate_failed ledger entry (yara FP-gate trip path)
+# ---------------------------------------------------------------------------
+
+@test "bl defend sig — yara FP-gate trip writes ledger kind=defend_sig_rejected with reason=fp_gate_trip" {
+    # Shim yara to simulate a match (prints output → grep -q . succeeds → FP gate trips).
+    # Real yara binary version skew (debian12 yara 4.2.3 lacks -q flag, rocky9 4.5.2 has it)
+    # would make a real-binary FP-gate test non-deterministic across the matrix; the shim
+    # exercises src/bl.d/82-defend.sh:543 fp_gate logic unambiguously.
+    cat > "$BL_DEFEND_SCANNER_BIN/yara" <<'EOF'
+#!/bin/bash
+# Print one synthetic match line so the fp_gate's `| grep -q .` hits true.
+printf 'MatchBenign /corpus/sample.txt\n'
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/yara"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    mkdir -p "$BL_VAR_DIR/sigs"
+    # YARA sig content is opaque to the shim — provide a syntactically reasonable rule
+    cat > "$BL_VAR_DIR/sigs/match.yar" <<'EOF'
+rule MatchBenign { strings: $a = "BENIGN_CONTENT_DELIBERATE_MATCH" condition: $a }
+EOF
+    BL_DISABLE_LLM=1 \
+    BL_YARA_RULES_DIR="$BL_VAR_DIR/sigs-out" \
+        run "$BL_SOURCE" defend sig "$BL_VAR_DIR/sigs/match.yar" --scanner yara
+    [ "$status" -eq 68 ]   # BL_EX_TIER_GATE_DENIED
+    # Ledger assertion
+    local ledger_file="$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+    [ -r "$ledger_file" ]
+    grep -q '"kind":"defend_sig_rejected"' "$ledger_file"
+    grep -q '"reason":"fp_gate_trip"' "$ledger_file"
+}
