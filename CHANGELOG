@@ -8,6 +8,7 @@ https://github.com/rfxn/blacklight
 [New] M10 P3 — README.md full public-face rewrite (hero, install, try-it, Why Managed Agents, Why Opus 4.7 + 1M, skills architecture, model choice, roadmap)
 [New] M10 P4 — bl <verb> --help dispatch (per-verb help surfaces for observe/consult/run/defend/clean/case/setup/flush); tightened bl_usage; version-pin drift-guard in tests/01-cli-surface.bats
 [New] M10 P5 — bl observe substrate verb (read-only host-substrate enumeration: kernel/libc/init/web+modsec/firewall/scanner/log_surface/cron/package_mgr/integrity/panel/virtualization; 12 substrate.category JSONL records + observe.summary trailer with categories_present/absent/elapsed_ms; BL_SUBSTRATE_PROBE_ROOT test affordance; <2s budget; reuses _bl_obs_detect_firewall + emit/close stream helpers; +7 BATS cases in tests/04-observe.bats)
+[New] M10 P6 — tests/10-install-paths.bats install roundtrip (8 tests; install.sh --local → bl --version → uninstall.sh --yes covering: 0755 perms, idempotent overwrite, missing-src rejection, state backup, --keep-state preserve, fresh-prefix uninstall, non-interactive state-preserve)
 
 - M9.5 P1 | Apr 25 2026 — security input-validation guards (audit-driven hardening):
 [Fix] schemas/step.json — step_id property now carries pattern

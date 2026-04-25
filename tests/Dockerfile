@@ -33,6 +33,8 @@ COPY tests/fixtures/defend-fp-corpus/ /var/lib/bl/fp-corpus/
 COPY . /opt/blacklight-src
 COPY tests/ /opt/tests/
 COPY bl /opt/bl
+COPY install.sh /opt/install.sh
+COPY uninstall.sh /opt/uninstall.sh
 COPY schemas/ /opt/schemas/
 COPY prompts/ /opt/prompts/
 COPY case-templates/ /opt/case-templates/

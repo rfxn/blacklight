@@ -1,0 +1,4 @@
+#!/bin/bash
+# tests/fixtures/install-bl-stub — fixture: fake bl for install-path tests
+# Prints a fixed version string so roundtrip tests don't require make bl.
+printf 'bl 0.1.0\n'

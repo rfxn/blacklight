@@ -4,3 +4,4 @@
 [New] M10 P2 — uninstall.sh (binary removal + interactive/--yes/--keep-state state handling; timestamped backup at /var/lib/bl.bk.<ts>/)
 [New] M10 P4 — bl <verb> --help dispatch (per-verb help surfaces for observe/consult/run/defend/clean/case/setup/flush); tightened bl_usage; version-pin drift-guard
 [New] M10 P5 — bl observe substrate verb (read-only host-substrate enumeration; 12 categories; <2s)
+[New] M10 P6 — tests/10-install-paths.bats install roundtrip (8 BATS tests covering install.sh + uninstall.sh roundtrip)
