@@ -4,6 +4,7 @@ https://github.com/rfxn/blacklight
 
 === M10 — Ship-ready (v0.1.0) ===
 [New] M10 P1 — install.sh curl-pipe-bash installer (bash≥4.1, curl, jq preflight; --local / remote modes; next-step prompt)
+[New] M10 P2 — uninstall.sh (binary removal + interactive/--yes/--keep-state state handling; timestamped backup at /var/lib/bl.bk.<ts>/)
 
 - M9.5 P1 | Apr 25 2026 — security input-validation guards (audit-driven hardening):
 [Fix] schemas/step.json — step_id property now carries pattern

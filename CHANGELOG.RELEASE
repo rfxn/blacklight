@@ -1,3 +1,4 @@
 ## 0.1.0 (unreleased)
 
 [New] M10 P1 — install.sh curl-pipe-bash installer (bash≥4.1, curl, jq preflight; --local / remote modes; next-step prompt)
+[New] M10 P2 — uninstall.sh (binary removal + interactive/--yes/--keep-state state handling; timestamped backup at /var/lib/bl.bk.<ts>/)
