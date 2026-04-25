@@ -7,6 +7,7 @@
 load 'helpers/assert-jsonl'
 load 'helpers/observe-fixture-setup'
 load 'helpers/bl-preflight-mock'
+load 'helpers/capability-detect'
 
 setup() {
     BL_SOURCE="${BL_SOURCE:-$BATS_TEST_DIRNAME/../bl}"
@@ -462,8 +463,8 @@ teardown() {
     local solo_dir
     solo_dir="$BL_VAR_DIR/solo_files"
     mkdir -p "$solo_dir"
-    touch -d "2026-04-23T14:22:07Z" "$solo_dir/solo1.php"
-    touch -d "2026-04-23T14:23:07Z" "$solo_dir/solo2.php"   # 60s apart
+    touch -d "2026-04-23 14:22:07 UTC" "$solo_dir/solo1.php"
+    touch -d "2026-04-23 14:23:07 UTC" "$solo_dir/solo2.php"   # 60s apart; space-form for c6 coreutils 8.4
     run "$BL_SOURCE" observe fs --mtime-cluster --window 5 "$solo_dir"
     [ "$status" -eq 0 ]
     # No cluster records (both singletons) + summary = 1 json line
@@ -480,8 +481,8 @@ teardown() {
     local since_dir
     since_dir="$BL_VAR_DIR/since_test"
     mkdir -p "$since_dir"
-    touch -d "2026-04-24T00:00:01Z" "$since_dir/new_file.php"
-    touch -d "2026-04-23T00:00:01Z" "$since_dir/old_file.php"
+    touch -d "2026-04-24 00:00:01 UTC" "$since_dir/new_file.php"
+    touch -d "2026-04-23 00:00:01 UTC" "$since_dir/old_file.php"
     run "$BL_SOURCE" observe fs --mtime-since --since "2026-04-23T23:00:00Z" --under "$since_dir"
     [ "$status" -eq 0 ]
     local json_count
@@ -508,8 +509,8 @@ teardown() {
     local filt_dir
     filt_dir="$BL_VAR_DIR/ext_filter_test"
     mkdir -p "$filt_dir"
-    touch -d "2026-04-24T00:00:01Z" "$filt_dir/keep.php"
-    touch -d "2026-04-24T00:00:01Z" "$filt_dir/skip.txt"
+    touch -d "2026-04-24 00:00:01 UTC" "$filt_dir/keep.php"
+    touch -d "2026-04-24 00:00:01 UTC" "$filt_dir/skip.txt"
     run "$BL_SOURCE" observe fs --mtime-since --since "2026-04-23T23:00:00Z" --under "$filt_dir" --ext php
     [ "$status" -eq 0 ]
 }
@@ -683,7 +684,10 @@ teardown() {
 @test "bl observe substrate: missing-tool degradation does not fail the verb" {
     local empty_root
     empty_root=$(mktemp -d)
-    run env BL_SUBSTRATE_PROBE_ROOT="$empty_root" PATH="/usr/bin:/bin" \
+    # PATH includes /usr/local/bin: c6 image installs jq as a static binary
+    # there (debian12 puts it at /usr/bin via apt). The test point is
+    # missing-tool degradation in the substrate probe, not jq absence.
+    run env BL_SUBSTRATE_PROBE_ROOT="$empty_root" PATH="/usr/local/bin:/usr/bin:/bin" \
         BL_VAR_DIR="$BL_VAR_DIR" ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" BL_HOST_LABEL="$BL_HOST_LABEL" \
         "$BL_SOURCE" observe substrate
     [ "$status" -eq 0 ]
@@ -795,8 +799,10 @@ teardown() {
     run bash -n "$bl_path"
     [ "$status" -eq 0 ]
     # shellcheck
-    run shellcheck "$bl_path"
-    [ "$status" -eq 0 ]
+    if shellcheck_available; then
+        run shellcheck "$bl_path"
+        [ "$status" -eq 0 ]
+    fi
     # No bare which
     run bash -c "grep -n '\\bwhich\\b' '$bl_path'"
     [ "$status" -ne 0 ] || [ -z "$output" ]

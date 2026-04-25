@@ -664,6 +664,12 @@ bl_observe_fs_mtime_since() {
     local stream_path
     stream_path="$(_bl_obs_open_stream 'fs-mtime-since')"
 
+    # Normalize ISO-8601 T-separator + Z suffix → space-form (coreutils 8.4
+    # on CentOS 6 / older find rejects "YYYY-MM-DDTHH:MM:SSZ"; the space
+    # form parses portably from coreutils 8.4 onwards).
+    local since_norm="${since_arg/T/ }"
+    since_norm="${since_norm/%Z/ UTC}"
+
     # GNU -newermt; BSD fallback via touch + -newer
     local use_gnu_find=0
     if command find --version 2>/dev/null | command grep -q 'GNU find'; then   # BSD find has no --version
@@ -675,13 +681,13 @@ bl_observe_fs_mtime_since() {
     tmpfile=$(command mktemp)
 
     if (( use_gnu_find )); then
-        find_args=( find "$under_path" -type f -newermt "$since_arg" )
+        find_args=( find "$under_path" -type f -newermt "$since_norm" )
         [[ -n "$ext_filter" ]] && find_args+=( -name "*.${ext_filter}" )
         command "${find_args[@]}" 2>/dev/null > "$tmpfile"   # EACCES on restricted paths — partial scan acceptable
     else
         local ref
         ref=$(command mktemp)
-        command touch -d "$since_arg" "$ref" 2>/dev/null || command touch -t "$(printf '%s' "$since_arg" | command tr -d 'TZ:-')" "$ref" 2>/dev/null || true   # BSD touch fallback
+        command touch -d "$since_norm" "$ref" 2>/dev/null || command touch -t "$(printf '%s' "$since_norm" | command tr -d 'TZ: UTC-')" "$ref" 2>/dev/null || true   # BSD touch fallback; `-` last in tr set so it stays literal (mid-set `-` triggers range mode)
         find_args=( find "$under_path" -type f -newer "$ref" )
         [[ -n "$ext_filter" ]] && find_args+=( -name "*.${ext_filter}" )
         command "${find_args[@]}" 2>/dev/null > "$tmpfile"   # BSD touch fallback; errors produce empty ref file

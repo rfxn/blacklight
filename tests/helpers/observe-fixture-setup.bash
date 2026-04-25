@@ -25,8 +25,10 @@ stage_apache_log() {
     # $1 = destination path to copy fixture to
     local dest="$1"
     cp "$BATS_TEST_DIRNAME/fixtures/apache-apsb25-94.log" "$dest"
-    # Set mtime to 2026-04-23T14:22:07Z for --around anchor matching fixture timestamps
-    touch -d "2026-04-23T14:22:07Z" "$dest"
+    # Set mtime to 2026-04-23 14:22:07 UTC for --around anchor matching fixture
+    # timestamps. Space-form (not ISO-T) for coreutils 8.4 (CentOS 6) which
+    # rejects "YYYY-MM-DDTHH:MM:SSZ"; the form below parses on c6 and modern.
+    touch -d "2026-04-23 14:22:07 UTC" "$dest"
 }
 
 stage_modsec_log() {
@@ -80,14 +82,15 @@ stage_fs_mtime_cluster() {
     # $1 = destination directory; re-touches files with 4-second cluster spacing
     local dest_dir="$1"
     mkdir -p "$dest_dir"
-    # 7 files spanning 4 seconds (14:22:07 to 14:22:11 UTC on 2026-04-23)
-    touch -d "2026-04-23T14:22:07Z" "$dest_dir/a.php"
-    touch -d "2026-04-23T14:22:08Z" "$dest_dir/b.php"
-    touch -d "2026-04-23T14:22:08Z" "$dest_dir/c.php"
-    touch -d "2026-04-23T14:22:09Z" "$dest_dir/d.php"
-    touch -d "2026-04-23T14:22:10Z" "$dest_dir/e.php"
-    touch -d "2026-04-23T14:22:10Z" "$dest_dir/f.php"
-    touch -d "2026-04-23T14:22:11Z" "$dest_dir/g.php"
+    # 7 files spanning 4 seconds (14:22:07 to 14:22:11 UTC on 2026-04-23).
+    # Space-form (not ISO-T) — see stage_apache_log for the c6 coreutils note.
+    touch -d "2026-04-23 14:22:07 UTC" "$dest_dir/a.php"
+    touch -d "2026-04-23 14:22:08 UTC" "$dest_dir/b.php"
+    touch -d "2026-04-23 14:22:08 UTC" "$dest_dir/c.php"
+    touch -d "2026-04-23 14:22:09 UTC" "$dest_dir/d.php"
+    touch -d "2026-04-23 14:22:10 UTC" "$dest_dir/e.php"
+    touch -d "2026-04-23 14:22:10 UTC" "$dest_dir/f.php"
+    touch -d "2026-04-23 14:22:11 UTC" "$dest_dir/g.php"
 }
 
 stage_substrate_fixture() {

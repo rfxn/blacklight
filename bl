@@ -19,7 +19,10 @@
 # This is a single-file bash wrapper. It is curl-pipeable per DESIGN.md §8.3
 # and must not `source` external helpers.
 
-set -euo pipefail
+# Note: `set -euo pipefail` is gated to execute-mode only (see 90-main.sh tail).
+# Tests source bl to access bl_* functions, and bash 4.1 (CentOS 6) propagates
+# errexit from sourced files even with `|| true` masking — so applying it here
+# would break the c6 floor for any test that does `source bl || true`.
 
 # ----------------------------------------------------------------------------
 # Version + exit-code constants (from docs/exit-codes.md §1)
@@ -165,8 +168,8 @@ bl_api_call() {
             -H "anthropic-version: 2023-06-01" \
             -H "anthropic-beta: managed-agents-2026-04-01" \
             -H "content-type: application/json" \
-            "${body_args[@]}" \
-            "https://api.anthropic.com${url_suffix}" 2>&1) || true   # retry handles curl exit
+            ${body_args[@]+"${body_args[@]}"} \
+            "https://api.anthropic.com${url_suffix}" 2>&1) || true   # retry handles curl exit; ${arr[@]+"${arr[@]}"} guards bash 4.1 set -u trap on empty arrays (CentOS 6 floor)
         http_status="${resp##*$'\n'}"
         body="${resp%$'\n'*}"
         case "$http_status" in
@@ -478,7 +481,10 @@ bl_fence_unwrap() {
     local envelope="$1"
     # Extract TOKEN from opening tag (first line match is fine — open tag is single-line)
     local token
-    token=$(printf '%s' "$envelope" | command awk 'match($0, /<untrusted fence="[a-f0-9]{16}"/) { s=substr($0,RSTART+18,16); print s; exit }')   # +18: length("<untrusted fence=\"")
+    # Explicit 16-class regex (no `{16}` quantifier) — mawk default on Debian
+    # / Ubuntu does not parse interval quantifiers, and gawk 3.1.7 (CentOS 6)
+    # needs --re-interval. Literal repetition is portable across all three.
+    token=$(printf '%s' "$envelope" | command awk 'match($0, /<untrusted fence="[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]"/) { s=substr($0,RSTART+18,16); print s; exit }')   # +18: length("<untrusted fence=\"")
     [[ -z "$token" || ! "$token" =~ ^[a-f0-9]{16}$ ]] && { bl_error_envelope fence "malformed envelope: no fence attr"; return "$BL_EX_SCHEMA_VALIDATION_FAIL"; }
     # Validate matching close tag </untrusted-TOKEN> appears anywhere in envelope
     printf '%s' "$envelope" | command grep -qF "</untrusted-$token>" || {
@@ -1923,6 +1929,12 @@ bl_observe_fs_mtime_since() {
     local stream_path
     stream_path="$(_bl_obs_open_stream 'fs-mtime-since')"
 
+    # Normalize ISO-8601 T-separator + Z suffix → space-form (coreutils 8.4
+    # on CentOS 6 / older find rejects "YYYY-MM-DDTHH:MM:SSZ"; the space
+    # form parses portably from coreutils 8.4 onwards).
+    local since_norm="${since_arg/T/ }"
+    since_norm="${since_norm/%Z/ UTC}"
+
     # GNU -newermt; BSD fallback via touch + -newer
     local use_gnu_find=0
     if command find --version 2>/dev/null | command grep -q 'GNU find'; then   # BSD find has no --version
@@ -1934,13 +1946,13 @@ bl_observe_fs_mtime_since() {
     tmpfile=$(command mktemp)
 
     if (( use_gnu_find )); then
-        find_args=( find "$under_path" -type f -newermt "$since_arg" )
+        find_args=( find "$under_path" -type f -newermt "$since_norm" )
         [[ -n "$ext_filter" ]] && find_args+=( -name "*.${ext_filter}" )
         command "${find_args[@]}" 2>/dev/null > "$tmpfile"   # EACCES on restricted paths — partial scan acceptable
     else
         local ref
         ref=$(command mktemp)
-        command touch -d "$since_arg" "$ref" 2>/dev/null || command touch -t "$(printf '%s' "$since_arg" | command tr -d 'TZ:-')" "$ref" 2>/dev/null || true   # BSD touch fallback
+        command touch -d "$since_norm" "$ref" 2>/dev/null || command touch -t "$(printf '%s' "$since_norm" | command tr -d 'TZ: UTC-')" "$ref" 2>/dev/null || true   # BSD touch fallback; `-` last in tr set so it stays literal (mid-set `-` triggers range mode)
         find_args=( find "$under_path" -type f -newer "$ref" )
         [[ -n "$ext_filter" ]] && find_args+=( -name "*.${ext_filter}" )
         command "${find_args[@]}" 2>/dev/null > "$tmpfile"   # BSD touch fallback; errors produce empty ref file
@@ -2723,8 +2735,11 @@ bl_bundle_build() {
     # Filter by --since if provided
     local since_epoch=0
     if [[ -n "$since_arg" ]]; then
+        # CentOS 6 coreutils (date 8.4) rejects ISO-8601 "T...Z" — normalize to
+        # the space-form that parses on c6 and modern coreutils alike.
+        local since_norm="${since_arg/T/ }"; since_norm="${since_norm/%Z/ UTC}"
         # GNU date -d parses ISO strings; BSD date -j -f is the portable fallback
-        since_epoch=$(command date -d "$since_arg" +%s 2>/dev/null) || since_epoch=$(command date -j -f '%Y-%m-%dT%H:%M:%SZ' "$since_arg" +%s 2>/dev/null) || since_epoch=0   # GNU date -d first; BSD -j -f fallback; zero disables since filter
+        since_epoch=$(command date -d "$since_norm" +%s 2>/dev/null) || since_epoch=$(command date -j -f '%Y-%m-%dT%H:%M:%SZ' "$since_arg" +%s 2>/dev/null) || since_epoch=0   # GNU date -d first; BSD -j -f fallback; zero disables since filter
     fi
 
     # Enumerate evidence files ordered by mtime
@@ -3126,8 +3141,11 @@ bl_consult_find_open_case_by_fingerprint() {
     #
     # Fast path: NF>=8 rows with non-empty $7 carry a fingerprint; match.
     local case_id_match
+    # Literal-class regex (no `{4}` quantifier) — mawk default on Debian /
+    # Ubuntu does not parse interval quantifiers; gawk 3.1.7 (CentOS 6) needs
+    # --re-interval. Literal repetition is portable across all awk variants.
     case_id_match=$(printf '%s' "$index_content" | command awk -v want="$fp" -F'|' '
-        /^\| CASE-[0-9]{4}-[0-9]{4} \|/ {
+        /^\| CASE-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9] \|/ {
             status=$4; gsub(/^[ \t]+|[ \t]+$/, "", status)
             if (status != "active") next
             if (NF < 8) next   # legacy 5-cell row → fall through to slow path
@@ -3147,7 +3165,7 @@ bl_consult_find_open_case_by_fingerprint() {
     local active_cases
     active_cases=$(printf '%s' "$index_content" \
         | command awk -F'|' '
-            /^\| CASE-[0-9]{4}-[0-9]{4} \|/ {
+            /^\| CASE-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9] \|/ {
                 status=$4; gsub(/^[ \t]+|[ \t]+$/, "", status)
                 if (status != "active") next
                 if (NF >= 8) next   # has fp column — fast path already handled
@@ -4828,9 +4846,13 @@ _bl_clean_dry_run_check() {
         bl_error_envelope clean "dry-run gate: receipt missing" "(run with --dry-run first, within ${ttl}s)"
         return "$BL_EX_TIER_GATE_DENIED"
     fi
-    local now epoch age
+    local now epoch age receipt_ts
     now=$(command date -u +%s)
-    epoch=$(command date -u -d "$(command cat "$receipt")" +%s 2>/dev/null || printf '0')   # malformed receipt → age=now (fails age check)
+    receipt_ts="$(command cat "$receipt")"
+    # CentOS 6 coreutils (date 8.4) rejects ISO-8601 "T...Z" — normalize to
+    # the space-form that parses portably from 8.4 onwards.
+    receipt_ts="${receipt_ts/T/ }"; receipt_ts="${receipt_ts/%Z/ UTC}"
+    epoch=$(command date -u -d "$receipt_ts" +%s 2>/dev/null || printf '0')   # malformed receipt → age=now (fails age check)
     age=$(( now - epoch ))
     if (( age > ttl )); then
         command rm -f "$receipt"
@@ -6218,4 +6240,14 @@ main() {
     esac
 }
 
+# Source-execute guard: skip `main` (and the strict-mode flags it relies on)
+# when bl is sourced — required so unit tests can access bl_* functions
+# without inheriting errexit. Bash 4.1 on CentOS 6 propagates `set -e` from
+# a sourced file's top level even when the caller masks with `|| true`, so
+# strict-mode lives behind the guard rather than at file head.
+if (return 0 2>/dev/null); then
+    return 0
+fi
+
+set -euo pipefail
 main "$@"

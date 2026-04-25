@@ -2,6 +2,8 @@
 # tests/01-cli-surface.bats — bl CLI surface (help/version/dispatch/unknown-verb)
 # Consumed by tests/run-tests.sh via batsman infrastructure.
 
+load 'helpers/capability-detect.bash'
+
 setup() {
     BL_SOURCE="${BL_SOURCE:-$BATS_TEST_DIRNAME/../bl}"
     export BL_REPO_ROOT="$BATS_TEST_DIRNAME/.."
@@ -13,6 +15,7 @@ teardown() {
 }
 
 @test "shellcheck is clean" {
+    shellcheck_available || skip "shellcheck unavailable on this image (vault has no usable c6 build)"
     run shellcheck "$BL_SOURCE"
     [ "$status" -eq 0 ]
     [ -z "$output" ]

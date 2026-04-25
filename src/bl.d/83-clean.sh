@@ -99,9 +99,13 @@ _bl_clean_dry_run_check() {
         bl_error_envelope clean "dry-run gate: receipt missing" "(run with --dry-run first, within ${ttl}s)"
         return "$BL_EX_TIER_GATE_DENIED"
     fi
-    local now epoch age
+    local now epoch age receipt_ts
     now=$(command date -u +%s)
-    epoch=$(command date -u -d "$(command cat "$receipt")" +%s 2>/dev/null || printf '0')   # malformed receipt → age=now (fails age check)
+    receipt_ts="$(command cat "$receipt")"
+    # CentOS 6 coreutils (date 8.4) rejects ISO-8601 "T...Z" — normalize to
+    # the space-form that parses portably from 8.4 onwards.
+    receipt_ts="${receipt_ts/T/ }"; receipt_ts="${receipt_ts/%Z/ UTC}"
+    epoch=$(command date -u -d "$receipt_ts" +%s 2>/dev/null || printf '0')   # malformed receipt → age=now (fails age check)
     age=$(( now - epoch ))
     if (( age > ttl )); then
         command rm -f "$receipt"

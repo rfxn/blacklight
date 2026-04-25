@@ -23,8 +23,8 @@ bl_api_call() {
             -H "anthropic-version: 2023-06-01" \
             -H "anthropic-beta: managed-agents-2026-04-01" \
             -H "content-type: application/json" \
-            "${body_args[@]}" \
-            "https://api.anthropic.com${url_suffix}" 2>&1) || true   # retry handles curl exit
+            ${body_args[@]+"${body_args[@]}"} \
+            "https://api.anthropic.com${url_suffix}" 2>&1) || true   # retry handles curl exit; ${arr[@]+"${arr[@]}"} guards bash 4.1 set -u trap on empty arrays (CentOS 6 floor)
         http_status="${resp##*$'\n'}"
         body="${resp%$'\n'*}"
         case "$http_status" in

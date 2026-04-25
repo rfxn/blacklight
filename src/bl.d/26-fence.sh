@@ -48,7 +48,10 @@ bl_fence_unwrap() {
     local envelope="$1"
     # Extract TOKEN from opening tag (first line match is fine — open tag is single-line)
     local token
-    token=$(printf '%s' "$envelope" | command awk 'match($0, /<untrusted fence="[a-f0-9]{16}"/) { s=substr($0,RSTART+18,16); print s; exit }')   # +18: length("<untrusted fence=\"")
+    # Explicit 16-class regex (no `{16}` quantifier) — mawk default on Debian
+    # / Ubuntu does not parse interval quantifiers, and gawk 3.1.7 (CentOS 6)
+    # needs --re-interval. Literal repetition is portable across all three.
+    token=$(printf '%s' "$envelope" | command awk 'match($0, /<untrusted fence="[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]"/) { s=substr($0,RSTART+18,16); print s; exit }')   # +18: length("<untrusted fence=\"")
     [[ -z "$token" || ! "$token" =~ ^[a-f0-9]{16}$ ]] && { bl_error_envelope fence "malformed envelope: no fence attr"; return "$BL_EX_SCHEMA_VALIDATION_FAIL"; }
     # Validate matching close tag </untrusted-TOKEN> appears anywhere in envelope
     printf '%s' "$envelope" | command grep -qF "</untrusted-$token>" || {

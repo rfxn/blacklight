@@ -16,3 +16,11 @@ case / setup / flush) land in this release.
 [New] M10 P11 — skills bundle integration: 4 new namespaces × 18 files (ride-the-substrate/, legacy-os-pitfalls/, shared-hosting-attack-shapes/, agentic-minutes-playbook/); INDEX.md routing extended; skill count 46 → 64
 [New] M10 P11 — DEB build + install validation matrix (debian12 + ubuntu2404)
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
+[Fix] M10 P13 — CentOS 6 floor recovery: portability fixes for bash 4.1
+      (source-execute guard around set -euo pipefail; safe-expand for
+      empty arrays under set -u), gawk 3.1.7 + Debian/Ubuntu mawk
+      (literal-class regex replaces {N} interval quantifier in
+      bl_fence_unwrap + bl_consult_find_open_case_by_fingerprint),
+      coreutils 8.4 (ISO-8601 T-form normalized to space-form before
+      date -d / find -newermt / touch -d), tr -d set ordering. Test
+      lane 79 fail → 0; debian12 / rocky9 / centos6 all 228/228.

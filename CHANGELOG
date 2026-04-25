@@ -14,6 +14,46 @@ https://github.com/rfxn/blacklight
 [New] M10 P11 — skills bundle integration: skills/INDEX.md routing extended with 4 new branches (substrate-as-precondition before any defend.* step, legacy-os-pitfalls on pre-systemd / pre-/usr-merge / bash<4.2 hosts, agentic-minutes-playbook on --sweep-mode --cve trigger, shared-hosting-attack-shapes on substrate-report shared_hosting_layer); Operator-voice core list extended with 4 new bundle entries; Bundle depth header updated 46 → 64 files / 16 → 20 subtrees. Bundles already committed in earlier commits (e56edc7 ride-the-substrate / f814bcb legacy-os-pitfalls / 5eef900 shared-hosting-attack-shapes / b83a576 agentic-minutes-playbook): 18 skill files total embodying the four pitch sentences ("ride the substrate", "compatible from CentOS 6", "millions of orgs without enterprise XDR", "agentic-minutes vs grep").
 [New] M10 P11 — DEB build + install validation (debian12 + ubuntu2404); test-deb-ubuntu2404 target; Dockerfile.test-deb BASE_IMAGE arg
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
+[Fix] M10 P13 — CentOS 6 floor recovery (test lane 79 fail → 0):
+      bash 4.1: source-execute guard around set -euo pipefail + main "$@"
+        in src/bl.d/90-main.sh tail (bash 4.1 propagates errexit from
+        sourced files even with `|| true` masking; tests source bl to
+        access bl_* helpers). set -euo pipefail moved out of
+        src/bl.d/00-header.sh into the post-guard runtime path; CLI
+        execute path is unchanged.
+      bash 4.1: ${body_args[@]+"${body_args[@]}"} safe-expand in
+        src/bl.d/20-api.sh — bash 4.1 + set -u trips on empty array
+        expansion; the +"$@" guard is the canonical idiom (matches
+        existing pattern in 41-observe-collectors.sh:1111-1112).
+      mawk + gawk 3.1.7 portability: regex {N} interval quantifier is
+        not parsed by Debian/Ubuntu mawk (default awk on those distros)
+        and requires --re-interval on c6 gawk; both bl_fence_unwrap
+        token regex and bl_consult_find_open_case_by_fingerprint case-id
+        regex rewritten to literal class repetition for both awk
+        variants (src/bl.d/26-fence.sh, src/bl.d/50-consult.sh).
+      coreutils 8.4 ISO-T rejection: CentOS 6 date 8.4 / find 4.4.2
+        reject ISO-8601 "YYYY-MM-DDTHH:MM:SSZ" form; ISO-T → space-form
+        normalization at the boundary in three sites:
+        src/bl.d/42-observe-router.sh (--since arg), 41-observe-collectors.sh
+        (find -newermt + touch -d fallback), 83-clean.sh (dry-run
+        receipt timestamp parse).
+      tr -d 'TZ:- UTC' character set fix: mid-set `-` triggers range
+        mode; reordered to 'TZ: UTC-' (src/bl.d/41-observe-collectors.sh
+        BSD touch fallback path).
+      tests/Dockerfile.centos6 — added missing COPY install.sh +
+        uninstall.sh (10-install-paths.bats requires them).
+      tests/helpers/capability-detect.bash — new APF-pattern probe
+        helper (shellcheck/nft/yara/modsec/zstd) used to gate tests
+        depending on optional binaries unavailable on c6 vault.
+      tests/01-cli-surface.bats + tests/04-observe.bats — shellcheck
+        assertion gated via shellcheck_available capability probe (c6
+        vault has no usable shellcheck build).
+      tests/04-observe.bats + tests/helpers/observe-fixture-setup.bash
+        — touch -d ISO-T strings switched to space-form for
+        coreutils 8.4 portability.
+      tests/04-observe.bats:687 — substrate test PATH includes
+        /usr/local/bin so jq (static binary on c6) resolves.
+      Verified: c6 / debian12 / rocky9 = 228/228 each, 0 fails.
 === M10 complete — blacklight v0.1.0 ship-ready ===
 
 - M9.5 P9 | Apr 25 2026 — sentinel fixup (chown-time TOCTOU close + test rename):

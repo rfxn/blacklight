@@ -41,8 +41,11 @@ bl_bundle_build() {
     # Filter by --since if provided
     local since_epoch=0
     if [[ -n "$since_arg" ]]; then
+        # CentOS 6 coreutils (date 8.4) rejects ISO-8601 "T...Z" — normalize to
+        # the space-form that parses on c6 and modern coreutils alike.
+        local since_norm="${since_arg/T/ }"; since_norm="${since_norm/%Z/ UTC}"
         # GNU date -d parses ISO strings; BSD date -j -f is the portable fallback
-        since_epoch=$(command date -d "$since_arg" +%s 2>/dev/null) || since_epoch=$(command date -j -f '%Y-%m-%dT%H:%M:%SZ' "$since_arg" +%s 2>/dev/null) || since_epoch=0   # GNU date -d first; BSD -j -f fallback; zero disables since filter
+        since_epoch=$(command date -d "$since_norm" +%s 2>/dev/null) || since_epoch=$(command date -j -f '%Y-%m-%dT%H:%M:%SZ' "$since_arg" +%s 2>/dev/null) || since_epoch=0   # GNU date -d first; BSD -j -f fallback; zero disables since filter
     fi
 
     # Enumerate evidence files ordered by mtime

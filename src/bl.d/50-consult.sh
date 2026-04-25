@@ -184,8 +184,11 @@ bl_consult_find_open_case_by_fingerprint() {
     #
     # Fast path: NF>=8 rows with non-empty $7 carry a fingerprint; match.
     local case_id_match
+    # Literal-class regex (no `{4}` quantifier) — mawk default on Debian /
+    # Ubuntu does not parse interval quantifiers; gawk 3.1.7 (CentOS 6) needs
+    # --re-interval. Literal repetition is portable across all awk variants.
     case_id_match=$(printf '%s' "$index_content" | command awk -v want="$fp" -F'|' '
-        /^\| CASE-[0-9]{4}-[0-9]{4} \|/ {
+        /^\| CASE-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9] \|/ {
             status=$4; gsub(/^[ \t]+|[ \t]+$/, "", status)
             if (status != "active") next
             if (NF < 8) next   # legacy 5-cell row → fall through to slow path
@@ -205,7 +208,7 @@ bl_consult_find_open_case_by_fingerprint() {
     local active_cases
     active_cases=$(printf '%s' "$index_content" \
         | command awk -F'|' '
-            /^\| CASE-[0-9]{4}-[0-9]{4} \|/ {
+            /^\| CASE-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9] \|/ {
                 status=$4; gsub(/^[ \t]+|[ \t]+$/, "", status)
                 if (status != "active") next
                 if (NF >= 8) next   # has fp column — fast path already handled

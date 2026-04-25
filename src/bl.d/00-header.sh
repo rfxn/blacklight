@@ -14,7 +14,10 @@
 # This is a single-file bash wrapper. It is curl-pipeable per DESIGN.md §8.3
 # and must not `source` external helpers.
 
-set -euo pipefail
+# Note: `set -euo pipefail` is gated to execute-mode only (see 90-main.sh tail).
+# Tests source bl to access bl_* functions, and bash 4.1 (CentOS 6) propagates
+# errexit from sourced files even with `|| true` masking — so applying it here
+# would break the c6 floor for any test that does `source bl || true`.
 
 # ----------------------------------------------------------------------------
 # Version + exit-code constants (from docs/exit-codes.md §1)

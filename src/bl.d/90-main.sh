@@ -84,4 +84,14 @@ main() {
     esac
 }
 
+# Source-execute guard: skip `main` (and the strict-mode flags it relies on)
+# when bl is sourced — required so unit tests can access bl_* functions
+# without inheriting errexit. Bash 4.1 on CentOS 6 propagates `set -e` from
+# a sourced file's top level even when the caller masks with `|| true`, so
+# strict-mode lives behind the guard rather than at file head.
+if (return 0 2>/dev/null); then
+    return 0
+fi
+
+set -euo pipefail
 main "$@"
