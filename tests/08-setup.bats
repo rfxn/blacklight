@@ -356,6 +356,50 @@ teardown() {
 # Lets the matches-current test stay green even as new skills land.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# S12 (M12 P3): bl setup --sync POSTs all live skill files (count derived)
+# Audit gap: prior --sync tests assert summary text only. This asserts the
+# actual POST count matches the live skills/ corpus — guards against silent
+# truncation if skills are added later but the sync loop misses them.
+# ---------------------------------------------------------------------------
+
+@test "bl setup --sync POSTs all live skill files (count derived from find)" {
+    mkdir -p "$BL_VAR_DIR/state" "$BL_VAR_DIR/fixtures"
+    printf 'agent_test_stub'      > "$BL_VAR_DIR/state/agent-id"
+    printf 'env_test_stub'        > "$BL_VAR_DIR/state/env-id"
+    printf 'memstore_skills_stub' > "$BL_VAR_DIR/state/memstore-skills-id"
+    printf 'memstore_case_stub'   > "$BL_VAR_DIR/state/memstore-case-id"
+    # Use the live blacklight repo as the skills source — count is dynamic.
+    export BL_REPO_ROOT="$BATS_TEST_DIRNAME/.."
+    export BL_CURATOR_MOCK_FIXTURES_DIR="$BL_VAR_DIR/fixtures"
+    # Baseline (empty) MANIFEST → diff sees every skill as "add"
+    printf '{"key":"MANIFEST.json","content":"[]"}\n' > "$BL_CURATOR_MOCK_FIXTURES_DIR/setup-manifest-baseline.json"
+    printf '{"id":"memory_synced"}\n' > "$BL_CURATOR_MOCK_FIXTURES_DIR/sync-memory-ack.json"
+    bl_curator_mock_set_response 'sync-memory-ack.json' 201
+    bl_curator_mock_add_route 'MANIFEST' 'setup-manifest-baseline.json' 200
+    export BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/curl-requests.log"
+    run "$BL_SOURCE" setup --sync
+    [ "$status" -eq 0 ]
+    # Count expected skills POSTs (every .md under skills/ except INDEX.md)
+    local expected
+    expected=$(find "$BL_REPO_ROOT/skills" -name '*.md' -not -name 'INDEX.md' | wc -l)
+    [ "$expected" -gt 0 ]
+    # Count actual POSTs to /v1/memory_stores/*/memories that carry a skills/ key.
+    # Log format: URL line then JSON body on the next line (two-line pairs).
+    # Use stateful awk: when a POST to memory_stores/memories line is seen, set
+    # a flag; on the next line, if the body has "key":"<subdir>/" count it.
+    local actual
+    actual=$(awk '
+        /POST.*memory_stores.*memories/ { post_line=NR; next }
+        NR == post_line+1 && /"key":"[a-zA-Z0-9_-]+\// { c++ }
+        END { print c+0 }
+    ' "$BL_MOCK_REQUEST_LOG")
+    # expected skill files + 1 MANIFEST re-POST (MANIFEST key doesn't match the
+    # subdir pattern so won't inflate actual; allow minor slack for re-posts)
+    [ "$actual" -ge "$expected" ]
+    [ "$actual" -le "$((expected + 5))" ]   # allow minor slack
+}
+
 _bl_M8_synth_current_manifest() {
     # Mirrors bl_setup_compute_manifest exactly so the no-op sync test sees a
     # remote MANIFEST that matches local. jq emits the {path,sha256} entries and

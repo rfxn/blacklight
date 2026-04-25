@@ -48,6 +48,20 @@ bl_outbox_oldest_age_secs() {
     return "$BL_EX_OK"
 }
 
+bl_outbox_should_drain() {
+    # bl_outbox_should_drain — returns 0 iff drain is warranted (non-empty AND aged)
+    # Idempotency guard: only fires when oldest entry is at least
+    # BL_OUTBOX_AGE_WARN_SECS old (default 3600s = 1h). Recently-enqueued events
+    # sit until either the operator runs `bl outbox drain --force` or the age
+    # threshold trips on the next preflight.
+    local depth age
+    depth=$(bl_outbox_depth)
+    (( depth == 0 )) && return 1
+    age=$(bl_outbox_oldest_age_secs)
+    (( age >= BL_OUTBOX_AGE_WARN_SECS )) && return 0
+    return 1
+}
+
 bl_outbox_enqueue() {
     # bl_outbox_enqueue <kind> <payload-json> — 0/64/65/67/70/71
     local kind="$1" payload="$2"

@@ -62,8 +62,15 @@ BOOTSTRAP_EOF
 
     printf '%s' "$BL_AGENT_ID" > "$BL_AGENT_ID_FILE"
     bl_debug "bl_preflight: seeded agent-id $BL_AGENT_ID cached to $BL_AGENT_ID_FILE"
-    # M9 P4: opportunistic outbox drain (best-effort; never fails preflight)
-    bl_outbox_drain --max "$BL_OUTBOX_DRAIN_DEFAULT_MAX" --deadline "$BL_OUTBOX_DRAIN_DEFAULT_DEADLINE_SECS" >/dev/null 2>&1 || true   # drain is best-effort; preflight must still succeed
+    # M12 P3: age-gated outbox drain (idempotent; only fires when entries are stale).
+    # Without the age gate, every preflight drains — entries enqueued seconds ago
+    # consume work on every subsequent CLI invocation. Gate via bl_outbox_should_drain
+    # (returns 0 iff non-empty AND oldest age ≥ BL_OUTBOX_AGE_WARN_SECS = 3600s).
+    # Soft-fail: rc=69 (no session yet) is normal mid-provision; do not 66-exit.
+    if bl_outbox_should_drain 2>/dev/null; then   # 2>/dev/null: predicate failures (EACCES on outbox dir) → skip drain, do not block preflight
+        bl_info "preflight: outbox has aged entries — draining"
+        bl_outbox_drain --max "$BL_OUTBOX_DRAIN_DEFAULT_MAX" --deadline "$BL_OUTBOX_DRAIN_DEFAULT_DEADLINE_SECS" >/dev/null 2>&1 || bl_warn "outbox drain returned $? — entries remain queued for next preflight"   # 2>/dev/null: drain emits per-entry chatter that pollutes preflight — only the rc matters here
+    fi
     return "$BL_EX_OK"
 }
 

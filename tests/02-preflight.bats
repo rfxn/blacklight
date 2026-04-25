@@ -104,6 +104,33 @@ teardown() {
     [[ "$output" == *"authentication"* ]] || [[ "$output" == *"401"* ]]
 }
 
+# ---------------------------------------------------------------------------
+# M12 P3: preflight drains outbox when entries are aged beyond warn threshold
+# The drain gate only fires after a live API probe caches the agent-id (the
+# cached-agent-id fast-path exits before reaching the drain code). This test
+# leaves the state/agent-id file absent so preflight does the full probe, then
+# checks that the info log message from bl_outbox_should_drain + drain appears.
+# ---------------------------------------------------------------------------
+
+@test "preflight outbox drain fires when oldest entry age exceeds warn threshold" {
+    # Pre-populate outbox with one aged wake entry
+    mkdir -p "$BL_VAR_DIR/outbox"
+    local aged_entry="$BL_VAR_DIR/outbox/20260101T000000Z-0001-wake-CASE-2026-0001.json"
+    printf '{"type":"user.message","case":"CASE-2026-0001","content":[{"type":"text","text":"aged wake"}]}\n' > "$aged_entry"
+    # Force mtime to 2h ago so it is > BL_OUTBOX_AGE_WARN_SECS (3600s)
+    touch -d "2 hours ago" "$aged_entry"
+
+    # Use populated mock — API returns agent_test_stub; preflight caches it then
+    # reaches the drain block. No pre-seeded agent-id so the probe path fires.
+    bl_mock_set_response populated
+
+    # BL_LOG_LEVEL=info ensures bl_info output reaches captured output
+    BL_LOG_LEVEL=info run "$BL_SOURCE" observe
+    # status 64 (missing sub-verb) is expected — preflight passed, routing failed.
+    # Drain attempt should have logged an info message on stderr (captured by BATS run).
+    [[ "$output" == *"outbox has aged entries"* ]] || [[ "$output" == *"draining"* ]]
+}
+
 @test "bl on bash <4.1 exits 65 with 'bash 4.1+ required' (best-effort source-under-patched-VERSINFO)" {
     # Attempt to source bl under a patched BASH_VERSINFO simulating bash 3.2.
     # If the patched assignment does not propagate, skip the test.
