@@ -16,6 +16,26 @@ https://github.com/rfxn/blacklight
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
 === M10 complete — blacklight v0.1.0 ship-ready ===
 
+- M9.5 P6 | Apr 25 2026 — author defense.json + intent.json input_schemas:
+[New] schemas/defense.json — synthesize_defense custom-tool input
+      contract per DESIGN.md §12.2: required {kind, body, reasoning,
+      case_id}; kind enum {modsec, firewall, sig}; optional kind-
+      specific fields (backend, scanner, evidence_ids, ip,
+      asn_safelist_checked). No additionalProperties (rejected by
+      Managed-Agents per managed-agents-2026-04-01). Replaces empty
+      stub `{type:object, properties:{}}` (audit M2).
+[New] schemas/intent.json — reconstruct_intent custom-tool input per
+      DESIGN.md §12.3: required {file_id, depth, case_id}; depth enum
+      {shallow, deep}; reasoning optional. Output (attribution.md fields)
+      lives wrapper-side; not part of input contract.
+[New] schemas/defense.md + schemas/intent.md — companion docs (per-field
+      rationale lives outside the schema body — Managed-Agents rejects
+      per-field `description` keyword).
+[New] tests/08-setup.bats — 3 schema-conformance cases: required-field
+      presence, kind/depth enum coverage, case_id pattern, absence of
+      Managed-Agents-prohibited keywords (additionalProperties +
+      per-field description).
+
 - M9.5 P3 | Apr 25 2026 — real-bug fixes (clamav exit code, FP-gate cache, stale schema ref):
 [Fix] src/bl.d/82-defend.sh — clamav FP-gate captures rc correctly via
       `cmd ... || rc=$?`; prior `if cmd; then return; fi; rc=$?` always

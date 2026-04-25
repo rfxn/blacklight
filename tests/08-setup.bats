@@ -226,6 +226,54 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# S6: defense.json + intent.json input_schemas are non-empty (audit M2)
+# Empty stub schemas defeat the structured-emit invariant Managed-Agents
+# custom tools rely on — verify they carry required fields.
+# ---------------------------------------------------------------------------
+
+@test "schemas/defense.json declares required fields for synthesize_defense" {
+    local schema="$BL_REPO_ROOT/schemas/defense.json"
+    [ -r "$schema" ]
+    # Required array must include kind/body/reasoning/case_id at minimum
+    run jq -e '.required | sort' "$schema"
+    [ "$status" -eq 0 ]
+    run jq -e '.required | index("kind") and index("body") and index("reasoning") and index("case_id")' "$schema"
+    [ "$status" -eq 0 ]
+    # Properties must list at least the four required + kind enum
+    run jq -e '.properties.kind.enum | sort' "$schema"
+    [ "$status" -eq 0 ]
+    run jq -e '.properties.kind.enum | index("modsec") and index("firewall") and index("sig")' "$schema"
+    [ "$status" -eq 0 ]
+    # case_id pattern must match canonical CASE-YYYY-NNNN
+    run jq -er '.properties.case_id.pattern' "$schema"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "^CASE-[0-9]{4}-[0-9]{4}$" ]]
+}
+
+@test "schemas/intent.json declares required fields for reconstruct_intent" {
+    local schema="$BL_REPO_ROOT/schemas/intent.json"
+    [ -r "$schema" ]
+    run jq -e '.required | index("file_id") and index("depth") and index("case_id")' "$schema"
+    [ "$status" -eq 0 ]
+    run jq -e '.properties.depth.enum | index("shallow") and index("deep")' "$schema"
+    [ "$status" -eq 0 ]
+    run jq -er '.properties.case_id.pattern' "$schema"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "^CASE-[0-9]{4}-[0-9]{4}$" ]]
+}
+
+@test "schemas/{defense,intent}.json reject Managed-Agents-prohibited keywords" {
+    # Per DESIGN.md §12 — additionalProperties + per-field description rejected
+    # by managed-agents-2026-04-01. Verify schemas carry neither.
+    local d="$BL_REPO_ROOT/schemas/defense.json"
+    local i="$BL_REPO_ROOT/schemas/intent.json"
+    run jq -e '.additionalProperties == null and .properties[].description == null' "$d"
+    [ "$status" -eq 0 ]
+    run jq -e '.additionalProperties == null and .properties[].description == null' "$i"
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
 # Helper: synthesize a current-manifest fixture from the live skills/ corpus.
 # Lets the matches-current test stay green even as new skills land.
 # ---------------------------------------------------------------------------

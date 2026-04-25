@@ -1,4 +1,23 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfxn.github.io/blacklight/schemas/intent.json",
+  "title": "blacklight reconstruct_intent custom-tool input",
   "type": "object",
-  "properties": {}
+  "required": ["file_id", "depth", "case_id"],
+  "properties": {
+    "file_id": {
+      "type": "string"
+    },
+    "depth": {
+      "type": "string",
+      "enum": ["shallow", "deep"]
+    },
+    "case_id": {
+      "type": "string",
+      "pattern": "^CASE-[0-9]{4}-[0-9]{4}$"
+    },
+    "reasoning": {
+      "type": "string"
+    }
+  }
 }

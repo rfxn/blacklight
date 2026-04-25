@@ -1,4 +1,41 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfxn.github.io/blacklight/schemas/defense.json",
+  "title": "blacklight synthesize_defense custom-tool input",
   "type": "object",
-  "properties": {}
+  "required": ["kind", "body", "reasoning", "case_id"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["modsec", "firewall", "sig"]
+    },
+    "body": {
+      "type": "string"
+    },
+    "reasoning": {
+      "type": "string"
+    },
+    "case_id": {
+      "type": "string",
+      "pattern": "^CASE-[0-9]{4}-[0-9]{4}$"
+    },
+    "backend": {
+      "type": "string",
+      "enum": ["apf", "csf", "nft", "iptables"]
+    },
+    "scanner": {
+      "type": "string",
+      "enum": ["lmd", "clamav", "yara"]
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "ip": {
+      "type": "string"
+    },
+    "asn_safelist_checked": {
+      "type": "boolean"
+    }
+  }
 }
