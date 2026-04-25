@@ -296,24 +296,48 @@ bl_observe_log_journal() {
     local jctl_args=( journalctl -o json --since "$since_arg" )
     [[ -n "$grep_arg" ]] && jctl_args+=( -g "$grep_arg" )
 
-    local total=0
-    local tmpfile
+    local total=0 truncated="false"
+    local tmpfile processed_file
     tmpfile=$(command mktemp)
+    processed_file=$(command mktemp)
+    local journal_max="${BL_OBS_JOURNAL_MAX:-10000}"
 
     command "${jctl_args[@]}" 2>/dev/null > "$tmpfile" || true   # journalctl exits non-zero when no entries match
 
-    while IFS= read -r jline; do
-        [[ -z "$jline" ]] && continue
-        local rec
-        rec=$(printf '%s' "$jline" | jq -c '{unit:(._SYSTEMD_UNIT // "unknown"),pid:(._PID // null | tonumber? // null),message:(.MESSAGE // ""),priority:(.PRIORITY // ""),ts_source:(.__REALTIME_TIMESTAMP // null | if . then (tonumber / 1000000 | todate) else null end)}' 2>/dev/null) || continue   # jq parse per line; skip malformed journal entries
-        _bl_obs_emit_jsonl 'journal.entry' "$rec" "$stream_path" || { command rm -f "$tmpfile"; return "$BL_EX_SCHEMA_VALIDATION_FAIL"; }
-        total=$((total + 1))
-    done < "$tmpfile"
+    # Stream the journal lines through a single jq invocation with raw-input
+    # parse-tolerant `fromjson?` — N journalctl entries → 1 jq fork instead
+    # of N. Audit M9: prior version forked one jq per line, ~5-15ms each;
+    # 500k-entry journals took 40+ minutes. Cap with BL_OBS_JOURNAL_MAX
+    # (default 10000) and warn on truncation.
+    jq -cR '
+        . as $l
+        | ($l | fromjson? // empty)
+        | {unit:(._SYSTEMD_UNIT // "unknown"),
+           pid:(._PID // null | tonumber? // null),
+           message:(.MESSAGE // ""),
+           priority:(.PRIORITY // ""),
+           ts_source:(.__REALTIME_TIMESTAMP // null | if . then (tonumber / 1000000 | todate) else null end)}
+    ' < "$tmpfile" 2>/dev/null | command head -n "$journal_max" > "$processed_file" || true   # jq stream parse; head caps record count
 
-    command rm -f "$tmpfile"
+    local input_lines
+    input_lines=$(command wc -l < "$tmpfile" | command awk '{print $1}')
+    if (( input_lines > journal_max )); then
+        truncated="true"
+        bl_warn "journal.entry: capped at $journal_max records (input had $input_lines lines; set BL_OBS_JOURNAL_MAX to override)"
+    fi
+
+    local rec
+    while IFS= read -r rec; do
+        [[ -z "$rec" ]] && continue
+        _bl_obs_emit_jsonl 'journal.entry' "$rec" "$stream_path" || { command rm -f "$tmpfile" "$processed_file"; return "$BL_EX_SCHEMA_VALIDATION_FAIL"; }
+        total=$((total + 1))
+    done < "$processed_file"
+
+    command rm -f "$tmpfile" "$processed_file"
 
     local summary
-    summary=$(jq -n -c --argjson total "$total" '{source:"journal.entry",total_records:$total}')
+    summary=$(jq -n -c --argjson total "$total" --arg truncated "$truncated" --argjson cap "$journal_max" \
+        '{source:"journal.entry",total_records:$total,truncated:($truncated == "true"),cap:$cap}')
     _bl_obs_close_stream "$stream_path" 'journal.entry' "$summary"
 }
 

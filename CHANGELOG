@@ -16,6 +16,16 @@ https://github.com/rfxn/blacklight
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
 === M10 complete — blacklight v0.1.0 ship-ready ===
 
+- M9.5 P5 | Apr 25 2026 — journal observe streaming-jq rewrite (M9):
+[Fix] src/bl.d/41-observe-collectors.sh — bl_observe_log_journal
+      replaces per-line `printf | jq -c` fanout with a single jq -cR
+      streaming filter using `fromjson?` for parse-tolerant input. N
+      journalctl entries → 1 jq fork instead of N. Adds
+      BL_OBS_JOURNAL_MAX cap (default 10000) with truncation warning;
+      summary record carries .record.truncated boolean + .record.cap
+      so downstream auditors can detect a capped scan (audit M9).
+[Change] bl — regenerated.
+
 - M9.5 P4 | Apr 25 2026 — apache observe hot-path rewrite (M6/M7/M8/m17):
 [Fix] src/bl.d/40-observe-helpers.sh — _bl_obs_emit_jsonl collapses
       `jq -n | _bl_obs_scrub` two-process pipeline into a single jq
