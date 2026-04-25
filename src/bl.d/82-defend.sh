@@ -154,7 +154,7 @@ bl_defend_modsec() {
         local memstore_id
         memstore_id="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state file may be absent on first invocation; fall through to default id
         local action_body action_payload action_kind action_rule_body
-        action_body=$(bl_api_call GET "/v1/memory_stores/$memstore_id/memories/bl-case%2F$case_id%2Factions%2Fpending%2F$from_action.json") || return $?
+        action_body=$(bl_mem_get "$memstore_id" "bl-case/$case_id/actions/pending/$from_action.json") || return $?
         action_payload=$(printf '%s' "$action_body" | jq -r '.content')
         local payload_tmp
         payload_tmp=$(command mktemp)

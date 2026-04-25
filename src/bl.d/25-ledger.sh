@@ -72,9 +72,8 @@ bl_ledger_mirror_remote() {
     local target_key="bl-case/$case_id/actions/applied/$event_id.json"
     local body_tmp
     body_tmp=$(mktemp)
-    jq -n --arg k "$target_key" --arg c "$record" \
-        '{key:$k, content:$c, metadata:{}}' > "$body_tmp"
-    if ! bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID:-memstore_bl_case}/memories" "$body_tmp" >/dev/null 2>&1; then   # mirror best-effort; remote may be unreachable
+    printf '%s' "$record" > "$body_tmp"
+    if ! bl_mem_post "${BL_MEMSTORE_CASE_ID:-memstore_bl_case}" "$target_key" "$body_tmp" >/dev/null 2>&1; then   # mirror best-effort; remote may be unreachable
         # Mirror failed → enqueue to outbox (best-effort; no ledger emission for this failure)
         local mirror_payload
         mirror_payload=$(jq -n --argjson r "$record" --arg k "$target_key" '{record:$r, target_key:$k}')

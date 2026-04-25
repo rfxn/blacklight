@@ -49,7 +49,7 @@ bl_run_step() {
     memstore_key="bl-case/$case_id/pending/$step_id.json"
     local resp rc
     rc=0
-    resp=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${memstore_key//\//%2F}") || rc=$?
+    resp=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "$memstore_key") || rc=$?
     if (( rc == 65 )); then
         command rm -f "$pending_tmp"
         bl_error_envelope run "step $step_id not found in pending/"
@@ -279,7 +279,7 @@ bl_run_writeback_result() {
 
     local pending_tmp
     pending_tmp=$(mktemp)
-    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fpending%2F$step_id.json" 2>/dev/null | jq -r '.content' > "$pending_tmp" || true   # transient miss
+    bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/pending/$step_id.json" 2>/dev/null | jq -r '.content' > "$pending_tmp" || true   # transient miss
 
     local result_content
     result_content=$(jq -n --slurpfile pending "$pending_tmp" --argjson rc "$rc" --arg stdout "$fenced_stdout" --arg now "$now" \
@@ -305,13 +305,12 @@ bl_run_writeback_result() {
 
     local body_file
     body_file=$(mktemp)
-    jq -n --arg k "bl-case/$case_id/results/$step_id.json" --arg c "$result_content" \
-        '{key:$k, content:$c, metadata:{}}' > "$body_file"
-    bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+    printf '%s' "$result_content" > "$body_file"
+    bl_mem_post "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/results/$step_id.json" "$body_file"
     local post_rc=$?
     command rm -f "$body_file"
     (( post_rc != 0 )) && { command rm -f "$pending_tmp"; return "$post_rc"; }
-    bl_api_call DELETE "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fpending%2F$step_id.json" >/dev/null || bl_warn "pending delete failed; manual cleanup may be needed"
+    bl_mem_delete_by_key "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/pending/$step_id.json" || bl_warn "pending delete failed; manual cleanup may be needed"
     command rm -f "$pending_tmp"
     return "$BL_EX_OK"
 }
@@ -324,7 +323,7 @@ bl_run_batch() {
     case_id=$(bl_case_current)
     [[ -z "$case_id" ]] && { bl_error_envelope run "no active case"; return "$BL_EX_NOT_FOUND"; }
     local list_body step_ids
-    list_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/pending/") || return $?
+    list_body=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/pending/") || return $?
     step_ids=$(printf '%s' "$list_body" | jq -r '.data[].key' | sed "s|bl-case/$case_id/pending/||; s|\.json$||" | sort)
     if [[ -z "$step_ids" ]]; then
         bl_info "no pending steps for $case_id"
@@ -348,7 +347,7 @@ bl_run_list() {
     case_id=$(bl_case_current)
     [[ -z "$case_id" ]] && { bl_error_envelope run "no active case"; return "$BL_EX_NOT_FOUND"; }
     local list_body
-    list_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/pending/") || return $?
+    list_body=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/pending/") || return $?
     local keys
     keys=$(printf '%s' "$list_body" | jq -r '.data[].key' | sort)
     if [[ -z "$keys" ]]; then
@@ -358,7 +357,7 @@ bl_run_list() {
     printf '%-8s  %-24s  %-11s  %s\n' "step_id" "verb" "tier" "reasoning"
     local key body sid verb tier reasoning
     while IFS= read -r key; do
-        body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${key//\//%2F}" 2>/dev/null | jq -r '.content') || continue   # skip unreadable
+        body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "$key" 2>/dev/null | jq -r '.content') || continue   # skip unreadable
         sid=$(printf '%s' "$body" | jq -r '.step_id')
         verb=$(printf '%s' "$body" | jq -r '.verb')
         tier=$(printf '%s' "$body" | jq -r '.action_tier')

@@ -252,8 +252,12 @@ bl_outbox_drain() {
                 ;;
             action_mirror)
                 body_tmp=$(mktemp)
+                local mirror_key
+                mirror_key=$(printf '%s' "$payload" | jq -r '.target_key // empty')
                 printf '%s' "$payload" | jq -c '.record' > "$body_tmp"
-                bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID:-memstore_bl_case}/memories" "$body_tmp" >/dev/null || rc=$?
+                if [[ -n "$mirror_key" ]]; then
+                    bl_mem_post "${BL_MEMSTORE_CASE_ID:-memstore_bl_case}" "$mirror_key" "$body_tmp" >/dev/null || rc=$?
+                fi
                 command rm -f "$body_tmp"
                 ;;
             *)

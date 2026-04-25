@@ -117,10 +117,14 @@ bl_setup_ensure_agent() {
         fi
     fi
     local list_resp probed_id
-    list_resp=$(bl_api_call GET "/v1/agents?name=bl-curator") || return $?
-    probed_id=$(printf '%s' "$list_resp" | jq -r '.data[0].id // empty')
+    list_resp=$(bl_api_call GET "/v1/agents") || return $?   # API rejects ?name= filter — list all, filter client-side
+    probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name == "bl-curator") | .id' | head -1)
+    if [[ -z "$probed_id" ]]; then
+        # Also match the smoketest agent name that was provisioned in initial workspace
+        probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name | startswith("blacklight-curator")) | .id' | head -1)
+    fi
     if [[ -n "$probed_id" ]]; then
-        bl_info "bl setup: agent bl-curator already exists ($probed_id) — caching"
+        bl_info "bl setup: curator agent already exists ($probed_id) — caching"
         printf '%s' "$probed_id" > "$id_file"
         printf -v "$_out" '%s' "$probed_id"
         return "$BL_EX_OK"
@@ -133,8 +137,9 @@ bl_setup_ensure_agent() {
     command rm -f "$body_file"
     if (( rc == 71 )); then
         bl_info "bl setup: agent already exists (409) — re-probing"
-        list_resp=$(bl_api_call GET "/v1/agents?name=bl-curator") || return $?
-        probed_id=$(printf '%s' "$list_resp" | jq -r '.data[0].id // empty')
+        list_resp=$(bl_api_call GET "/v1/agents") || return $?   # API rejects ?name= filter — list all, filter client-side
+        probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name == "bl-curator") | .id' | head -1)
+        [[ -z "$probed_id" ]] && probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name | startswith("blacklight-curator")) | .id' | head -1)
         [[ -z "$probed_id" ]] && { bl_error_envelope setup "agent created elsewhere but probe still empty"; return "$BL_EX_NOT_FOUND"; }
         printf '%s' "$probed_id" > "$id_file"
         printf -v "$_out" '%s' "$probed_id"
@@ -198,7 +203,8 @@ bl_setup_ensure_memstore() {
     fi
     local list_resp probed_id
     list_resp=$(bl_api_call GET "/v1/memory_stores?name=$name") || return $?
-    probed_id=$(printf '%s' "$list_resp" | jq -r '.data[0].id // empty')
+    # Filter client-side by exact name — API ?name= may do prefix match or return all
+    probed_id=$(printf '%s' "$list_resp" | jq -r --arg n "$name" '.data[] | select(.name == $n) | .id' | head -1)
     if [[ -n "$probed_id" ]]; then
         bl_info "bl setup: memstore $name already exists ($probed_id) — caching"
         printf '%s' "$probed_id" > "$id_file"
@@ -315,31 +321,22 @@ bl_setup_post_memory() {
     local store_id="$1"
     local key="$2"
     local content_path="$3"
-    local sha="$4"
-    local body_file
-    body_file=$(mktemp)
-    jq -n --arg k "$key" --rawfile c "$content_path" --arg s "$sha" \
-        '{key:$k, content:$c, metadata:{sha256:$s}}' > "$body_file"
-    bl_api_call POST "/v1/memory_stores/$store_id/memories" "$body_file" >/dev/null
-    local rc=$?
-    command rm -f "$body_file"
-    return $rc
+    # sha arg ($4) ignored — API no longer accepts metadata field
+    bl_mem_post "$store_id" "$key" "$content_path"
+    return $?
 }
 
 # bl_setup_post_manifest <store-id> <comma-joined-entries> — POST MANIFEST.json memory.
 bl_setup_post_manifest() {
     local store_id="$1"
     local entries="$2"
-    local now
-    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    local body_file content
-    body_file=$(mktemp)
-    content="[$entries]"
-    jq -n --arg k "MANIFEST.json" --arg c "$content" --arg ts "$now" \
-        '{key:$k, content:$c, metadata:{generated_at:$ts}}' > "$body_file"
-    bl_api_call POST "/v1/memory_stores/$store_id/memories" "$body_file" >/dev/null
+    local content_file
+    content_file=$(mktemp)
+    printf '[%s]' "$entries" > "$content_file"
+    # Use bl_mem_patch so re-seeding re-run overwrites the existing MANIFEST
+    bl_mem_patch "$store_id" "MANIFEST.json" "$content_file"
     local rc=$?
-    command rm -f "$body_file"
+    command rm -f "$content_file"
     return $rc
 }
 
@@ -450,7 +447,7 @@ bl_setup_sync() {
     bl_setup_compute_manifest "$skills_dir" > "$local_manifest_file"
     # Fetch remote manifest
     local remote_resp rc=0
-    remote_resp=$(bl_api_call GET "/v1/memory_stores/$skills_id/memories/MANIFEST.json") || rc=$?
+    remote_resp=$(bl_mem_get "$skills_id" "MANIFEST.json") || rc=$?
     if (( rc != 0 )); then
         command rm -f "$local_manifest_file" "$remote_manifest_file"
         return $rc
@@ -497,11 +494,9 @@ bl_setup_sync() {
         bl_setup_post_memory "$skills_id" "$rel" "$path" "$sha" || bl_warn "bl setup --sync: POST (modify) failed for $rel"
     done < <(printf '%s' "$diff_json" | jq -r '.modify[]')
     if [[ "$prune" == "yes" ]]; then
-        local key_enc
         while IFS= read -r rel; do
             [[ -z "$rel" ]] && continue
-            key_enc="${rel//\//%2F}"
-            bl_api_call DELETE "/v1/memory_stores/$skills_id/memories/$key_enc" >/dev/null || bl_warn "bl setup --sync: DELETE failed for $rel"
+            bl_mem_delete_by_key "$skills_id" "$rel" || bl_warn "bl setup --sync: DELETE failed for $rel"
         done < <(printf '%s' "$diff_json" | jq -r '.remove[]')
     else
         (( n_rm > 0 )) && bl_info "bl setup --sync: $n_rm remote-only skill(s) — pass --prune to remove"

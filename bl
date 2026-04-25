@@ -170,6 +170,11 @@ bl_api_call() {
             "https://api.anthropic.com${url_suffix}" 2>&1) || true   # retry handles curl exit; ${arr[@]+"${arr[@]}"} guards bash 4.1 set -u trap on empty arrays (CentOS 6 floor)
         http_status="${resp##*$'\n'}"
         body="${resp%$'\n'*}"
+        # Cost-cap wire-up — append compact 2xx response JSON to BL_CURL_TRACE_LOG when set;
+        # trace-runner's bl_check_cost_cap awks the file for usage.{input,output}_tokens per line.
+        if [[ -n "${BL_CURL_TRACE_LOG:-}" ]] && [[ "$http_status" =~ ^2 ]]; then
+            printf '%s\n' "$body" | jq -c '.' >> "$BL_CURL_TRACE_LOG" 2>/dev/null || true   # 2>/dev/null + || true: trace-log write failure or non-JSON body must not break the API call (cost-cap is observational only)
+        fi
         case "$http_status" in
             2??)
                 printf '%s' "$body"
@@ -254,7 +259,7 @@ bl_poll_pending() {
             fi
         fi
         local list_body rc
-        list_body=$(bl_api_call GET "/v1/memory_stores/$memstore_id/memories?key_prefix=bl-case/$case_id/pending/")
+        list_body=$(bl_mem_list "$memstore_id" "bl-case/$case_id/pending/")
         rc=$?
         if (( rc != 0 )); then
             command rm -f "$seen_set_file"
@@ -364,6 +369,11 @@ bl_files_api_upload() {
             "https://api.anthropic.com/v1/files" 2>&1) || true   # retry handles curl exit
         http_status="${resp##*$'\n'}"
         body="${resp%$'\n'*}"
+        # Cost-cap wire-up — append compact 2xx response JSON to BL_CURL_TRACE_LOG when set;
+        # trace-runner's bl_check_cost_cap awks the file for usage.{input,output}_tokens per line.
+        if [[ -n "${BL_CURL_TRACE_LOG:-}" ]] && [[ "$http_status" =~ ^2 ]]; then
+            printf '%s\n' "$body" | jq -c '.' >> "$BL_CURL_TRACE_LOG" 2>/dev/null || true   # 2>/dev/null + || true: trace-log write failure or non-JSON body must not break the API call (cost-cap is observational only)
+        fi
         case "$http_status" in
             2??)
                 printf '%s\n' "$body" | jq -r '.id'
@@ -390,12 +400,109 @@ bl_files_api_upload() {
 }
 
 # ----------------------------------------------------------------------------
+# Memory-store adapter — API schema migration shim (M12 P6).
+# The managed-agents API changed from key-based to path-based memories:
+#   key="bl-case/foo" → path="/bl-case/foo" (absolute)
+#   GET by key → list by path_prefix + GET by mem_id
+#   PATCH with if_content_sha256 → DELETE + POST (last-write-wins)
+#   ?key_prefix= → ?path_prefix=
+#
+# bl_mem_post <store_id> <key> <content_file> — 0/65/69/70/71
+# bl_mem_get  <store_id> <key>               — prints body to stdout; 0/65
+# bl_mem_patch <store_id> <key> <content_file> [_sha_ignored] — 0/65/69/70
+# bl_mem_delete_by_key <store_id> <key>       — 0/65
+# bl_mem_list <store_id> <key_prefix>         — prints normalized JSON to stdout; 0/65
+#   Normalized: each item in .data has a .key field = path with leading / stripped.
+# ----------------------------------------------------------------------------
+
+bl_mem_post() {
+    local store_id="$1" key="$2" content_file="$3"
+    local body_file
+    body_file=$(mktemp)
+    jq -n --arg p "/$key" --rawfile c "$content_file" \
+        '{path:$p, content:$c}' > "$body_file"
+    local rc
+    bl_api_call POST "/v1/memory_stores/$store_id/memories" "$body_file" >/dev/null
+    rc=$?
+    command rm -f "$body_file"
+    return $rc
+}
+
+bl_mem_get() {
+    # bl_mem_get <store_id> <key> — fetch memory by path; prints full API body (with .content)
+    local store_id="$1" key="$2"
+    local encoded_path
+    encoded_path=$(printf '%s' "/$key" | /usr/bin/python3 -c \
+        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe=""))' 2>/dev/null \
+        || printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g')
+    local list_body mem_id
+    list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_path}&limit=1") || return $?
+    mem_id=$(printf '%s' "$list_body" | jq -r \
+        --arg p "/$key" '.data[] | select((.path == $p) or (.key == ($p | ltrimstr("/")))) | .id' | head -1)
+    if [[ -z "$mem_id" ]]; then
+        bl_error_envelope api "memory not found: $key"
+        return "$BL_EX_PREFLIGHT_FAIL"  # matches old 404→65 behaviour
+    fi
+    bl_api_call GET "/v1/memory_stores/$store_id/memories/$mem_id"
+    return $?
+}
+
+bl_mem_patch() {
+    # bl_mem_patch <store_id> <key> <content_file> [_sha_ignored] — delete + re-POST (last-write-wins)
+    local store_id="$1" key="$2" content_file="$3"
+    # Find existing mem_id
+    local encoded_path mem_id list_body
+    encoded_path=$(printf '%s' "/$key" | /usr/bin/python3 -c \
+        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe=""))' 2>/dev/null \
+        || printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g')
+    list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_path}&limit=1") || return $?
+    mem_id=$(printf '%s' "$list_body" | jq -r \
+        --arg p "/$key" '.data[] | select((.path == $p) or (.key == ($p | ltrimstr("/")))) | .id' | head -1)
+    if [[ -n "$mem_id" ]]; then
+        bl_api_call DELETE "/v1/memory_stores/$store_id/memories/$mem_id" >/dev/null || true   # best-effort delete; POST below fails with conflict if needed
+    fi
+    bl_mem_post "$store_id" "$key" "$content_file"
+    return $?
+}
+
+bl_mem_delete_by_key() {
+    # bl_mem_delete_by_key <store_id> <key> — find mem_id by path then DELETE
+    local store_id="$1" key="$2"
+    local encoded_path list_body mem_id
+    encoded_path=$(printf '%s' "/$key" | /usr/bin/python3 -c \
+        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe=""))' 2>/dev/null \
+        || printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g')
+    list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_path}&limit=1") || return $?
+    mem_id=$(printf '%s' "$list_body" | jq -r \
+        --arg p "/$key" '.data[] | select((.path == $p) or (.key == ($p | ltrimstr("/")))) | .id' | head -1)
+    [[ -z "$mem_id" ]] && return "$BL_EX_OK"   # already gone — treat as success
+    bl_api_call DELETE "/v1/memory_stores/$store_id/memories/$mem_id" >/dev/null
+    return $?
+}
+
+bl_mem_list() {
+    # bl_mem_list <store_id> <key_prefix> — list memories under prefix; normalizes .path→.key
+    local store_id="$1" key_prefix="$2"
+    local encoded_prefix list_body
+    encoded_prefix=$(printf '%s' "/$key_prefix" | /usr/bin/python3 -c \
+        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe="/"))' 2>/dev/null \
+        || printf '%s' "/$key_prefix")
+    list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_prefix}") || return $?
+    # Normalize .key field — production emits .path (with /), mock fixtures emit .key (no /).
+    # Prefer .path when present; fall back to existing .key; never overwrite a real .key with null.
+    printf '%s' "$list_body" | jq '
+        .data |= map(. + {key: (if .path then (.path | ltrimstr("/")) else (.key // "") end)})
+        | . + {data: .data}'
+    return $?
+}
+
+# ----------------------------------------------------------------------------
 # Preflight — DESIGN.md §8.1 contract:
 # 1. Verify ANTHROPIC_API_KEY set + non-empty
 # 2. Verify curl + jq available
 # 3. Create state/ directly (NOT via bl_init_workdir)
 # 4. Read cached agent-id; if present, return 0
-# 5. Else probe GET /v1/agents?name=bl-curator; populated → cache; empty → 66
+# 5. Else probe GET /v1/agents (filter client-side by name=bl-curator)
 # ----------------------------------------------------------------------------
 
 
@@ -579,9 +686,8 @@ bl_ledger_mirror_remote() {
     local target_key="bl-case/$case_id/actions/applied/$event_id.json"
     local body_tmp
     body_tmp=$(mktemp)
-    jq -n --arg k "$target_key" --arg c "$record" \
-        '{key:$k, content:$c, metadata:{}}' > "$body_tmp"
-    if ! bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID:-memstore_bl_case}/memories" "$body_tmp" >/dev/null 2>&1; then   # mirror best-effort; remote may be unreachable
+    printf '%s' "$record" > "$body_tmp"
+    if ! bl_mem_post "${BL_MEMSTORE_CASE_ID:-memstore_bl_case}" "$target_key" "$body_tmp" >/dev/null 2>&1; then   # mirror best-effort; remote may be unreachable
         # Mirror failed → enqueue to outbox (best-effort; no ledger emission for this failure)
         local mirror_payload
         mirror_payload=$(jq -n --argjson r "$record" --arg k "$target_key" '{record:$r, target_key:$k}')
@@ -936,8 +1042,12 @@ bl_outbox_drain() {
                 ;;
             action_mirror)
                 body_tmp=$(mktemp)
+                local mirror_key
+                mirror_key=$(printf '%s' "$payload" | jq -r '.target_key // empty')
                 printf '%s' "$payload" | jq -c '.record' > "$body_tmp"
-                bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID:-memstore_bl_case}/memories" "$body_tmp" >/dev/null || rc=$?
+                if [[ -n "$mirror_key" ]]; then
+                    bl_mem_post "${BL_MEMSTORE_CASE_ID:-memstore_bl_case}" "$mirror_key" "$body_tmp" >/dev/null || rc=$?
+                fi
                 command rm -f "$body_tmp"
                 ;;
             *)
@@ -1026,10 +1136,15 @@ bl_preflight() {
         bl_debug "bl_preflight: cached agent-id empty, re-probing"
     fi
 
-    # 5. Probe GET /v1/agents?name=bl-curator
+    # 5. Probe GET /v1/agents — list all; filter client-side (?name= not supported)
     local resp
-    resp=$(bl_api_call GET "/v1/agents?name=bl-curator") || return $?
-    BL_AGENT_ID="$(printf '%s\n' "$resp" | jq -r '.data[0].id // empty')"
+    resp=$(bl_api_call GET "/v1/agents") || return $?
+    BL_AGENT_ID="$(printf '%s\n' "$resp" | jq -r '
+        (.data[] | select(.name == "bl-curator") | .id)? // empty' | head -1)"
+    if [[ -z "$BL_AGENT_ID" ]]; then
+        BL_AGENT_ID="$(printf '%s\n' "$resp" | jq -r '
+            (.data[] | select(.name | startswith("blacklight-curator")) | .id)? // empty' | head -1)"
+    fi
 
     if [[ -z "$BL_AGENT_ID" ]]; then
         command cat >&2 <<'BOOTSTRAP_EOF'
@@ -1871,7 +1986,7 @@ bl_observe_file() {
         local memstore_id
         memstore_id="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state-file may legitimately be absent on first-run; fall back to canonical default name
         local attr_body
-        attr_body=$(bl_api_call GET "/v1/memory_stores/$memstore_id/memories/bl-case%2F$case_id_attr%2Fattributions%2F$attribution_from.json") || return $?
+        attr_body=$(bl_mem_get "$memstore_id" "bl-case/$case_id_attr/attributions/$attribution_from.json") || return $?
         attribution_json=$(printf '%s' "$attr_body" | jq -r '.content')
         local attr_tmp
         attr_tmp=$(command mktemp)
@@ -3337,17 +3452,15 @@ bl_consult_materialize_case() {
             content="<!-- trigger_fingerprint: $fp -->"$'\n'"$content"
         fi
         body_file=$(mktemp)
-        jq -n --arg k "$memstore_prefix/$tmpl.md" --arg c "$content" \
-            '{key: $k, content: $c, metadata: {}}' > "$body_file"
-        bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+        printf '%s' "$content" > "$body_file"
+        bl_mem_post "${BL_MEMSTORE_CASE_ID}" "$memstore_prefix/$tmpl.md" "$body_file"
         rc=$?
         command rm -f "$body_file"
         (( rc == 0 )) || return "$rc"
     done
     body_file=$(mktemp)
-    jq -n --arg k "$memstore_prefix/STEP_COUNTER" --arg c "0" \
-        '{key: $k, content: $c, metadata: {}}' > "$body_file"
-    bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null || {
+    printf '0' > "$body_file"
+    bl_mem_post "${BL_MEMSTORE_CASE_ID}" "$memstore_prefix/STEP_COUNTER" "$body_file" || {
         command rm -f "$body_file"
         return "$BL_EX_UPSTREAM_ERROR"
     }
@@ -3403,7 +3516,7 @@ bl_consult_find_open_case_by_fingerprint() {
     # operator workspaces resolvable.
     local fp="$1"
     local index_body
-    index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" 2>/dev/null) || return "$BL_EX_OK"   # missing INDEX → no prior cases
+    index_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md" 2>/dev/null) || return "$BL_EX_OK"   # missing INDEX → no prior cases
     local index_content
     index_content=$(printf '%s' "$index_body" | jq -r '.content')
 
@@ -3448,7 +3561,7 @@ bl_consult_find_open_case_by_fingerprint() {
     local case_id hyp_body hyp_fp
     while IFS= read -r case_id; do
         [[ -z "$case_id" ]] && continue
-        hyp_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null) || continue   # skip unreadable row
+        hyp_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" 2>/dev/null) || continue   # skip unreadable row
         hyp_fp=$(printf '%s' "$hyp_body" | jq -r '.content' | grep -oE 'trigger_fingerprint: [a-f0-9]{16}' | awk '{print $2}')
         if [[ "$hyp_fp" == "$fp" ]]; then
             printf '%s\n' "$case_id"
@@ -3470,13 +3583,12 @@ bl_consult_update_index_row_append() {
     local attempt=0 index_body current_content new_content body_file rc
     local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"
     while (( attempt < 3 )); do
-        index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" 2>/dev/null) || {
+        index_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md" 2>/dev/null) || {
             current_content=$(command cat "$repo_root/case-templates/INDEX.md" 2>/dev/null || command cat "case-templates/INDEX.md" 2>/dev/null || printf '')
             new_content=$(printf '%s\n%s\n' "$current_content" "$new_row")
             body_file=$(mktemp)
-            jq -n --arg k "bl-case/INDEX.md" --arg c "$new_content" \
-                '{key:$k, content:$c, metadata:{}}' > "$body_file"
-            bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+            printf '%s' "$new_content" > "$body_file"
+            bl_mem_post "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md" "$body_file"
             rc=$?
             command rm -f "$body_file"
             (( rc == 0 )) && return "$BL_EX_OK"
@@ -3489,12 +3601,9 @@ bl_consult_update_index_row_append() {
         else
             new_content=$(printf '%s\n%s\n' "$current_content" "$new_row")
         fi
-        local current_sha
-        current_sha=$(printf '%s' "$index_body" | jq -r '.content_sha256 // empty')
         body_file=$(mktemp)
-        jq -n --arg c "$new_content" --arg s "$current_sha" \
-            '{content:$c, if_content_sha256:$s}' > "$body_file"
-        bl_api_call PATCH "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" "$body_file" >/dev/null
+        printf '%s' "$new_content" > "$body_file"
+        bl_mem_patch "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md" "$body_file"   # last-write-wins; if_content_sha256 no longer supported
         rc=$?
         command rm -f "$body_file"
         (( rc == 0 )) && return "$BL_EX_OK"
@@ -3566,11 +3675,11 @@ bl_consult_attach() {
         return "$BL_EX_USAGE"
     fi
     local probe_rc=0
-    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" >/dev/null || probe_rc=$?
+    bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" >/dev/null || probe_rc=$?
     if (( probe_rc == 65 )); then
-        local list_rc=0
-        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/" >/dev/null || list_rc=$?
-        if (( list_rc != 0 )); then
+        local list_rc=0 list_out
+        list_out=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/") || list_rc=$?
+        if (( list_rc != 0 )) || [[ -z "$(printf '%s' "${list_out:-}" | jq -r '.data[0].id // empty' 2>/dev/null)" ]]; then
             bl_error_envelope consult "case not found: $case_id"
             return "$BL_EX_NOT_FOUND"
         fi
@@ -3590,7 +3699,7 @@ bl_consult_sweep_mode() {
     local cve="${1:-}"
     BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
     local list_body
-    list_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/&depth=2") || return $?
+    list_body=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/") || return $?
     local closed_cases
     closed_cases=$(printf '%s' "$list_body" | jq -r '.data[] | select(.key | test("^bl-case/CASE-[^/]+/closed\\.md$")) | .key' 2>/dev/null || printf '')
     if [[ -z "$closed_cases" ]]; then
@@ -3602,10 +3711,10 @@ bl_consult_sweep_mode() {
     while IFS= read -r key; do
         [[ -z "$key" ]] && continue
         case_id=$(printf '%s' "$key" | sed 's|bl-case/||; s|/closed.md||')
-        body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${key//\//%2F}" 2>/dev/null) || continue   # skip unreadable
+        body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "$key" 2>/dev/null) || continue   # skip unreadable
         if [[ -n "$cve" ]]; then
             local hyp
-            hyp=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null) || continue   # skip unreadable
+            hyp=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" 2>/dev/null) || continue   # skip unreadable
             printf '%s' "$hyp" | grep -qi "$cve" || continue   # no match → skip row
         fi
         local closed_at fid_md
@@ -3674,7 +3783,7 @@ bl_run_step() {
     memstore_key="bl-case/$case_id/pending/$step_id.json"
     local resp rc
     rc=0
-    resp=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${memstore_key//\//%2F}") || rc=$?
+    resp=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "$memstore_key") || rc=$?
     if (( rc == 65 )); then
         command rm -f "$pending_tmp"
         bl_error_envelope run "step $step_id not found in pending/"
@@ -3904,7 +4013,7 @@ bl_run_writeback_result() {
 
     local pending_tmp
     pending_tmp=$(mktemp)
-    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fpending%2F$step_id.json" 2>/dev/null | jq -r '.content' > "$pending_tmp" || true   # transient miss
+    bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/pending/$step_id.json" 2>/dev/null | jq -r '.content' > "$pending_tmp" || true   # transient miss
 
     local result_content
     result_content=$(jq -n --slurpfile pending "$pending_tmp" --argjson rc "$rc" --arg stdout "$fenced_stdout" --arg now "$now" \
@@ -3930,13 +4039,12 @@ bl_run_writeback_result() {
 
     local body_file
     body_file=$(mktemp)
-    jq -n --arg k "bl-case/$case_id/results/$step_id.json" --arg c "$result_content" \
-        '{key:$k, content:$c, metadata:{}}' > "$body_file"
-    bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+    printf '%s' "$result_content" > "$body_file"
+    bl_mem_post "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/results/$step_id.json" "$body_file"
     local post_rc=$?
     command rm -f "$body_file"
     (( post_rc != 0 )) && { command rm -f "$pending_tmp"; return "$post_rc"; }
-    bl_api_call DELETE "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fpending%2F$step_id.json" >/dev/null || bl_warn "pending delete failed; manual cleanup may be needed"
+    bl_mem_delete_by_key "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/pending/$step_id.json" || bl_warn "pending delete failed; manual cleanup may be needed"
     command rm -f "$pending_tmp"
     return "$BL_EX_OK"
 }
@@ -3949,7 +4057,7 @@ bl_run_batch() {
     case_id=$(bl_case_current)
     [[ -z "$case_id" ]] && { bl_error_envelope run "no active case"; return "$BL_EX_NOT_FOUND"; }
     local list_body step_ids
-    list_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/pending/") || return $?
+    list_body=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/pending/") || return $?
     step_ids=$(printf '%s' "$list_body" | jq -r '.data[].key' | sed "s|bl-case/$case_id/pending/||; s|\.json$||" | sort)
     if [[ -z "$step_ids" ]]; then
         bl_info "no pending steps for $case_id"
@@ -3973,7 +4081,7 @@ bl_run_list() {
     case_id=$(bl_case_current)
     [[ -z "$case_id" ]] && { bl_error_envelope run "no active case"; return "$BL_EX_NOT_FOUND"; }
     local list_body
-    list_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/pending/") || return $?
+    list_body=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/pending/") || return $?
     local keys
     keys=$(printf '%s' "$list_body" | jq -r '.data[].key' | sort)
     if [[ -z "$keys" ]]; then
@@ -3983,7 +4091,7 @@ bl_run_list() {
     printf '%-8s  %-24s  %-11s  %s\n' "step_id" "verb" "tier" "reasoning"
     local key body sid verb tier reasoning
     while IFS= read -r key; do
-        body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${key//\//%2F}" 2>/dev/null | jq -r '.content') || continue   # skip unreadable
+        body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "$key" 2>/dev/null | jq -r '.content') || continue   # skip unreadable
         sid=$(printf '%s' "$body" | jq -r '.step_id')
         verb=$(printf '%s' "$body" | jq -r '.verb')
         tier=$(printf '%s' "$body" | jq -r '.action_tier')
@@ -4035,19 +4143,19 @@ bl_case_show() {
     [[ -z "$case_id" ]] && { bl_error_envelope case "no active case"; return "$BL_EX_NOT_FOUND"; }
     printf '# Case %s\n' "$case_id"
     printf '\n## Hypothesis\n'
-    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null | jq -r '.content // "(not found)"' || printf '(not found)\n'
+    bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" 2>/dev/null | jq -r '.content // "(not found)"' || printf '(not found)\n'
     printf '\n## Evidence\n'
-    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/evidence/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
+    bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/evidence/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
     printf '\n## Pending steps\n'
-    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/pending/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
+    bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/pending/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
     printf '\n## Applied actions\n'
-    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
+    bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
     printf '\n## Defense hits\n'
-    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fdefense-hits.md" 2>/dev/null | jq -r '.content // "(none)"' || printf '(none)\n'
+    bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/defense-hits.md" 2>/dev/null | jq -r '.content // "(none)"' || printf '(none)\n'
     printf '\n## Open questions\n'
-    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fopen-questions.md" 2>/dev/null | jq -r '.content // "(none)"' || printf '(none)\n'
+    bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/open-questions.md" 2>/dev/null | jq -r '.content // "(none)"' || printf '(none)\n'
     local closed_list
-    closed_list=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/closed-" 2>/dev/null | jq -r '.data[].key' || printf '')
+    closed_list=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/closed-" 2>/dev/null | jq -r '.data[].key' || printf '')
     if [[ -n "$closed_list" ]]; then
         printf '\n## Previous closures\n%s\n' "$closed_list"
     fi
@@ -4080,7 +4188,7 @@ bl_case_list() {
         *)         bl_error_envelope case "unknown filter: $filter"; return "$BL_EX_USAGE" ;;
     esac
     local index_body
-    index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" 2>/dev/null | jq -r '.content')
+    index_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md" 2>/dev/null | jq -r '.content')
     if [[ -z "$index_body" ]]; then
         bl_info "(no cases in workspace)"
         return "$BL_EX_OK"
@@ -4097,16 +4205,14 @@ bl_case_update_index_status() {
     local new_status="$2"
     local attempt=0
     while (( attempt < 3 )); do
-        local index_body current_content new_content current_sha body_file rc
-        index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md") || return $?
+        local index_body current_content new_content body_file rc
+        index_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md") || return $?
         current_content=$(printf '%s' "$index_body" | jq -r '.content')
-        current_sha=$(printf '%s' "$index_body" | jq -r '.content_sha256 // empty')
         # Replace the status cell for this case row
         new_content=$(printf '%s' "$current_content" | sed -E "s|(\| $case_id \|[^|]+\|) [a-z]+ (\|.*\|)|\1 $new_status \2|")
         body_file=$(mktemp)
-        jq -n --arg c "$new_content" --arg s "$current_sha" \
-            '{content:$c, if_content_sha256:$s}' > "$body_file"
-        bl_api_call PATCH "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" "$body_file" >/dev/null
+        printf '%s' "$new_content" > "$body_file"
+        bl_mem_patch "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md" "$body_file"   # last-write-wins
         rc=$?
         command rm -f "$body_file"
         (( rc == 0 )) && return "$BL_EX_OK"
@@ -4120,15 +4226,15 @@ bl_case_close_validate_preconditions() {
     local case_id="$1"
     local force="$2"
     local oq_body oq_content
-    oq_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fopen-questions.md" 2>/dev/null | jq -r '.content')
+    oq_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/open-questions.md" 2>/dev/null | jq -r '.content')
     oq_content=$(printf '%s' "$oq_body" | grep -vE '^<!--|^# |^$' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
     if [[ -n "$oq_content" && "$oq_content" != "none" ]]; then
         bl_error_envelope case "open-questions.md has unresolved entries (expected 0 or 'none')"
         return "$BL_EX_TIER_GATE_DENIED"
     fi
     local pending results
-    pending=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/pending/" 2>/dev/null | jq -r '.data[].key' | sed "s|bl-case/$case_id/pending/||")
-    results=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/results/" 2>/dev/null | jq -r '.data[].key' | sed "s|bl-case/$case_id/results/||")
+    pending=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/pending/" 2>/dev/null | jq -r '.data[].key' | sed "s|bl-case/$case_id/pending/||")
+    results=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/results/" 2>/dev/null | jq -r '.data[].key' | sed "s|bl-case/$case_id/results/||")
     local missing
     missing=$(comm -23 <(printf '%s\n' "$pending" | sort) <(printf '%s\n' "$results" | sort))
     if [[ -n "$missing" ]]; then
@@ -4136,11 +4242,11 @@ bl_case_close_validate_preconditions() {
         return "$BL_EX_TIER_GATE_DENIED"
     fi
     local applied_keys missing_hint=0
-    applied_keys=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key')
+    applied_keys=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key')
     while IFS= read -r k; do
         [[ -z "$k" ]] && continue
         local applied_content
-        applied_content=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${k//\//%2F}" 2>/dev/null | jq -r '.content')
+        applied_content=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "$k" 2>/dev/null | jq -r '.content')
         printf '%s' "$applied_content" | grep -q '^retire_hint:' || { missing_hint=1; break; }
     done <<< "$applied_keys"
     if (( missing_hint == 1 )); then
@@ -4149,7 +4255,7 @@ bl_case_close_validate_preconditions() {
     fi
     if [[ "$force" != "yes" ]]; then
         local hyp_body confidence
-        hyp_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null | jq -r '.content')
+        hyp_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" 2>/dev/null | jq -r '.content')
         confidence=$(printf '%s' "$hyp_body" | awk '/^## Confidence/{flag=1; next} flag && /^0?\.[0-9]+|^[0-9]+(\.[0-9]+)?/{print; exit}' | grep -oE '[0-9]+\.?[0-9]*' | head -1)
         if [[ -z "$confidence" ]] || awk "BEGIN{exit !($confidence < 0.7)}"; then
             bl_error_envelope case "hypothesis confidence < 0.7 (use --force to override)"
@@ -4171,17 +4277,17 @@ bl_case_close_render_brief_input() {
     {
         printf '# Case %s\n\n' "$case_id"
         printf '## Executive summary\n'
-        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null | jq -r '.content' || printf '(hypothesis unavailable)\n'
+        bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" 2>/dev/null | jq -r '.content' || printf '(hypothesis unavailable)\n'
         printf '\n## Kill chain\n'
-        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fattribution.md" 2>/dev/null | jq -r '.content' || printf '(not populated)\n'
+        bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/attribution.md" 2>/dev/null | jq -r '.content' || printf '(not populated)\n'
         printf '\n## Indicators of compromise\n'
         for f in ip-clusters url-patterns file-patterns; do
-            bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2F$f.md" 2>/dev/null | jq -r '.content' || printf '\n'
+            bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/$f.md" 2>/dev/null | jq -r '.content' || printf '\n'
         done
         printf '\n## Remediation applied\n'
-        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
+        bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key' || printf '(none)\n'
         printf '\n## Defense hits\n'
-        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fdefense-hits.md" 2>/dev/null | jq -r '.content' | tail -30 || printf '(none)\n'
+        bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/defense-hits.md" 2>/dev/null | jq -r '.content' | tail -30 || printf '(none)\n'
         printf '\n## Open questions resolved\nnone at close\n'
         printf '\n## Audit\nSee /var/lib/bl/ledger/%s.jsonl\n' "$case_id"
     } > "$out"
@@ -4210,9 +4316,8 @@ bl_case_close_write_closed_md() {
         {print}')
     local body_file
     body_file=$(mktemp)
-    jq -n --arg k "bl-case/$case_id/closed.md" --arg c "$closed_content" \
-        '{key:$k, content:$c, metadata:{}}' > "$body_file"
-    bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+    printf '%s' "$closed_content" > "$body_file"
+    bl_mem_post "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/closed.md" "$body_file"
     local rc=$?
     command rm -f "$body_file"
     return "$rc"
@@ -4224,11 +4329,11 @@ bl_case_close_schedule_retire() {
     local queue_file="$BL_VAR_DIR/state/retire-queue.jsonl"
     command mkdir -p "$BL_VAR_DIR/state" 2>/dev/null || return "$BL_EX_PREFLIGHT_FAIL"   # RO fs / perms
     local applied_keys
-    applied_keys=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key')
+    applied_keys=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/actions/applied/" 2>/dev/null | jq -r '.data[].key')
     while IFS= read -r k; do
         [[ -z "$k" ]] && continue
         local body act_id hint
-        body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${k//\//%2F}" 2>/dev/null | jq -r '.content')
+        body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "$k" 2>/dev/null | jq -r '.content')
         act_id=$(printf '%s' "$body" | grep '^act_id:' | awk '{print $2}')
         hint=$(printf '%s' "$body" | grep '^retire_hint:' | cut -d' ' -f2-)
         [[ -n "$act_id" && -n "$hint" ]] || continue   # malformed → skip
@@ -4348,7 +4453,7 @@ bl_case_reopen() {
     [[ -z "$case_id" ]] && { bl_error_envelope case "missing <case-id>"; return "$BL_EX_USAGE"; }
     [[ -z "$reason" ]] && { bl_error_envelope case "missing --reason <str>"; return "$BL_EX_USAGE"; }
     local closed_body
-    closed_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fclosed.md")
+    closed_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/closed.md")
     local rc=$?
     (( rc != 0 )) && { bl_error_envelope case "case is not closed (closed.md not found)"; return "$BL_EX_USAGE"; }
     local ts
@@ -4357,14 +4462,13 @@ bl_case_reopen() {
     local content body_file
     content=$(printf '%s' "$closed_body" | jq -r '.content')
     body_file=$(mktemp)
-    jq -n --arg k "$archive_key" --arg c "$content" \
-        '{key:$k, content:$c, metadata:{}}' > "$body_file"
-    bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null || {
+    printf '%s' "$content" > "$body_file"
+    bl_mem_post "${BL_MEMSTORE_CASE_ID}" "$archive_key" "$body_file" || {
         command rm -f "$body_file"
         return "$BL_EX_UPSTREAM_ERROR"
     }
     command rm -f "$body_file"
-    bl_api_call DELETE "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fclosed.md" >/dev/null || bl_warn "original closed.md delete failed"
+    bl_mem_delete_by_key "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/closed.md" || bl_warn "original closed.md delete failed"
     # MUST-FIX 5.2: update INDEX status to reopened via shared helper
     bl_case_update_index_status "$case_id" "reopened" || bl_warn "INDEX update failed on reopen; manual correction may be needed"
     bl_ledger_append "$case_id" \
@@ -4536,7 +4640,7 @@ bl_defend_modsec() {
         local memstore_id
         memstore_id="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state file may be absent on first invocation; fall through to default id
         local action_body action_payload action_kind action_rule_body
-        action_body=$(bl_api_call GET "/v1/memory_stores/$memstore_id/memories/bl-case%2F$case_id%2Factions%2Fpending%2F$from_action.json") || return $?
+        action_body=$(bl_mem_get "$memstore_id" "bl-case/$case_id/actions/pending/$from_action.json") || return $?
         action_payload=$(printf '%s' "$action_body" | jq -r '.content')
         local payload_tmp
         payload_tmp=$(command mktemp)
@@ -6104,10 +6208,14 @@ bl_setup_ensure_agent() {
         fi
     fi
     local list_resp probed_id
-    list_resp=$(bl_api_call GET "/v1/agents?name=bl-curator") || return $?
-    probed_id=$(printf '%s' "$list_resp" | jq -r '.data[0].id // empty')
+    list_resp=$(bl_api_call GET "/v1/agents") || return $?   # API rejects ?name= filter — list all, filter client-side
+    probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name == "bl-curator") | .id' | head -1)
+    if [[ -z "$probed_id" ]]; then
+        # Also match the smoketest agent name that was provisioned in initial workspace
+        probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name | startswith("blacklight-curator")) | .id' | head -1)
+    fi
     if [[ -n "$probed_id" ]]; then
-        bl_info "bl setup: agent bl-curator already exists ($probed_id) — caching"
+        bl_info "bl setup: curator agent already exists ($probed_id) — caching"
         printf '%s' "$probed_id" > "$id_file"
         printf -v "$_out" '%s' "$probed_id"
         return "$BL_EX_OK"
@@ -6120,8 +6228,9 @@ bl_setup_ensure_agent() {
     command rm -f "$body_file"
     if (( rc == 71 )); then
         bl_info "bl setup: agent already exists (409) — re-probing"
-        list_resp=$(bl_api_call GET "/v1/agents?name=bl-curator") || return $?
-        probed_id=$(printf '%s' "$list_resp" | jq -r '.data[0].id // empty')
+        list_resp=$(bl_api_call GET "/v1/agents") || return $?   # API rejects ?name= filter — list all, filter client-side
+        probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name == "bl-curator") | .id' | head -1)
+        [[ -z "$probed_id" ]] && probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name | startswith("blacklight-curator")) | .id' | head -1)
         [[ -z "$probed_id" ]] && { bl_error_envelope setup "agent created elsewhere but probe still empty"; return "$BL_EX_NOT_FOUND"; }
         printf '%s' "$probed_id" > "$id_file"
         printf -v "$_out" '%s' "$probed_id"
@@ -6185,7 +6294,8 @@ bl_setup_ensure_memstore() {
     fi
     local list_resp probed_id
     list_resp=$(bl_api_call GET "/v1/memory_stores?name=$name") || return $?
-    probed_id=$(printf '%s' "$list_resp" | jq -r '.data[0].id // empty')
+    # Filter client-side by exact name — API ?name= may do prefix match or return all
+    probed_id=$(printf '%s' "$list_resp" | jq -r --arg n "$name" '.data[] | select(.name == $n) | .id' | head -1)
     if [[ -n "$probed_id" ]]; then
         bl_info "bl setup: memstore $name already exists ($probed_id) — caching"
         printf '%s' "$probed_id" > "$id_file"
@@ -6302,31 +6412,22 @@ bl_setup_post_memory() {
     local store_id="$1"
     local key="$2"
     local content_path="$3"
-    local sha="$4"
-    local body_file
-    body_file=$(mktemp)
-    jq -n --arg k "$key" --rawfile c "$content_path" --arg s "$sha" \
-        '{key:$k, content:$c, metadata:{sha256:$s}}' > "$body_file"
-    bl_api_call POST "/v1/memory_stores/$store_id/memories" "$body_file" >/dev/null
-    local rc=$?
-    command rm -f "$body_file"
-    return $rc
+    # sha arg ($4) ignored — API no longer accepts metadata field
+    bl_mem_post "$store_id" "$key" "$content_path"
+    return $?
 }
 
 # bl_setup_post_manifest <store-id> <comma-joined-entries> — POST MANIFEST.json memory.
 bl_setup_post_manifest() {
     local store_id="$1"
     local entries="$2"
-    local now
-    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    local body_file content
-    body_file=$(mktemp)
-    content="[$entries]"
-    jq -n --arg k "MANIFEST.json" --arg c "$content" --arg ts "$now" \
-        '{key:$k, content:$c, metadata:{generated_at:$ts}}' > "$body_file"
-    bl_api_call POST "/v1/memory_stores/$store_id/memories" "$body_file" >/dev/null
+    local content_file
+    content_file=$(mktemp)
+    printf '[%s]' "$entries" > "$content_file"
+    # Use bl_mem_patch so re-seeding re-run overwrites the existing MANIFEST
+    bl_mem_patch "$store_id" "MANIFEST.json" "$content_file"
     local rc=$?
-    command rm -f "$body_file"
+    command rm -f "$content_file"
     return $rc
 }
 
@@ -6437,7 +6538,7 @@ bl_setup_sync() {
     bl_setup_compute_manifest "$skills_dir" > "$local_manifest_file"
     # Fetch remote manifest
     local remote_resp rc=0
-    remote_resp=$(bl_api_call GET "/v1/memory_stores/$skills_id/memories/MANIFEST.json") || rc=$?
+    remote_resp=$(bl_mem_get "$skills_id" "MANIFEST.json") || rc=$?
     if (( rc != 0 )); then
         command rm -f "$local_manifest_file" "$remote_manifest_file"
         return $rc
@@ -6484,11 +6585,9 @@ bl_setup_sync() {
         bl_setup_post_memory "$skills_id" "$rel" "$path" "$sha" || bl_warn "bl setup --sync: POST (modify) failed for $rel"
     done < <(printf '%s' "$diff_json" | jq -r '.modify[]')
     if [[ "$prune" == "yes" ]]; then
-        local key_enc
         while IFS= read -r rel; do
             [[ -z "$rel" ]] && continue
-            key_enc="${rel//\//%2F}"
-            bl_api_call DELETE "/v1/memory_stores/$skills_id/memories/$key_enc" >/dev/null || bl_warn "bl setup --sync: DELETE failed for $rel"
+            bl_mem_delete_by_key "$skills_id" "$rel" || bl_warn "bl setup --sync: DELETE failed for $rel"
         done < <(printf '%s' "$diff_json" | jq -r '.remove[]')
     else
         (( n_rm > 0 )) && bl_info "bl setup --sync: $n_rm remote-only skill(s) — pass --prune to remove"

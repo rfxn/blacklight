@@ -425,7 +425,7 @@ bl_observe_file() {
         local memstore_id
         memstore_id="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state-file may legitimately be absent on first-run; fall back to canonical default name
         local attr_body
-        attr_body=$(bl_api_call GET "/v1/memory_stores/$memstore_id/memories/bl-case%2F$case_id_attr%2Fattributions%2F$attribution_from.json") || return $?
+        attr_body=$(bl_mem_get "$memstore_id" "bl-case/$case_id_attr/attributions/$attribution_from.json") || return $?
         attribution_json=$(printf '%s' "$attr_body" | jq -r '.content')
         local attr_tmp
         attr_tmp=$(command mktemp)

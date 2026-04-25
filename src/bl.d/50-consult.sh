@@ -107,17 +107,15 @@ bl_consult_materialize_case() {
             content="<!-- trigger_fingerprint: $fp -->"$'\n'"$content"
         fi
         body_file=$(mktemp)
-        jq -n --arg k "$memstore_prefix/$tmpl.md" --arg c "$content" \
-            '{key: $k, content: $c, metadata: {}}' > "$body_file"
-        bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+        printf '%s' "$content" > "$body_file"
+        bl_mem_post "${BL_MEMSTORE_CASE_ID}" "$memstore_prefix/$tmpl.md" "$body_file"
         rc=$?
         command rm -f "$body_file"
         (( rc == 0 )) || return "$rc"
     done
     body_file=$(mktemp)
-    jq -n --arg k "$memstore_prefix/STEP_COUNTER" --arg c "0" \
-        '{key: $k, content: $c, metadata: {}}' > "$body_file"
-    bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null || {
+    printf '0' > "$body_file"
+    bl_mem_post "${BL_MEMSTORE_CASE_ID}" "$memstore_prefix/STEP_COUNTER" "$body_file" || {
         command rm -f "$body_file"
         return "$BL_EX_UPSTREAM_ERROR"
     }
@@ -173,7 +171,7 @@ bl_consult_find_open_case_by_fingerprint() {
     # operator workspaces resolvable.
     local fp="$1"
     local index_body
-    index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" 2>/dev/null) || return "$BL_EX_OK"   # missing INDEX → no prior cases
+    index_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md" 2>/dev/null) || return "$BL_EX_OK"   # missing INDEX → no prior cases
     local index_content
     index_content=$(printf '%s' "$index_body" | jq -r '.content')
 
@@ -218,7 +216,7 @@ bl_consult_find_open_case_by_fingerprint() {
     local case_id hyp_body hyp_fp
     while IFS= read -r case_id; do
         [[ -z "$case_id" ]] && continue
-        hyp_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null) || continue   # skip unreadable row
+        hyp_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" 2>/dev/null) || continue   # skip unreadable row
         hyp_fp=$(printf '%s' "$hyp_body" | jq -r '.content' | grep -oE 'trigger_fingerprint: [a-f0-9]{16}' | awk '{print $2}')
         if [[ "$hyp_fp" == "$fp" ]]; then
             printf '%s\n' "$case_id"
@@ -240,13 +238,12 @@ bl_consult_update_index_row_append() {
     local attempt=0 index_body current_content new_content body_file rc
     local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"
     while (( attempt < 3 )); do
-        index_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" 2>/dev/null) || {
+        index_body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md" 2>/dev/null) || {
             current_content=$(command cat "$repo_root/case-templates/INDEX.md" 2>/dev/null || command cat "case-templates/INDEX.md" 2>/dev/null || printf '')
             new_content=$(printf '%s\n%s\n' "$current_content" "$new_row")
             body_file=$(mktemp)
-            jq -n --arg k "bl-case/INDEX.md" --arg c "$new_content" \
-                '{key:$k, content:$c, metadata:{}}' > "$body_file"
-            bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories" "$body_file" >/dev/null
+            printf '%s' "$new_content" > "$body_file"
+            bl_mem_post "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md" "$body_file"
             rc=$?
             command rm -f "$body_file"
             (( rc == 0 )) && return "$BL_EX_OK"
@@ -259,12 +256,9 @@ bl_consult_update_index_row_append() {
         else
             new_content=$(printf '%s\n%s\n' "$current_content" "$new_row")
         fi
-        local current_sha
-        current_sha=$(printf '%s' "$index_body" | jq -r '.content_sha256 // empty')
         body_file=$(mktemp)
-        jq -n --arg c "$new_content" --arg s "$current_sha" \
-            '{content:$c, if_content_sha256:$s}' > "$body_file"
-        bl_api_call PATCH "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2FINDEX.md" "$body_file" >/dev/null
+        printf '%s' "$new_content" > "$body_file"
+        bl_mem_patch "${BL_MEMSTORE_CASE_ID}" "bl-case/INDEX.md" "$body_file"   # last-write-wins; if_content_sha256 no longer supported
         rc=$?
         command rm -f "$body_file"
         (( rc == 0 )) && return "$BL_EX_OK"
@@ -336,11 +330,11 @@ bl_consult_attach() {
         return "$BL_EX_USAGE"
     fi
     local probe_rc=0
-    bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" >/dev/null || probe_rc=$?
+    bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" >/dev/null || probe_rc=$?
     if (( probe_rc == 65 )); then
-        local list_rc=0
-        bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/$case_id/" >/dev/null || list_rc=$?
-        if (( list_rc != 0 )); then
+        local list_rc=0 list_out
+        list_out=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/") || list_rc=$?
+        if (( list_rc != 0 )) || [[ -z "$(printf '%s' "${list_out:-}" | jq -r '.data[0].id // empty' 2>/dev/null)" ]]; then
             bl_error_envelope consult "case not found: $case_id"
             return "$BL_EX_NOT_FOUND"
         fi
@@ -360,7 +354,7 @@ bl_consult_sweep_mode() {
     local cve="${1:-}"
     BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
     local list_body
-    list_body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories?key_prefix=bl-case/&depth=2") || return $?
+    list_body=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/") || return $?
     local closed_cases
     closed_cases=$(printf '%s' "$list_body" | jq -r '.data[] | select(.key | test("^bl-case/CASE-[^/]+/closed\\.md$")) | .key' 2>/dev/null || printf '')
     if [[ -z "$closed_cases" ]]; then
@@ -372,10 +366,10 @@ bl_consult_sweep_mode() {
     while IFS= read -r key; do
         [[ -z "$key" ]] && continue
         case_id=$(printf '%s' "$key" | sed 's|bl-case/||; s|/closed.md||')
-        body=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/${key//\//%2F}" 2>/dev/null) || continue   # skip unreadable
+        body=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "$key" 2>/dev/null) || continue   # skip unreadable
         if [[ -n "$cve" ]]; then
             local hyp
-            hyp=$(bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" 2>/dev/null) || continue   # skip unreadable
+            hyp=$(bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" 2>/dev/null) || continue   # skip unreadable
             printf '%s' "$hyp" | grep -qi "$cve" || continue   # no match → skip row
         fi
         local closed_at fid_md

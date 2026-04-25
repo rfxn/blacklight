@@ -25,6 +25,11 @@ bl_api_call() {
             "https://api.anthropic.com${url_suffix}" 2>&1) || true   # retry handles curl exit; ${arr[@]+"${arr[@]}"} guards bash 4.1 set -u trap on empty arrays (CentOS 6 floor)
         http_status="${resp##*$'\n'}"
         body="${resp%$'\n'*}"
+        # Cost-cap wire-up — append compact 2xx response JSON to BL_CURL_TRACE_LOG when set;
+        # trace-runner's bl_check_cost_cap awks the file for usage.{input,output}_tokens per line.
+        if [[ -n "${BL_CURL_TRACE_LOG:-}" ]] && [[ "$http_status" =~ ^2 ]]; then
+            printf '%s\n' "$body" | jq -c '.' >> "$BL_CURL_TRACE_LOG" 2>/dev/null || true   # 2>/dev/null + || true: trace-log write failure or non-JSON body must not break the API call (cost-cap is observational only)
+        fi
         case "$http_status" in
             2??)
                 printf '%s' "$body"
@@ -109,7 +114,7 @@ bl_poll_pending() {
             fi
         fi
         local list_body rc
-        list_body=$(bl_api_call GET "/v1/memory_stores/$memstore_id/memories?key_prefix=bl-case/$case_id/pending/")
+        list_body=$(bl_mem_list "$memstore_id" "bl-case/$case_id/pending/")
         rc=$?
         if (( rc != 0 )); then
             command rm -f "$seen_set_file"
@@ -219,6 +224,11 @@ bl_files_api_upload() {
             "https://api.anthropic.com/v1/files" 2>&1) || true   # retry handles curl exit
         http_status="${resp##*$'\n'}"
         body="${resp%$'\n'*}"
+        # Cost-cap wire-up — append compact 2xx response JSON to BL_CURL_TRACE_LOG when set;
+        # trace-runner's bl_check_cost_cap awks the file for usage.{input,output}_tokens per line.
+        if [[ -n "${BL_CURL_TRACE_LOG:-}" ]] && [[ "$http_status" =~ ^2 ]]; then
+            printf '%s\n' "$body" | jq -c '.' >> "$BL_CURL_TRACE_LOG" 2>/dev/null || true   # 2>/dev/null + || true: trace-log write failure or non-JSON body must not break the API call (cost-cap is observational only)
+        fi
         case "$http_status" in
             2??)
                 printf '%s\n' "$body" | jq -r '.id'
@@ -245,11 +255,108 @@ bl_files_api_upload() {
 }
 
 # ----------------------------------------------------------------------------
+# Memory-store adapter — API schema migration shim (M12 P6).
+# The managed-agents API changed from key-based to path-based memories:
+#   key="bl-case/foo" → path="/bl-case/foo" (absolute)
+#   GET by key → list by path_prefix + GET by mem_id
+#   PATCH with if_content_sha256 → DELETE + POST (last-write-wins)
+#   ?key_prefix= → ?path_prefix=
+#
+# bl_mem_post <store_id> <key> <content_file> — 0/65/69/70/71
+# bl_mem_get  <store_id> <key>               — prints body to stdout; 0/65
+# bl_mem_patch <store_id> <key> <content_file> [_sha_ignored] — 0/65/69/70
+# bl_mem_delete_by_key <store_id> <key>       — 0/65
+# bl_mem_list <store_id> <key_prefix>         — prints normalized JSON to stdout; 0/65
+#   Normalized: each item in .data has a .key field = path with leading / stripped.
+# ----------------------------------------------------------------------------
+
+bl_mem_post() {
+    local store_id="$1" key="$2" content_file="$3"
+    local body_file
+    body_file=$(mktemp)
+    jq -n --arg p "/$key" --rawfile c "$content_file" \
+        '{path:$p, content:$c}' > "$body_file"
+    local rc
+    bl_api_call POST "/v1/memory_stores/$store_id/memories" "$body_file" >/dev/null
+    rc=$?
+    command rm -f "$body_file"
+    return $rc
+}
+
+bl_mem_get() {
+    # bl_mem_get <store_id> <key> — fetch memory by path; prints full API body (with .content)
+    local store_id="$1" key="$2"
+    local encoded_path
+    encoded_path=$(printf '%s' "/$key" | /usr/bin/python3 -c \
+        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe=""))' 2>/dev/null \
+        || printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g')
+    local list_body mem_id
+    list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_path}&limit=1") || return $?
+    mem_id=$(printf '%s' "$list_body" | jq -r \
+        --arg p "/$key" '.data[] | select((.path == $p) or (.key == ($p | ltrimstr("/")))) | .id' | head -1)
+    if [[ -z "$mem_id" ]]; then
+        bl_error_envelope api "memory not found: $key"
+        return "$BL_EX_PREFLIGHT_FAIL"  # matches old 404→65 behaviour
+    fi
+    bl_api_call GET "/v1/memory_stores/$store_id/memories/$mem_id"
+    return $?
+}
+
+bl_mem_patch() {
+    # bl_mem_patch <store_id> <key> <content_file> [_sha_ignored] — delete + re-POST (last-write-wins)
+    local store_id="$1" key="$2" content_file="$3"
+    # Find existing mem_id
+    local encoded_path mem_id list_body
+    encoded_path=$(printf '%s' "/$key" | /usr/bin/python3 -c \
+        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe=""))' 2>/dev/null \
+        || printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g')
+    list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_path}&limit=1") || return $?
+    mem_id=$(printf '%s' "$list_body" | jq -r \
+        --arg p "/$key" '.data[] | select((.path == $p) or (.key == ($p | ltrimstr("/")))) | .id' | head -1)
+    if [[ -n "$mem_id" ]]; then
+        bl_api_call DELETE "/v1/memory_stores/$store_id/memories/$mem_id" >/dev/null || true   # best-effort delete; POST below fails with conflict if needed
+    fi
+    bl_mem_post "$store_id" "$key" "$content_file"
+    return $?
+}
+
+bl_mem_delete_by_key() {
+    # bl_mem_delete_by_key <store_id> <key> — find mem_id by path then DELETE
+    local store_id="$1" key="$2"
+    local encoded_path list_body mem_id
+    encoded_path=$(printf '%s' "/$key" | /usr/bin/python3 -c \
+        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe=""))' 2>/dev/null \
+        || printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g')
+    list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_path}&limit=1") || return $?
+    mem_id=$(printf '%s' "$list_body" | jq -r \
+        --arg p "/$key" '.data[] | select((.path == $p) or (.key == ($p | ltrimstr("/")))) | .id' | head -1)
+    [[ -z "$mem_id" ]] && return "$BL_EX_OK"   # already gone — treat as success
+    bl_api_call DELETE "/v1/memory_stores/$store_id/memories/$mem_id" >/dev/null
+    return $?
+}
+
+bl_mem_list() {
+    # bl_mem_list <store_id> <key_prefix> — list memories under prefix; normalizes .path→.key
+    local store_id="$1" key_prefix="$2"
+    local encoded_prefix list_body
+    encoded_prefix=$(printf '%s' "/$key_prefix" | /usr/bin/python3 -c \
+        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe="/"))' 2>/dev/null \
+        || printf '%s' "/$key_prefix")
+    list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_prefix}") || return $?
+    # Normalize .key field — production emits .path (with /), mock fixtures emit .key (no /).
+    # Prefer .path when present; fall back to existing .key; never overwrite a real .key with null.
+    printf '%s' "$list_body" | jq '
+        .data |= map(. + {key: (if .path then (.path | ltrimstr("/")) else (.key // "") end)})
+        | . + {data: .data}'
+    return $?
+}
+
+# ----------------------------------------------------------------------------
 # Preflight — DESIGN.md §8.1 contract:
 # 1. Verify ANTHROPIC_API_KEY set + non-empty
 # 2. Verify curl + jq available
 # 3. Create state/ directly (NOT via bl_init_workdir)
 # 4. Read cached agent-id; if present, return 0
-# 5. Else probe GET /v1/agents?name=bl-curator; populated → cache; empty → 66
+# 5. Else probe GET /v1/agents (filter client-side by name=bl-curator)
 # ----------------------------------------------------------------------------
 

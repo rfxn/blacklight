@@ -36,10 +36,15 @@ bl_preflight() {
         bl_debug "bl_preflight: cached agent-id empty, re-probing"
     fi
 
-    # 5. Probe GET /v1/agents?name=bl-curator
+    # 5. Probe GET /v1/agents — list all; filter client-side (?name= not supported)
     local resp
-    resp=$(bl_api_call GET "/v1/agents?name=bl-curator") || return $?
-    BL_AGENT_ID="$(printf '%s\n' "$resp" | jq -r '.data[0].id // empty')"
+    resp=$(bl_api_call GET "/v1/agents") || return $?
+    BL_AGENT_ID="$(printf '%s\n' "$resp" | jq -r '
+        (.data[] | select(.name == "bl-curator") | .id)? // empty' | head -1)"
+    if [[ -z "$BL_AGENT_ID" ]]; then
+        BL_AGENT_ID="$(printf '%s\n' "$resp" | jq -r '
+            (.data[] | select(.name | startswith("blacklight-curator")) | .id)? // empty' | head -1)"
+    fi
 
     if [[ -z "$BL_AGENT_ID" ]]; then
         command cat >&2 <<'BOOTSTRAP_EOF'

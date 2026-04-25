@@ -70,6 +70,27 @@ IFS='|' read -ra patterns <<< "${BL_CURATOR_MOCK_PATTERNS_CSV:-}"
 IFS='|' read -ra fixtures <<< "${BL_CURATOR_MOCK_FIXTURES_CSV:-}"
 IFS='|' read -ra statuses <<< "${BL_CURATOR_MOCK_STATUSES_CSV:-}"
 matched=0
+# M12 P5.5 compat: when adapter (bl_mem_*) issues list-style query (?path_prefix=), wrap
+# single-object fixtures in {"data":[fixture+id+path]} so the new adapter can extract mem_id.
+# Old fixtures stay untouched; mock auto-shapes the response based on URL form.
+_mock_wrap_for_list() {
+    local raw="$1" wrap_url="$2"
+    case "$wrap_url" in
+        *'?path_prefix='*|*'&path_prefix='*) : ;;
+        *) printf '%s' "$raw"; return ;;
+    esac
+    if printf '%s' "$raw" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
+        printf '%s' "$raw"; return   # already list-shaped — leave alone
+    fi
+    local path_value mem_id
+    path_value=$(printf '%s' "$wrap_url" | sed -n 's/.*[?&]path_prefix=\([^&]*\).*/\1/p' \
+        | sed 's/%2F/\//g; s/%20/ /g')
+    [[ "$path_value" != /* ]] && path_value="/$path_value"
+    mem_id="mem_mock_$(printf '%s' "$path_value" | sed 's|/|_|g; s/^_//')"
+    printf '%s' "$raw" | jq --arg p "$path_value" --arg id "$mem_id" \
+        '{data: [(. + {id: $id, path: $p})]}' 2>/dev/null \
+        || printf '{"data":[{"id":"%s","path":"%s"}]}' "$mem_id" "$path_value"
+}
 for i in "${!patterns[@]}"; do
     if [[ -n "${patterns[i]}" && "$url" =~ ${patterns[i]} ]]; then
         fixture_path="$BL_CURATOR_MOCK_FIXTURES_DIR/${fixtures[i]}"
@@ -78,6 +99,7 @@ for i in "${!patterns[@]}"; do
         else
             body="{}"
         fi
+        body=$(_mock_wrap_for_list "$body" "$url")
         printf '%s\n%s' "$body" "${statuses[i]}"
         matched=1
         break
@@ -91,6 +113,7 @@ if (( matched == 0 )); then
     else
         body="{}"
     fi
+    body=$(_mock_wrap_for_list "$body" "$url")
     printf '%s\n%s' "$body" "$default_status"
 fi
 exit 0
