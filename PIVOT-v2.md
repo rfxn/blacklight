@@ -256,9 +256,9 @@ That is 8–12% of the 1M window. The curator reads the whole case on every wake
 | Curator (the case-owning session) | Opus 4.7 | 1M context, adaptive thinking, Managed Agents session, all 20 skills loaded |
 | Synthesizer (defense authoring call) | Opus 4.7 | structured output via `output_config.format` json_schema, no forced `tool_choice` with thinking |
 | Intent reconstructor (shell analysis) | Opus 4.7 | extended thinking, runs against specific shell-sample files |
-| Hunter (optional parallel dispatch) | Sonnet 4.6 | cheaper, faster, forced `tool_choice`, thinking off — used only when correlation scope exceeds the curator's turn budget |
+| Hunter (Phase P3 roadmap) | Sonnet 4.6 | cheaper, faster, forced `tool_choice`, thinking off — Phase P3 roadmap via `callable_agents` (§17.4); not load-bearing in v2; v2 ships curator-only |
 
-Most v2 sessions run curator-only. Hunter parallelism is available but not load-bearing.
+Most v2 sessions run curator-only. Hunter parallelism is **deferred to Phase P3** (see §17.4 — `callable_agents` multi-agent for kernel/memory/network forensics) and is not exercised in v2.
 
 ---
 

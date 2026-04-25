@@ -34,8 +34,8 @@ collects evidence, and applies a ModSec rule — all in under ten minutes.
 **Step 1 — collect Apache logs and check the filesystem:**
 
 ```bash
-bl observe apache --path /var/log/apache2/access.log --since 2026-03-22T00:00:00Z
-bl observe fs --path /var/www/html --ext php --since 2026-03-20T00:00:00Z
+bl observe log apache --around /var/www/html/pub/media/catalog/product/.cache/a.php --window 6h
+bl observe fs --mtime-since --since 2026-03-20T00:00:00Z --under /var/www/html --ext php
 ```
 
 ```
@@ -129,7 +129,11 @@ depth needed for forensic synthesis — distinguishing a staging artifact from a
 positive requires the model to apply knowledge from ModSecurity grammar, Magento path
 conventions, and attacker TTPs simultaneously. The `exhibits/fleet-01/` directory in
 this repository contains a worked APSB25-94-shaped case that exercises the full bundle
-shape, reconstructed entirely from the public Adobe security advisory.
+shape, reconstructed entirely from the public Adobe security advisory. Adaptive
+thinking depth is model-internal on Opus 4.7 (engaged automatically on
+correlation-heavy turns) — operator-configurable `thinking` kwargs on
+`POST /v1/agents` are rejected by the `managed-agents-2026-04-01` beta
+(verified 2026-04-24; see `DESIGN.md` §12.1).
 
 ## Skills architecture
 
@@ -140,12 +144,15 @@ YARA rule repositories. The curator agent loads these skill bundles as read-only
 memory store content at session creation via `bl setup --sync`. The operator never
 touches the skill files at runtime; the curator reads them, applies them to the
 evidence, and prescribes steps. New skills can be authored and synced without
-modifying `bl` source. The current bundle covers thirteen defensive domains:
-`apsb25-94`, `modsec-grammar`, `apf-grammar`, `ir-playbook`, `linux-forensics`,
-`magento-attacks`, `obfuscation`, `webshell-families`, `actor-attribution`,
-`false-positives`, `defense-synthesis`, `remediation`, and `timeline`. Total
-skill surface: 48 files across 13 subdirectories. Skill authoring discipline and
-bundle structure are documented in `DESIGN.md` §9.
+modifying `bl` source. The current bundle covers twenty defensive domains:
+`actor-attribution`, `agentic-minutes-playbook`, `apf-grammar`, `apsb25-94`,
+`defense-synthesis`, `false-positives`, `hosting-stack`, `ic-brief-format`,
+`ioc-aggregation`, `ir-playbook`, `legacy-os-pitfalls`, `linux-forensics`,
+`magento-attacks`, `modsec-grammar`, `obfuscation`, `remediation`,
+`ride-the-substrate`, `shared-hosting-attack-shapes`, `timeline`, and
+`webshell-families`. Total skill surface: 65 files across 20 subdirectories.
+Skill authoring discipline and bundle structure are documented in
+`DESIGN.md` §9.
 
 ## Model choice
 

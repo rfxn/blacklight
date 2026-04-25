@@ -123,7 +123,7 @@ $ bl case close           ┐
                            │  retire firewall blocks @ T+30d
 ```
 
-**Key mechanical choice: async step-emit over polled memory-store files, not synchronous SSE tool-result.** The agent writes proposed step JSON to `bl-case/pending/<id>.json`; the wrapper polls `bl-case/pending/` every 2–3s, executes, writes to `bl-case/results/<id>.json`, sends a wake event. This avoids SSE bidirectional plumbing in bash, makes the case memory a self-documenting audit log, and keeps `bl` a short-lived command rather than a long-running REPL process. Polling overhead (~2–5s/turn) is invisible against agent reasoning time.
+**Key mechanical choice: async step-emit over polled memory-store files, not synchronous SSE tool-result.** The agent writes proposed step JSON to `bl-case/pending/<id>.json`; the wrapper consumes pending steps via two modes: (a) a continuous poll loop (`bl_poll_pending`, in `src/bl.d/20-api.sh`) used by `bl consult` foreground REPL — `GET /v1/memory_stores/<id>/memories?key_prefix=bl-case/<case>/pending/` every 3s, dedup-against-seen-set, exit on `end_turn` or `--timeout`; and (b) on-demand single-fetch via `bl run --list` (`bl_run_list`, in `src/bl.d/60-run.sh`) used by batched/async operator workflows. Both paths execute, write to `bl-case/results/<id>.json`, and send wake events. This avoids SSE bidirectional plumbing in bash, makes the case memory a self-documenting audit log, and keeps `bl` a short-lived command per invocation. Polling overhead (~3-9s per loop tick) is invisible against agent reasoning time.
 
 ---
 
@@ -662,6 +662,18 @@ Every `bl clean` subcommand supports `--dry-run`. Dry-run shows the full diff an
 ### 11.5 Capture before kill
 
 `bl clean proc <pid>` captures `/proc/<pid>/{cmdline,environ,exe,cwd,status,maps}` and `lsof -p <pid>` to the case evidence before sending signal. `--capture=off` disables (operator must pass explicitly). Default is capture-on because the forensic value of a running process's /proc snapshot is often higher than whatever latency the capture adds.
+
+### 11.6 Brief rendering — MD canonical, HTML/PDF best-effort
+
+`bl case close` always writes the case brief to the Files API as `text/markdown`
+(the `fid_md` returned to `bl-case/<case-id>/closed.md` is the canonical artifact).
+HTML and PDF renders are produced by the curator's environment-side `pandoc` +
+`weasyprint` toolchain (apt-installed at env creation per §8.2) when the curator
+is running and reachable. If the env is unreachable or the render times out
+(60s), `bl case close` degrades gracefully — `closed.md` records empty
+`brief_file_id_html` / `brief_file_id_pdf` and the operator can re-run
+`bl case close --re-render` later. Operators who need deterministic local-only
+rendering pass `BL_BRIEF_MIMES=text/markdown` to skip the stage-2 delegate.
 
 ---
 

@@ -5,6 +5,7 @@
 [New] M11 P6 — tests/03-poll.bats: 7 tests covering timeout, emit, dedup, end-of-pending, auth-fail propagation, dry-run, missing-case-id
 [New] M11 P9 — five highest-leverage negative tests (preflight 401-auth-fail / consult schema-reject / defend yara fp_gate_trip / clean dry-run-receipt-expired + concurrent flock atomicity / setup partial-state recovery) — closes audit gap "228 tests, 70% smoke"; 234/234 green on debian12 + rocky9
 [New] M11 P11 — exhibits/fleet-01/host-2-polyshell/ APSB25-94 fixture beef-up (50K-line Apache CLF + ~3K-line ModSec A/B/F/H/Z + 500-record journalctl JSON; deterministic seed=42 via scripts/synthesize-fixture-logs.sh; public Adobe advisory IOC patterns + RFC 5737 IPs only; lifts host-2 fixture bundle to ~100K tokens, exercises 1M-context curator defense)
+[Change] M11 P1 — doc reconciliation: README skills count 48/13 → 65/20; "Try it" walkthrough flag spelling corrected (bl observe log apache --around / bl observe fs --mtime-since); README adaptive-thinking caveat (model-internal on Opus 4.7); DESIGN.md §4 polling cadence two-mode clarification (continuous loop + bl run --list); DESIGN.md §11.6 brief-render MD-canonical with HTML/PDF best-effort; PIVOT-v2.md §6.1 Sonnet 4.6 hunter dispatch demoted to Phase P3 roadmap (callable_agents)
 
 ## 0.1.0 — 2026-04-26 — first public release
 
@@ -21,7 +22,7 @@ case / setup / flush) land in this release.
 [New] M10 P6 — tests/10-install-paths.bats install roundtrip (8 BATS tests covering install.sh + uninstall.sh roundtrip)
 [New] M10 P9 — pkg.manifest + pkg/ scaffold (RPM/DEB build infra via pkg_gen.sh; single-binary layout)
 [New] M10 P10 — RPM build + install validation matrix (rocky9 + centos7)
-[New] M10 P11 — skills bundle integration: 4 new namespaces × 18 files (ride-the-substrate/, legacy-os-pitfalls/, shared-hosting-attack-shapes/, agentic-minutes-playbook/); INDEX.md routing extended; skill count 46 → 64
+[New] M10 P11 — skills bundle integration: 4 new namespaces × 18 files (ride-the-substrate/, legacy-os-pitfalls/, shared-hosting-attack-shapes/, agentic-minutes-playbook/); INDEX.md routing extended; skill count 46 → 65 (64 content files + INDEX.md)
 [New] M10 P11 — DEB build + install validation matrix (debian12 + ubuntu2404)
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
 [Fix] M10 P13 — CentOS 6 floor recovery: portability fixes for bash 4.1

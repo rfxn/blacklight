@@ -3,6 +3,9 @@ Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
 === M11 — Posture lift (v0.2.0) ===
+[Change] M11 P1 — doc reconciliation: README skills count 48/13 → 65/20; "Try it" walkthrough flag spelling; adaptive-thinking caveat; DESIGN.md §4 polling cadence two-mode clarification; DESIGN.md §11.6 brief-render MD-canonical note; PIVOT-v2.md §6.1 hunter-dispatch demote to P3 roadmap
+[New] M11 P1 — docs/specs/2026-04-25-M11-posture-lift.md: spec input file authoring 14-item posture-lift gap table, goals, non-goals, verification commands
+[Fix] M11 P1 — CHANGELOG.RELEASE M10 P11 skills count typo (46 → 64) corrected to 46 → 65 (64 content files + INDEX.md)
 [New] M11 P2 — src/bl.d/22-models.sh: bl_messages_call wrapper for Messages API (POST /v1/messages); 4-retry exponential backoff matching bl_api_call; 4xx/5xx/429 distinct exit codes; foundation for Sonnet 4.6 + Haiku 4.5 routing
 [New] M11 P2 — tests/helpers/messages-mock.bash: /v1/messages curl-shim with body-capture for shape assertions (model-name routing, fixture-driven status override)
 [New] M11 P2 — tests/fixtures/messages-{sonnet-summary,haiku-fp-pass,haiku-fp-fail}.json: canned Messages API responses for Phase 5 routing coverage
