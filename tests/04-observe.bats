@@ -54,22 +54,10 @@ teardown() {
     [[ "$output" == *"requires --mtime-cluster or --mtime-since"* ]]
 }
 
-@test "bl observe: 'file' dispatches to bl_observe_file (missing path → 64)" {
-    run "$BL_SOURCE" observe file
-    [ "$status" -eq 64 ]
-    [[ "$output" == *"<path> required"* ]]
-}
-
 @test "bl observe: 'cron' dispatches to bl_observe_cron" {
     run "$BL_SOURCE" observe cron --user nonexistent_user_999
     # exit 72 (no crontab) or 64 (usage) both confirm dispatch happened
     [ "$status" -ge 64 ]
-}
-
-@test "bl observe: 'proc' dispatches to bl_observe_proc (missing --user → 64)" {
-    run "$BL_SOURCE" observe proc
-    [ "$status" -eq 64 ]
-    [[ "$output" == *"--user"* ]]
 }
 
 @test "bl observe: 'htaccess' dispatches to bl_observe_htaccess (missing dir → 64)" {
@@ -88,12 +76,6 @@ teardown() {
     # Without a fixture dir, exits 72 (no scanner found) — confirms dispatch
     run "$BL_SOURCE" observe sigs
     [ "$status" -ge 64 ]
-}
-
-@test "bl observe: 'bundle' dispatches to bl_bundle_build" {
-    run "$BL_SOURCE" observe bundle --out-dir "$BL_VAR_DIR/outbox"
-    # Current case exists (seeded in setup); evidence dir empty → still runs bl_bundle_build
-    [ "$status" -ge 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -220,12 +202,6 @@ teardown() {
     [ "$status" -ne 64 ]
 }
 
-@test "bl observe log modsec: scrub fires on output" {
-    run "$BL_SOURCE" observe log modsec
-    [[ "$output" != *"liquidweb"* ]]
-    [[ "$output" != *"sigforge"* ]]
-}
-
 # ---------------------------------------------------------------------------
 # Group: log_journal — bl_observe_log_journal
 # ---------------------------------------------------------------------------
@@ -254,12 +230,6 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "bl observe log journal: scrub fires on output" {
-    run "$BL_SOURCE" observe log journal --since "2026-04-23T00:00:00Z" || true
-    [[ "$output" != *"liquidweb"* ]]
-    [[ "$output" != *"sigforge"* ]]
-}
-
 # ---------------------------------------------------------------------------
 # Group: cron — bl_observe_cron
 # ---------------------------------------------------------------------------
@@ -280,23 +250,6 @@ teardown() {
     [ "$json_count" -ge 1 ]
 }
 
-@test "bl observe cron: ANSI-obscured detection works with fixture" {
-    local fixture_dir
-    fixture_dir="$BL_VAR_DIR/cron_fixture_dir"
-    mkdir -p "$fixture_dir"
-    stage_cron_injected "$fixture_dir/crontab.txt"
-    # Directly source and test via bash
-    local ansi_detected
-    ansi_detected=$(cat -v "$fixture_dir/crontab.txt" | grep '^\^' | wc -l) || ansi_detected=0
-    # The fixture contains an ESC character; cat -v should show ^[ for ESC
-    [ "$ansi_detected" -ge 0 ]  # existence check; actual ANSI detection tested via handler
-}
-
-@test "bl observe cron: --system paths are processed (no crash)" {
-    run "$BL_SOURCE" observe cron --system
-    [ "$status" -eq 0 ]
-}
-
 @test "bl observe cron: scrub fires on output" {
     run "$BL_SOURCE" observe cron --system
     [[ "$output" != *"liquidweb"* ]]
@@ -311,6 +264,22 @@ teardown() {
     run "$BL_SOURCE" observe proc
     [ "$status" -eq 64 ]
     [[ "$output" == *"--user"* ]]
+}
+
+@test "bl observe proc: rejects --user with comma-list (multi-user broadening)" {
+    run "$BL_SOURCE" observe proc --user "root,www-data"
+    [ "$status" -eq 64 ]
+    [[ "$output" == *"--user format invalid"* ]]
+}
+
+@test "bl observe proc: rejects --user with leading dash (flag-shape)" {
+    run "$BL_SOURCE" observe proc --user "-A"
+    [ "$status" -eq 64 ]
+}
+
+@test "bl observe proc: rejects --user with traversal characters" {
+    run "$BL_SOURCE" observe proc --user "../etc/passwd"
+    [ "$status" -eq 64 ]
 }
 
 @test "bl observe proc: --verify-argv flag accepted without error (fixture mode)" {
@@ -665,12 +634,6 @@ teardown() {
         "$BL_SOURCE" observe firewall --backend iptables >/dev/null 2>&1 || true
     run "$BL_SOURCE" observe bundle --format gz --out-dir "$BL_VAR_DIR/outbox"
     [ "$status" -eq 0 ]
-}
-
-@test "bl observe bundle: --since window filter accepted without error" {
-    run "$BL_SOURCE" observe bundle --since "2026-04-23T00:00:00Z" --out-dir "$BL_VAR_DIR/outbox"
-    # Empty evidence dir → bundle may exit 72 (not found) or 0 with empty bundle
-    [ "$status" -ge 0 ]
 }
 
 @test "bl observe bundle: MANIFEST.json created inside bundle" {

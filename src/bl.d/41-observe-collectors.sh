@@ -764,6 +764,13 @@ bl_observe_proc() {
         bl_error_envelope observe "proc: --user <user> required"
         return "$BL_EX_USAGE"
     fi
+    # POSIX user-name guard — reject comma-lists, leading-dash flag forms, and
+    # other shapes that ps -u would accept silently with broader scope than
+    # the curator step intended.
+    if ! [[ "$user_arg" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+        bl_error_envelope observe "proc: --user format invalid (POSIX user-name): $user_arg"
+        return "$BL_EX_USAGE"
+    fi
 
     # Linux-only — /proc/<pid>/exe not available elsewhere
     if [[ "$(command uname -s 2>/dev/null)" != "Linux" ]]; then   # uname unavailable in some minimal containers

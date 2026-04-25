@@ -17,8 +17,8 @@
     "iso_ts"
   ],
   "properties": {
-    "entry_id": { "type": "string" },
-    "original_path": { "type": "string" },
+    "entry_id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$" },
+    "original_path": { "type": "string", "pattern": "^/[^\\u0000]+$" },
     "sha256": { "type": "string" },
     "size_bytes": { "type": "integer" },
     "uid": { "type": "integer" },

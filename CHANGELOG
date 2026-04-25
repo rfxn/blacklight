@@ -2,6 +2,51 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+- M9.5 P1 | Apr 25 2026 — security input-validation guards (audit-driven hardening):
+[Fix] schemas/step.json — step_id property now carries pattern
+      ^[A-Za-z0-9_-]{1,64}$; rejects curator-poisoned traversal segments
+      at schema-check time (60-run.sh:57). Defense-in-depth complement
+      to the new CLI-arg guard.
+[Fix] src/bl.d/60-run.sh — bl_run_step rejects malformed step-id at
+      CLI/batch entry; protects /tmp/bl-step-<id>.out write target and
+      memstore-key path against operator-typed or curator-driven
+      traversal. Schema validates step JSON content; this guards the
+      orthogonal dispatch arg (bl run "../foo").
+[Fix] src/bl.d/82-defend.sh — bl_defend_firewall validates IP/CIDR
+      syntax + rejects 0.0.0.0/* prefix; CIDR mask floor /16 IPv4 /
+      /48 IPv6, override via BL_DEFEND_FW_ALLOW_BROAD_IP=yes. New
+      helper _bl_defend_firewall_validate_ip. Catches "block the
+      internet" misfires from curator hallucinations or operator typos.
+[Fix] src/bl.d/50-consult.sh — bl_consult_attach enforces case-id
+      regex ^CASE-[0-9]{4}-[0-9]{4}$ before any state writes; protects
+      ledger paths, quarantine paths, memstore-key URL-encoding from
+      operator typo / shell-history accidents.
+[Fix] src/bl.d/41-observe-collectors.sh — bl_observe_proc rejects
+      --user values that don't match POSIX user-name shape
+      ^[a-z_][a-z0-9_-]{0,31}$; closes silent multi-user broadening
+      via comma-list and flag-shape (-A, -1) misroutes.
+[Fix] schemas/quarantine-manifest.json — entry_id + original_path now
+      carry pattern; defense-in-depth on the unquarantine restore path
+      (TOCTOU full fix follows in P2).
+[New] tests/06-defend.bats — 5 firewall input-validation cases
+      (malformed IP, 0.0.0.0/0, /15 broad, /16 accepted, override env).
+[New] tests/05-consult-run-case.bats — 2 consult-attach format
+      rejection cases + 1 bl run step-id traversal-guard case.
+[New] tests/04-observe.bats — 3 proc --user format rejection cases
+      (comma-list, leading-dash, traversal).
+[Change] bl — regenerated from src/bl.d/ via make bl.
+
+- Test suite | Apr 24 2026 — dedup pass:
+[Change] tests/04-observe.bats — drop 8 redundant tests: 2 dispatch
+      duplicates of dedicated handler tests (file/proc), 1 strict
+      subset (cron --system processed), 3 tautological assertions
+      ([ status -ge 0 ]: bundle dispatch, bundle --since, ANSI
+      detection), 2 scrub-on-empty-output tests (modsec/journal —
+      output never contained the strings being asserted absent).
+[Change] tests/05-consult-run-case.bats — retire G4 R8 pre-merge
+      contract skip (handlers landed M4-M7; skip's retire trigger met).
+      Test count: 196 → 187. Both debian12 and rocky9 green.
+
 - M6 | Apr 24 2026 — bl defend (modsec / firewall / sig):
 [New] bl defend modsec — apply path: versioned rule file copy, apachectl
       configtest, atomic symlink swap, graceful reload; rollback on

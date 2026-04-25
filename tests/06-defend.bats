@@ -166,6 +166,46 @@ EOF
     ! grep -q '^iptables:' "$BL_VAR_DIR/backend.log"
 }
 
+@test "bl defend firewall rejects malformed IP" {
+    run "$BL_SOURCE" defend firewall "not-an-ip" --backend iptables --reason "junk"
+    [ "$status" -eq 64 ]   # BL_EX_USAGE
+    printf '%s\n' "$output" | grep -q "malformed IP/CIDR"
+}
+
+@test "bl defend firewall rejects 0.0.0.0/0 catch-all" {
+    run "$BL_SOURCE" defend firewall "0.0.0.0/0" --backend iptables --reason "junk"
+    [ "$status" -eq 64 ]
+    printf '%s\n' "$output" | grep -q "0.0.0.0 prefix"
+}
+
+@test "bl defend firewall rejects /15 IPv4 mask without override" {
+    run "$BL_SOURCE" defend firewall "192.0.0.0/15" --backend iptables --reason "broad"
+    [ "$status" -eq 64 ]
+    printf '%s\n' "$output" | grep -q "too broad"
+}
+
+@test "bl defend firewall accepts /16 IPv4 mask" {
+    cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/iptables"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    run "$BL_SOURCE" defend firewall "203.0.0.0/16" --backend iptables --reason "broad-but-allowed"
+    [ "$status" -eq 0 ]
+}
+
+@test "bl defend firewall accepts broad mask with override env" {
+    cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/iptables"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    BL_DEFEND_FW_ALLOW_BROAD_IP=yes run "$BL_SOURCE" defend firewall "203.0.0.0/12" --backend iptables --reason "operator-override"
+    [ "$status" -eq 0 ]
+}
+
 @test "bl defend firewall emits schema-conforming ledger entry on success" {
     # Use --backend iptables to bypass auto-detection (system may have nft).
     cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'

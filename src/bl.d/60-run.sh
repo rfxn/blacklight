@@ -30,6 +30,14 @@ bl_run_step() {
     local explain="$5"
     BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state file absent on first invocation → fallback to canonical default literal
     [[ -z "$step_id" ]] && { bl_error_envelope run "missing <step-id>"; return "$BL_EX_USAGE"; }
+    # Format guard at the CLI/batch entry — protects `/tmp/bl-step-$step_id.out`
+    # write target and the memstore-key path against curator-poisoned or
+    # operator-typed traversal segments. Schema pattern in step.json validates
+    # the step JSON's .step_id field; this guards the orthogonal dispatch arg.
+    if ! [[ "$step_id" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+        bl_error_envelope run "step-id format invalid (expected [A-Za-z0-9_-]{1,64}): $step_id"
+        return "$BL_EX_USAGE"
+    fi
     local case_id
     case_id=$(bl_case_current)
     if [[ -z "$case_id" ]]; then

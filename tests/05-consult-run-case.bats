@@ -58,6 +58,34 @@ teardown() {
     [ "$(cat "$BL_VAR_DIR/state/case.current")" = "CASE-2026-0001" ]
 }
 
+@test "bl consult --attach rejects malformed case-id (traversal attempt)" {
+    bl_case_fixture_seed CASE-2026-0001
+    rm -f "$BL_VAR_DIR/state/case.current"
+    run "$BL_SOURCE" consult --attach '../../etc/passwd'
+    [ "$status" -eq 64 ]   # BL_EX_USAGE
+    printf '%s\n' "$output" | grep -q "case-id format invalid"
+    # case.current must NOT have been written
+    [ ! -f "$BL_VAR_DIR/state/case.current" ]
+}
+
+@test "bl consult --attach rejects shape-mismatched case-id" {
+    bl_case_fixture_seed CASE-2026-0001
+    rm -f "$BL_VAR_DIR/state/case.current"
+    run "$BL_SOURCE" consult --attach 'CASE-26-1'
+    [ "$status" -eq 64 ]
+    [ ! -f "$BL_VAR_DIR/state/case.current" ]
+}
+
+@test "bl run rejects malformed step-id arg (CLI-arg traversal guard)" {
+    bl_case_fixture_seed CASE-2026-0001
+    printf 'CASE-2026-0001' > "$BL_VAR_DIR/state/case.current"
+    run "$BL_SOURCE" run "../../etc/passwd"
+    [ "$status" -eq 64 ]   # BL_EX_USAGE
+    printf '%s\n' "$output" | grep -q "step-id format invalid"
+    # No /tmp/bl-step-... write should have happened
+    [ ! -f "/tmp/bl-step-../../etc/passwd.out" ]
+}
+
 @test "bl consult --attach to unknown case exits 72" {
     # Seed state dir with agent-id so preflight passes; all memstore calls return 404
     bl_case_fixture_seed CASE-2026-0001
@@ -138,10 +166,6 @@ teardown() {
 # ---------------------------------------------------------------------------
 # G4: bl run step — schema/tier/not-found/unknown-tier paths
 # ---------------------------------------------------------------------------
-
-@test "bl run validates schema, evaluates tier, dispatches verb (handler not yet landed exits 64)" {
-    skip "R8 pre-merge contract — post-M4-merge observe.log_apache IS a real handler. Re-target to an M6/M7 stubbed verb (defend.firewall, clean.htaccess) when those motions are in-flight, or retire the test once all verbs are landed."
-}
 
 @test "bl run on malformed step exits 67 without execution" {
     bl_case_fixture_seed CASE-2026-0001

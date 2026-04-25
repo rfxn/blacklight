@@ -296,6 +296,44 @@ _bl_defend_firewall_is_private_ip() {
     return 1
 }
 
+_bl_defend_firewall_validate_ip() {
+    # $1 = candidate IP/CIDR. Returns 0 if syntactically valid + not over-broad,
+    # else BL_EX_USAGE. Rejects 0.0.0.0/* and CIDR mask < /16 IPv4 / < /48 IPv6
+    # (catches "block the internet" misfires from curator hallucinations or
+    # operator typos). Override via BL_DEFEND_FW_ALLOW_BROAD_IP=yes.
+    local ip="$1"
+    local v4='^(25[0-5]|2[0-4][0-9]|[01]?[0-9]{1,2})(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9]{1,2})){3}(/(3[0-2]|[12]?[0-9]))?$'
+    local v6='^[0-9a-fA-F:]+(/(12[0-8]|1[01][0-9]|[1-9]?[0-9]))?$'
+    if [[ "$ip" =~ $v4 ]]; then
+        # Reject 0.0.0.0 prefix entirely (unicast catch-all)
+        [[ "$ip" =~ ^0\. || "$ip" == "0.0.0.0"* ]] && {
+            bl_error_envelope defend "rejected 0.0.0.0 prefix: $ip"
+            return "$BL_EX_USAGE"
+        }
+        # Mask floor: /16 unless override
+        if [[ "$ip" == */* && "${BL_DEFEND_FW_ALLOW_BROAD_IP:-}" != "yes" ]]; then
+            local mask="${ip##*/}"
+            (( mask < 16 )) && {
+                bl_error_envelope defend "CIDR /$mask too broad (floor /16; set BL_DEFEND_FW_ALLOW_BROAD_IP=yes to override): $ip"
+                return "$BL_EX_USAGE"
+            }
+        fi
+        return "$BL_EX_OK"
+    fi
+    if [[ "$ip" =~ $v6 ]]; then
+        if [[ "$ip" == */* && "${BL_DEFEND_FW_ALLOW_BROAD_IP:-}" != "yes" ]]; then
+            local mask="${ip##*/}"
+            (( mask < 48 )) && {
+                bl_error_envelope defend "IPv6 CIDR /$mask too broad (floor /48; set BL_DEFEND_FW_ALLOW_BROAD_IP=yes to override): $ip"
+                return "$BL_EX_USAGE"
+            }
+        fi
+        return "$BL_EX_OK"
+    fi
+    bl_error_envelope defend "malformed IP/CIDR: $ip"
+    return "$BL_EX_USAGE"
+}
+
 _bl_defend_firewall_cdn_safelist_check() {
     # $1 = ip; returns 0 (allowed) if NOT a CDN; 68 (refused) if CDN match.
     local ip="$1"
@@ -364,6 +402,7 @@ bl_defend_firewall() {
         esac
     done
     [[ -z "$ip" ]] && { bl_error_envelope defend "missing <ip>"; return "$BL_EX_USAGE"; }
+    _bl_defend_firewall_validate_ip "$ip" || return "$BL_EX_USAGE"
 
     local case_id="$case_override"
     [[ -z "$case_id" ]] && case_id=$(bl_case_current)

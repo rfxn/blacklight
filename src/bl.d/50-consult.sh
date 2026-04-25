@@ -285,6 +285,12 @@ bl_consult_attach() {
         bl_error_envelope consult "missing <case-id> for --attach"
         return "$BL_EX_USAGE"
     fi
+    # Format guard: defense-in-depth against operator typo / shell-history accident
+    # propagating to ledger paths, quarantine paths, memstore-key URL-encoding.
+    if ! [[ "$case_id" =~ ^CASE-[0-9]{4}-[0-9]{4}$ ]]; then
+        bl_error_envelope consult "case-id format invalid (expected CASE-YYYY-NNNN): $case_id"
+        return "$BL_EX_USAGE"
+    fi
     local probe_rc=0
     bl_api_call GET "/v1/memory_stores/${BL_MEMSTORE_CASE_ID}/memories/bl-case%2F$case_id%2Fhypothesis.md" >/dev/null || probe_rc=$?
     if (( probe_rc == 65 )); then
