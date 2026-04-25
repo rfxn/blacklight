@@ -29,7 +29,7 @@ M0 Contracts (spec-only) ─┐
                           ├──► M2 case templates ──────────────────────────────────────────────────────────────────────┤
                           │                                                                                             ├──► M9 hardening ──► M10 ship-ready
                           └──► M3 knowledge (skills + prompt) ────────────────────────────────────────────────────────┘
-                                                                                                                      (M11 demo deferred)
+                                                                                                                      (M11 posture lift ─► M12 demo deferred)
 ```
 
 | # | Motion | Depends on | Posture | Parallel-safe with |
@@ -45,8 +45,9 @@ M0 Contracts (spec-only) ─┐
 | M7 | `bl clean` | M1, M5.5 | plan | M6, M8 |
 | M8 | `bl setup` implementation | M1, M0, M5.5 | plan | M6, M7 |
 | M9 | Security hardening pass — **DONE** (`6595cda..eb6e4f3`) | M4, M5, M3 | spec-then-plan | (solo) |
-| M10 | Ship-ready (README, install, packaging) | M9 | plan | (solo) |
-| M11 | Demo + narrative | M10 | deferred | — |
+| M10 | Ship-ready (README, install, packaging) — **DONE** (`ad600fa..ca00967`) | M9 | plan | (solo) |
+| M11 | Posture lift (credibility close-out — model routing, stub→real, doc/code reconciliation, negative tests, live-trace evidence) | M10 | plan | (solo) |
+| M12 | Demo + narrative | M11 | deferred | — |
 
 **File-ownership contract for parallel `bl` work:**
 - **Pre-M5.5 (M4 + M5):** each motion owns a disjoint function prefix (`bl_observe_*`, `bl_consult_*`, `bl_run_*`, `bl_case_*`) inside monolithic `bl`. Merge conflicts limited to shared helpers — resolvable, but real (commit `795bb5d` was a near-miss from the M4+M5 merge).
@@ -71,7 +72,8 @@ Wave 2.5  (solo, merge gate)  M5.5                     ⎬  post-M4+M5 merge —
 Wave 3    (3 parallel)        M6  +  M7  +  M8         ⎭  disjoint src/bl.d/ part files
 Wave 4    (solo)              M9
 Wave 5    (solo)              M10
-Wave 6    (later)             M11
+Wave 6    (solo)              M11
+Wave 7    (later)             M12
 ```
 
 Merge cadence: after each wave closes, single-operator merge of the worktrees back to `main`. Next wave dispatches from the merged state. Wave 2.5 is the structural gate — Wave 3 parallelism is only safe once `src/bl.d/` exists and `make bl` is the canonical build step.
@@ -340,7 +342,9 @@ Any test delta = refactor introduced a bug; bisect the drift by comparing pre/po
 
 ---
 
-### M10 — Ship-ready (solo, post-M9)
+### M10 — Ship-ready (solo, post-M9) — **COMPLETE**
+
+**Status:** shipped 2026-04-25 — commits `ad600fa..ca00967` (P1-P12 covering install.sh, uninstall.sh, README, --help dispatch, observe substrate verb, install-paths BATS, demo storyboard, CentOS 6 lane, pkg/ scaffold, RPM matrix, skills bundle integration, DEB matrix, .gitattributes export-ignore + M10 closeout). CHANGELOG.RELEASE stanza stamped `## 0.1.0 — 2026-04-26 — first public release`. Plus a parallel M9.5 follow-up pass (`ccf1e19..3d580d4`) cleared every Critical/Major audit finding.
 
 **Scope:** Repo polish + install path + packaged releases + public-face README.
 
@@ -359,9 +363,26 @@ Any test delta = refactor introduced a bug; bisect the drift by comparing pre/po
 
 ---
 
-### M11 — Demo (deferred)
+### M11 — Posture lift (solo, post-M10)
 
-Picks up after M10. Fixture envelope + script + recording + 100–200 word summary. Scoped when we get there.
+**Scope:** Credibility close-out. Closes the gap between blacklight's documented claims and what its code actually executes — the kind of polish "ship-ready" did not catch because M10's bar was packaging, not narrative-vs-runtime parity.
+
+**Decomposition lives in `PLAN-M11.md`** (14 phases, plan version 3.0.6). Headline deliverables:
+- `src/bl.d/22-models.sh` — real three-tier model routing (Opus 4.7 / Sonnet 4.6 / Haiku 4.5) wired into `bl consult` + curator wake.
+- Replace `bl_poll_pending` stub with working memstore poll against `/v1/sessions`.
+- Wire `synthesize_defense` + `reconstruct_intent` custom tools end-to-end (Managed Agents tool result → step emit → tier gate).
+- Reconcile six doc files (README "Try it" walkthrough, DESIGN.md §12.1, MEMORY.md, CHANGELOG, runbooks) with the actual CLI surface.
+- New `tests/03-models.bats` + `tests/03-poll.bats` plus negative-test additions across the existing suite.
+- New `docs/security-model.md` and committed `docs/live-traces/` artifact set.
+- Spec authored alongside Phase 1: `docs/specs/2026-04-25-M11-posture-lift.md`.
+
+**Why a wedge between M10 and demo:** the demo's narrative assumes the README is true. Two of the README's load-bearing claims (three-tier routing, custom-tool synthesis) are aspirational in the M10 codebase. Demo against an aspirational README invites "doesn't your CLI just print stubs?" reviewer questions; M11 makes the demo defensible by making the claims executable.
+
+---
+
+### M12 — Demo (deferred)
+
+Picks up after M11. Fixture envelope + script + recording + 100–200 word summary. Scoped when we get there.
 
 ---
 
