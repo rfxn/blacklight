@@ -91,7 +91,7 @@ bl-case/
 
 ## 4. Size budget
 
-Managed Agents platform caps every memory-store file at 100 KB (see `docs/managed-agents.md §memory_stores.file_size`). The caps in §3 are steady-state targets — if any file approaches 80 KB, the wrapper emits a warning and the curator's `open-questions.md` gets a new entry to compress, split, or promote-to-Files.
+Managed Agents platform caps every memory-store file at 100 KB (see `docs/internal/managed-agents.md §memory_stores.file_size`). The caps in §3 are steady-state targets — if any file approaches 80 KB, the wrapper emits a warning and the curator's `open-questions.md` gets a new entry to compress, split, or promote-to-Files.
 
 **Per-case steady-state estimate** (assuming ~50 evidence ingests, ~20 step emits, ~10 action applies):
 

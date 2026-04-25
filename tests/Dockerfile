@@ -41,6 +41,6 @@ COPY case-templates/ /opt/case-templates/
 COPY skills/ /opt/skills/
 COPY scripts/ /opt/scripts/
 COPY tools/ /opt/tools/
-RUN chmod +x /opt/bl /opt/tools/synth-corpus.sh
+RUN chmod +x /opt/bl /opt/tools/dev/synth-corpus.sh
 
 WORKDIR /opt/tests

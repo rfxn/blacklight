@@ -191,7 +191,7 @@ Behavioral verification is committed evidence, not a claim. Two artifacts:
 - **Stress corpus:** [`exhibits/fleet-01/README.md`](exhibits/fleet-01/README.md) —
   a deterministic, byte-identical, ~360k-token APSB25-94 forensic bundle (apache +
   modsec + fs + cron + proc + journal + maldet) with attack needles buried in
-  realistic noise. Regenerate with `tools/synth-corpus.sh --seed 42`. Sources
+  realistic noise. Regenerate with `tools/dev/synth-corpus.sh --seed 42`. Sources
   documented; no operator-local data.
 
 ## Roadmap

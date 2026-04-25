@@ -1,6 +1,6 @@
 # evidence-envelope — JSONL record contract
 
-Authoritative contract for evidence records produced by `bl observe`, consumed by the curator (via memory-store reads + Files attachments), and reproduced by demo-fixture fabrication (see `docs/demo-fixture-spec.md`). Companion to `schemas/step.json` (step envelope) and `DESIGN.md §10` (bundle shape).
+Authoritative contract for evidence records produced by `bl observe`, consumed by the curator (via memory-store reads + Files attachments), and reproduced by demo-fixture fabrication (see `docs/demo/fixture-spec.md`). Companion to `schemas/step.json` (step envelope) and `DESIGN.md §10` (bundle shape).
 
 Every evidence record is one line of JSONL. Every record has the **preamble** fields below plus a `record` payload whose fields are governed by the declared `source`. No record is free-form; every field is typed. Operator-local identifiers (customer tokens, internal hostnames, cpanel usernames) MUST NOT appear in any envelope — the wrapper scrubs at emit time.
 
@@ -175,7 +175,7 @@ Fence tokens are session-unique and derived from `sha256(case || obs || payload)
 ## 5. Producer / consumer compliance
 
 - **Wrapper (`bl observe`)** MUST emit conforming JSONL and MUST scrub operator-local identifiers before emit.
-- **Demo fixture fabricators** (`docs/demo-fixture-spec.md`) MUST produce records that pass a schema check against this contract. Drift is a demo-fixture bug, not a curator bug.
+- **Demo fixture fabricators** (`docs/demo/fixture-spec.md`) MUST produce records that pass a schema check against this contract. Drift is a demo-fixture bug, not a curator bug.
 - **Curator** MAY assume every record conforms; a record that fails validation is dropped with a `reasoning` note, never acted on.
 - **Third-party skills** that want new source classes (e.g. `plesk.logs`, `directadmin.cron`) MUST PR a new `source` enum entry and a §3 payload spec. Skills do not get to silently introduce new sources — that breaks duckdb query plans and the untrusted-content fence's hash inputs.
 
