@@ -216,11 +216,15 @@ bl_help_case() {
     command cat <<'HELP_EOF'
 bl case — inspect, log, close, reopen cases.
 
-Usage: bl case <verb>
+Usage: bl case <verb> [options]
 
 Verbs:
   open <id>     open a new case
   list          list cases on this host
+  log [<id>] [--audit]
+                show ledger entries; --audit appends per-kind summary
+                + decoded fence-wrapped wake entries from outbox
+                (consumes bl_fence_kind for forensic review)
   show <id>     print case summary + ledger tail
   note "..."    append a manual note to the current case
   close <id>    mark case closed; persists memstore record

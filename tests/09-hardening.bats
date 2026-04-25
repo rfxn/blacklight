@@ -244,6 +244,52 @@ _source_bl() { source "$BL_SOURCE" >/dev/null 2>&1 || true; }
     [ "$status" -eq 67 ]
 }
 
+@test "bl case log --audit decodes fenced wake entries via bl_fence_kind" {
+    local case_id="CASE-2026-0099"
+    # Seed minimal case state — ledger directory + one ledger entry.
+    mkdir -p "$BL_VAR_DIR/ledger" "$BL_VAR_DIR/outbox"
+    printf '%s\n' '{"ts":"2026-04-25T18:00:00Z","case":"CASE-2026-0099","kind":"case_opened","payload":{"trigger_fingerprint":"abcd1234efgh5678"}}' \
+        > "$BL_VAR_DIR/ledger/${case_id}.jsonl"
+    # Seed an outbox wake entry whose trigger_fingerprint_fenced field
+    # contains a real fence-wrapped envelope built via bl_fence_wrap.
+    local payload_file fenced wake_payload
+    payload_file=$(mktemp)
+    printf '%s test-trigger-payload' "$case_id" > "$payload_file"
+    fenced=$(bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_fence_wrap '$case_id' wake_trigger '$payload_file'")
+    rm -f "$payload_file"
+    [[ -n "$fenced" ]] || skip "bl_fence_wrap returned empty (precondition failure)"
+    wake_payload=$(jq -n --arg c "$case_id" --arg ft "$fenced" \
+        '{type:"user.message", case:$c, content:[{type:"text", text:"audit fixture"}], trigger_fingerprint_fenced:$ft}')
+    printf '%s' "$wake_payload" > "$BL_VAR_DIR/outbox/20260425T120000Z-0001-wake-${case_id}.json"
+    # Run bl case log --audit
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_case_log '$case_id' --audit"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"=== Audit: ${case_id} ==="* ]]
+    [[ "$output" == *"Ledger kinds:"* ]]
+    [[ "$output" == *"case_opened"* ]]
+    [[ "$output" == *"Outbox fence audit"* ]]
+    [[ "$output" == *"fence_kind=wake_trigger"* ]]
+}
+
+@test "bl case log --audit on case with no entries prints empty-state placeholders" {
+    local case_id="CASE-2026-0098"
+    mkdir -p "$BL_VAR_DIR/ledger" "$BL_VAR_DIR/outbox"
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_case_log '$case_id' --audit"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"(no ledger entries)"* ]]
+    [[ "$output" == *"(no fence-wrapped wake entries in outbox)"* ]]
+}
+
+@test "bl case log: --audit accepted before case-id (flag-ordering symmetry)" {
+    local case_id="CASE-2026-0097"
+    mkdir -p "$BL_VAR_DIR/ledger" "$BL_VAR_DIR/outbox"
+    # Flag-before-positional ordering must produce same audit shape as
+    # positional-first ordering (bl_case_log argparse contract).
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_case_log --audit '$case_id'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"=== Audit: ${case_id} ==="* ]]
+}
+
 @test "bl_run_writeback_result validates result envelope schema" {
     # If stdout is non-fenceable (degenerate case), result envelope fails schema → exit 67 + ledger result_schema_reject.
     # Tricky to trigger naturally — exercise indirectly via the wrap-stdout integration test.

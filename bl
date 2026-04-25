@@ -1316,11 +1316,15 @@ bl_help_case() {
     command cat <<'HELP_EOF'
 bl case — inspect, log, close, reopen cases.
 
-Usage: bl case <verb>
+Usage: bl case <verb> [options]
 
 Verbs:
   open <id>     open a new case
   list          list cases on this host
+  log [<id>] [--audit]
+                show ledger entries; --audit appends per-kind summary
+                + decoded fence-wrapped wake entries from outbox
+                (consumes bl_fence_kind for forensic review)
   show <id>     print case summary + ledger tail
   note "..."    append a manual note to the current case
   close <id>    mark case closed; persists memstore record
@@ -4163,15 +4167,48 @@ bl_case_show() {
 }
 
 bl_case_log() {
-    # bl_case_log [case-id] — JSONL to stdout; 0/64/69/72
-    local case_id="${1:-}"
+    # bl_case_log [case-id] [--audit] — JSONL to stdout; --audit appends per-kind summary + outbox fence decode (M11.1); 0/64/69/72
+    local case_id="" audit=""
+    while (( $# > 0 )); do
+        case "$1" in
+            --audit) audit="yes"; shift ;;
+            -*)      bl_error_envelope case "unknown flag: $1"; return "$BL_EX_USAGE" ;;
+            *)       case_id="$1"; shift ;;
+        esac
+    done
     [[ -z "$case_id" ]] && case_id=$(bl_case_current)
     [[ -z "$case_id" ]] && { bl_error_envelope case "no active case"; return "$BL_EX_NOT_FOUND"; }
     local ledger_file="$BL_VAR_DIR/ledger/$case_id.jsonl"
     local all_events
     all_events=$(mktemp)
     [[ -r "$ledger_file" ]] && command cat "$ledger_file" >> "$all_events"
-    sort -t'"' -k4 "$all_events"
+    command sort -t'"' -k4 "$all_events"
+    if [[ "$audit" == "yes" ]]; then
+        printf '\n=== Audit: %s ===\n' "$case_id"
+        printf '\nLedger kinds:\n'
+        if [[ -s "$all_events" ]]; then
+            jq -r '.kind' < "$all_events" | command sort | command uniq -c | command awk '{printf "  %-25s : %d\n", $2, $1}'
+        else
+            printf '  (no ledger entries)\n'
+        fi
+        printf '\nOutbox fence audit (wake entries):\n'
+        local outbox_dir="$BL_VAR_DIR/outbox"
+        local found=0 f fenced kind
+        if [[ -d "$outbox_dir" ]]; then
+            local glob_pending="$outbox_dir/*-wake-${case_id}*.json"
+            local glob_failed="$outbox_dir/failed/*-wake-${case_id}*.json"
+            # shellcheck disable=SC2231  # intentional glob expansion; missing matches handled by [[ -r ]] guard
+            for f in $glob_pending $glob_failed; do
+                [[ -r "$f" ]] || continue
+                fenced=$(jq -r '.trigger_fingerprint_fenced // empty' "$f" 2>/dev/null)   # 2>/dev/null: malformed JSON → empty fenced → skip
+                [[ -z "$fenced" ]] && continue
+                kind=$(bl_fence_kind "$fenced" 2>/dev/null) || kind="(decode failed)"   # 2>/dev/null: decode error envelope is captured separately via fallback string
+                printf '  %s  fence_kind=%s\n' "$(command basename "$f")" "$kind"
+                found=$((found + 1))
+            done
+        fi
+        (( found == 0 )) && printf '  (no fence-wrapped wake entries in outbox)\n'
+    fi
     command rm -f "$all_events"
     return "$BL_EX_OK"
 }
