@@ -146,8 +146,6 @@ bl_case_current() {
 # --- src/bl.d/20-api.sh ---
 # ----------------------------------------------------------------------------
 # API helpers — HTTPS wrappers for Anthropic Managed Agents endpoints.
-# bl_poll_pending is a skeleton; M5 drops in real read/write against
-# bl-case/<case-id>/pending/.
 # ----------------------------------------------------------------------------
 
 bl_api_call() {
@@ -215,21 +213,77 @@ bl_api_call() {
 }
 
 bl_poll_pending() {
-    # Skeleton: 2s sleep-loop probing bl-case/<case-id>/pending/. M5 consumes.
-    # $1 = case-id
+    # bl_poll_pending <case-id> [--timeout <seconds>] [--interval <seconds>]
+    # Polls bl-case/<case-id>/pending/ every <interval>s (default 3s); emits
+    # each new step_id on stdout exactly once (deduped via seen-set). Exits 0
+    # on either 3 consecutive empty-listing cycles (curator end_turn proxy)
+    # or --timeout elapsed; propagates bl_api_call rc on auth/upstream/429.
+    # BL_POLL_DRY_RUN=1 skips the loop entirely (returns 0).
     local case_id="$1"
-    local cycles=0
-    # shellcheck disable=SC2034  # consumed by M5
-    local empty_cycles=0
-    while (( cycles < 1 )); do   # M1: single-cycle skeleton; M5 widens to while true
-        bl_debug "bl_poll_pending: probing case=$case_id (cycle=$cycles)"
-        # M5 drops in: read bl-case/<case_id>/pending/ via bl_api_call;
-        # for each new step, emit to stdout; on empty-pending-3-cycles or end_turn, break.
-        empty_cycles=$((empty_cycles + 1))
-        cycles=$((cycles + 1))
-        sleep 0
+    shift || true   # tolerate missing arg; case_id check below returns 64
+    local interval=3
+    local timeout_s=0
+    while (( $# > 0 )); do
+        case "$1" in
+            --timeout)   timeout_s="$2"; shift 2 ;;
+            --interval)  interval="$2"; shift 2 ;;
+            *)           bl_error_envelope api "bl_poll_pending: unknown flag: $1"; return "$BL_EX_USAGE" ;;
+        esac
     done
-    return "$BL_EX_OK"
+    [[ -z "$case_id" ]] && { bl_error_envelope api "bl_poll_pending: case-id required"; return "$BL_EX_USAGE"; }
+    [[ "${BL_POLL_DRY_RUN:-}" == "1" ]] && return "$BL_EX_OK"
+
+    local memstore_id
+    memstore_id="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf '')}"   # missing state-file → empty → 72
+    [[ -z "$memstore_id" ]] && { bl_error_envelope api "bl_poll_pending: memstore-case-id not set"; return "$BL_EX_NOT_FOUND"; }
+
+    local start_epoch
+    start_epoch=$(command date +%s)
+    local empty_cycles=0
+    local seen_set_file
+    seen_set_file=$(command mktemp)
+
+    while :; do
+        if (( timeout_s > 0 )); then
+            local now_epoch
+            now_epoch=$(command date +%s)
+            if (( now_epoch - start_epoch >= timeout_s )); then
+                bl_debug "bl_poll_pending: --timeout=$timeout_s reached"
+                command rm -f "$seen_set_file"
+                return "$BL_EX_OK"
+            fi
+        fi
+        local list_body rc
+        list_body=$(bl_api_call GET "/v1/memory_stores/$memstore_id/memories?key_prefix=bl-case/$case_id/pending/")
+        rc=$?
+        if (( rc != 0 )); then
+            command rm -f "$seen_set_file"
+            return "$rc"
+        fi
+        local keys
+        keys=$(printf '%s' "$list_body" | jq -r '.data[].key' 2>/dev/null) || keys=""   # malformed JSON → treat as empty cycle
+        if [[ -z "$keys" ]]; then
+            empty_cycles=$((empty_cycles + 1))
+            if (( empty_cycles >= 3 )); then   # end_turn proxy: curator stopped writing
+                bl_debug "bl_poll_pending: 3 empty cycles → exit"
+                command rm -f "$seen_set_file"
+                return "$BL_EX_OK"
+            fi
+        else
+            empty_cycles=0
+            local key sid
+            while IFS= read -r key; do
+                [[ -z "$key" ]] && continue
+                sid="${key##*/}"
+                sid="${sid%.json}"
+                if ! command grep -qFx "$sid" "$seen_set_file" 2>/dev/null; then   # absent file/no-match → emit
+                    printf '%s\n' "$sid"
+                    printf '%s\n' "$sid" >> "$seen_set_file"
+                fi
+            done <<< "$keys"
+        fi
+        sleep "$interval"
+    done
 }
 
 # ----------------------------------------------------------------------------

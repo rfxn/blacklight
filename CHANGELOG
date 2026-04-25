@@ -2,10 +2,12 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
-=== M11 — Posture lift ===
+=== M11 — Posture lift (v0.2.0) ===
 [New] M11 P2 — src/bl.d/22-models.sh: bl_messages_call wrapper for Messages API (POST /v1/messages); 4-retry exponential backoff matching bl_api_call; 4xx/5xx/429 distinct exit codes; foundation for Sonnet 4.6 + Haiku 4.5 routing
 [New] M11 P2 — tests/helpers/messages-mock.bash: /v1/messages curl-shim with body-capture for shape assertions (model-name routing, fixture-driven status override)
 [New] M11 P2 — tests/fixtures/messages-{sonnet-summary,haiku-fp-pass,haiku-fp-fail}.json: canned Messages API responses for Phase 5 routing coverage
+[Change] M11 P6 — bl_poll_pending real GET-poll loop (src/bl.d/20-api.sh): seen-set dedup, --timeout / --interval flags, end_turn proxy via 3-empty-cycles, BL_POLL_DRY_RUN=1 bypass; replaces single-cycle skeleton from M1
+[New] M11 P6 — tests/03-poll.bats: 7 tests covering timeout, emit, dedup, end-of-pending, auth-fail propagation, dry-run, missing-case-id
 
 === M10 — Ship-ready (v0.1.0) ===
 [New] M10 P1 — install.sh curl-pipe-bash installer (bash≥4.1, curl, jq preflight; --local / remote modes; next-step prompt)
