@@ -299,6 +299,59 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# S11 (M11 P13): --sync delta verification — only the modified skill is POSTed.
+# Audit gap: prior --sync tests assert summary text; this asserts the actual
+# wire traffic (which keys hit the memory POST endpoint).
+# ---------------------------------------------------------------------------
+
+@test "bl setup --sync — only POSTs the modified skill (delta verification)" {
+    mkdir -p "$BL_VAR_DIR/state" "$BL_VAR_DIR/fixtures"
+    printf 'agent_test_stub'      > "$BL_VAR_DIR/state/agent-id"
+    printf 'env_test_stub'        > "$BL_VAR_DIR/state/env-id"
+    printf 'memstore_skills_stub' > "$BL_VAR_DIR/state/memstore-skills-id"
+    printf 'memstore_case_stub'   > "$BL_VAR_DIR/state/memstore-case-id"
+    # Build a fake repo with 3 skills + curator-agent prompt so resolve_source
+    # accepts BL_REPO_ROOT (DESIGN.md §8.3 step 0).
+    local fake_repo
+    fake_repo=$(mktemp -d)
+    mkdir -p "$fake_repo/skills/foo" "$fake_repo/prompts"
+    printf 'skill-a-content-original\n' > "$fake_repo/skills/foo/a.md"
+    printf 'skill-b-content\n'          > "$fake_repo/skills/foo/b.md"
+    printf 'skill-c-content\n'          > "$fake_repo/skills/foo/c.md"
+    printf 'curator prompt\n'           > "$fake_repo/prompts/curator-agent.md"
+    export BL_REPO_ROOT="$fake_repo"
+    # Redirect fixtures dir so the per-test MANIFEST baseline does not collide
+    # with the shared tests/fixtures/setup-manifest-baseline.json (content:"[]").
+    export BL_CURATOR_MOCK_FIXTURES_DIR="$BL_VAR_DIR/fixtures"
+    # Remote MANIFEST holds shas matching ALL three originals — diff sees zero
+    # delta until we modify a.md AFTER the fixture is materialized.
+    local sha_a sha_b sha_c
+    sha_a=$(sha256sum "$fake_repo/skills/foo/a.md" | awk '{print $1}')
+    sha_b=$(sha256sum "$fake_repo/skills/foo/b.md" | awk '{print $1}')
+    sha_c=$(sha256sum "$fake_repo/skills/foo/c.md" | awk '{print $1}')
+    jq -n --arg a "$sha_a" --arg b "$sha_b" --arg c "$sha_c" \
+        '{key:"MANIFEST.json", content:("[{\"path\":\"foo/a.md\",\"sha256\":\""+$a+"\"},{\"path\":\"foo/b.md\",\"sha256\":\""+$b+"\"},{\"path\":\"foo/c.md\",\"sha256\":\""+$c+"\"}]")}' \
+        > "$BL_CURATOR_MOCK_FIXTURES_DIR/setup-manifest-baseline.json"
+    # Memory POSTs (and the final MANIFEST re-POST) get a generic ack.
+    printf '{"id":"memory_synced"}\n' > "$BL_CURATOR_MOCK_FIXTURES_DIR/sync-memory-ack.json"
+    bl_curator_mock_set_response 'sync-memory-ack.json' 201
+    bl_curator_mock_add_route 'MANIFEST' 'setup-manifest-baseline.json' 200
+    # Now modify skill a — local sha_a no longer matches the captured baseline.
+    printf 'skill-a-content-MODIFIED\n' > "$fake_repo/skills/foo/a.md"
+    export BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/curl-requests.log"
+    run "$BL_SOURCE" setup --sync
+    [ "$status" -eq 0 ]
+    # Exactly one memory POST for foo/a.md; zero for foo/b.md and foo/c.md.
+    # awk avoids anti-pattern #7 (grep -c exits 1 on zero matches → masks count
+    # in $() with `|| printf 0` and yields a multi-byte string that breaks `[`).
+    [ -r "$BL_MOCK_REQUEST_LOG" ]
+    [ "$(awk '/"key":"foo\/a\.md"/{c++} END{print c+0}' "$BL_MOCK_REQUEST_LOG")" -ge 1 ]
+    [ "$(awk '/"key":"foo\/b\.md"/{c++} END{print c+0}' "$BL_MOCK_REQUEST_LOG")" -eq 0 ]
+    [ "$(awk '/"key":"foo\/c\.md"/{c++} END{print c+0}' "$BL_MOCK_REQUEST_LOG")" -eq 0 ]
+    rm -rf "$fake_repo"
+}
+
+# ---------------------------------------------------------------------------
 # Helper: synthesize a current-manifest fixture from the live skills/ corpus.
 # Lets the matches-current test stay green even as new skills land.
 # ---------------------------------------------------------------------------

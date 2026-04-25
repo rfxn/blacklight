@@ -29,10 +29,43 @@ bl_curator_mock_init() {
 #!/bin/bash
 # curator-mock: URL-routing curl shim
 # Explicit patterns checked first; falls back to DEFAULT if none match.
+# Optional: when BL_MOCK_REQUEST_LOG is set, every invocation appends a record
+# of <METHOD> <URL> + the bound body (read from --data-binary @<file>) to that
+# path. Used by --sync delta-verification tests to assert exactly which keys
+# were POSTed (M11 P13).
 url=""
+method="GET"
+body_file=""
+prev=""
 for arg in "$@"; do
+    case "$prev" in
+        -X) method="$arg" ;;
+        --data-binary)
+            case "$arg" in
+                @*) body_file="${arg#@}" ;;
+                *)  body_file="" ;;
+            esac
+            ;;
+    esac
     case "$arg" in https://*|http://*) url="$arg" ;; esac
+    prev="$arg"
 done
+if [[ -n "${BL_MOCK_REQUEST_LOG:-}" ]]; then
+    {
+        printf '%s %s\n' "$method" "$url"
+        if [[ -n "$body_file" && -r "$body_file" ]]; then
+            # Compact via jq so consumers can grep '"key":"foo/a.md"' regardless
+            # of whether the producer pretty-printed. Fallback: strip whitespace
+            # if jq is missing or rejects the body.
+            if command -v jq >/dev/null 2>&1; then
+                jq -c '.' < "$body_file" 2>/dev/null || tr -d ' \t\n' < "$body_file"
+            else
+                tr -d ' \t\n' < "$body_file"
+            fi
+            printf '\n'
+        fi
+    } >> "$BL_MOCK_REQUEST_LOG"
+fi
 IFS='|' read -ra patterns <<< "${BL_CURATOR_MOCK_PATTERNS_CSV:-}"
 IFS='|' read -ra fixtures <<< "${BL_CURATOR_MOCK_FIXTURES_CSV:-}"
 IFS='|' read -ra statuses <<< "${BL_CURATOR_MOCK_STATUSES_CSV:-}"
