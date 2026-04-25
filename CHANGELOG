@@ -2,6 +2,9 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== M10 — Ship-ready (v0.1.0) ===
+[New] M10 P1 — install.sh curl-pipe-bash installer (bash≥4.1, curl, jq preflight; --local / remote modes; next-step prompt)
+
 - M9.5 P1 | Apr 25 2026 — security input-validation guards (audit-driven hardening):
 [Fix] schemas/step.json — step_id property now carries pattern
       ^[A-Za-z0-9_-]{1,64}$; rejects curator-poisoned traversal segments
