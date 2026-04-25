@@ -161,7 +161,12 @@ bl_case_close_validate_preconditions() {
 bl_case_close_render_brief_input() {
     # bl_case_close_render_brief_input <case-id> — prints brief-input path on stdout; 0/69
     local case_id="$1"
-    local out="/tmp/brief-$case_id-$$.md"
+    local out
+    # mktemp instead of `$$`-suffixed predictable name (workspace standard).
+    out=$(command mktemp "/tmp/bl-brief-${case_id}.XXXXXX.md") || {
+        bl_error_envelope case "mktemp failed for brief input"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
     {
         printf '# Case %s\n\n' "$case_id"
         printf '## Executive summary\n'

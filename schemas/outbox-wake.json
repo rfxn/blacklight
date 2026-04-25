@@ -3,10 +3,11 @@
   "$id": "https://rfxn.github.io/blacklight/schemas/outbox-wake.json",
   "title": "blacklight outbox kind=wake payload",
   "type": "object",
-  "required": ["type", "content", "trigger_fingerprint_fenced"],
+  "required": ["type", "content", "trigger_fingerprint_fenced", "case"],
   "properties": {
     "type": {"const": "user.message"},
     "content": {"type": "array"},
-    "trigger_fingerprint_fenced": {"type": "string", "pattern": "^<untrusted fence=\"[a-f0-9]{16}\""}
+    "trigger_fingerprint_fenced": {"type": "string", "pattern": "^<untrusted fence=\"[a-f0-9]{16}\""},
+    "case": {"type": "string", "pattern": "^CASE-[0-9]{4}-[0-9]{4}$"}
   }
 }

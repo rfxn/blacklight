@@ -642,6 +642,18 @@ bl_outbox_enqueue() {
                     return "$BL_EX_SCHEMA_VALIDATION_FAIL"
                 fi
                 ;;
+            wake)
+                # Wake-payload `case` field newly required (audit m5). Filename
+                # routing in bl_outbox_enqueue partitions outbox files by
+                # case-id; missing field collapsed every wake to
+                # `*-wake-global.json` and broke per-case audit grep-ability.
+                local wc
+                wc=$(printf '%s' "$payload" | jq -r '.case // ""')
+                if [[ ! "$wc" =~ ^CASE-[0-9]{4}-[0-9]{4}$ ]]; then
+                    bl_error_envelope outbox "wake.case fails pattern (got: $wc)"
+                    return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+                fi
+                ;;
         esac
     fi
 
@@ -1625,9 +1637,13 @@ bl_observe_file() {
     fi
 
     # Magic
-    local magic="null"
+    # `jq -Rr '.'` emits raw input — same string in/out — so the prior code's
+    # `"<raw>"` wrapping produced malformed JSON when file-magic strings
+    # contained `"` or `\`. Pass the raw string via `--arg` and let jq emit a
+    # properly-encoded JSON string at line 405's record build site (audit m14).
+    local magic_raw="null"
     if command -v file >/dev/null 2>&1; then
-        magic="\"$(command file -b "$path" | jq -Rr '.' 2>/dev/null || command file -b "$path")\""   # jq error output suppressed; file -b fallback handles failure
+        magic_raw=$(command file -b "$path" 2>/dev/null || printf 'unknown')   # file failure → 'unknown' label; never propagates malformed magic into the JSON record
     fi
 
     # Strings
@@ -1649,7 +1665,7 @@ bl_observe_file() {
     rec=$(jq -n -c \
         --arg path "$path" \
         --arg sha256 "$sha256" \
-        --argjson magic "$magic" \
+        --arg magic "$magic_raw" \
         --argjson strings_sample "$strings_sample" \
         --argjson strings_total "$strings_total" \
         --argjson size_bytes "$size" \
@@ -3070,7 +3086,7 @@ bl_consult_register_curator() {
         command rm -f "$trigger_payload_file"
         local wake_payload
         wake_payload=$(jq -n --arg c "$case_id" --arg f "$fp" --arg ft "$fenced_trigger" \
-            '{type:"user.message", content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f)}], trigger_fingerprint_fenced:$ft}')
+            '{type:"user.message", case:$c, content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f)}], trigger_fingerprint_fenced:$ft}')
         bl_outbox_enqueue wake "$wake_payload" || bl_warn "outbox enqueue failed; wake event lost for $case_id"
         return "$BL_EX_OK"
     fi
@@ -3433,7 +3449,16 @@ bl_run_step() {
         command rm -f "$pending_tmp"
         return "$BL_EX_OK"
     fi
-    local stdout_file="/tmp/bl-step-$step_id.out"
+    # mktemp-allocated stdout buffer — predictable `/tmp/bl-step-$step_id.out`
+    # was symlink-vulnerable on multi-user hosts (workspace standard: never
+    # use `$$`/predictable temp names). The step-id format guard already
+    # rejects traversal, but mktemp closes the predictable-name vector.
+    local stdout_file
+    stdout_file=$(command mktemp "/tmp/bl-step-${step_id}.XXXXXX") || {
+        bl_error_envelope run "mktemp failed for stdout buffer"
+        command rm -f "$pending_tmp"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
     local exec_rc=0
     bl_run_dispatch_verb "$verb" "$args_json" > "$stdout_file" || exec_rc=$?
     local writeback_ok=1
@@ -3846,7 +3871,12 @@ bl_case_close_validate_preconditions() {
 bl_case_close_render_brief_input() {
     # bl_case_close_render_brief_input <case-id> — prints brief-input path on stdout; 0/69
     local case_id="$1"
-    local out="/tmp/brief-$case_id-$$.md"
+    local out
+    # mktemp instead of `$$`-suffixed predictable name (workspace standard).
+    out=$(command mktemp "/tmp/bl-brief-${case_id}.XXXXXX.md") || {
+        bl_error_envelope case "mktemp failed for brief input"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
     {
         printf '# Case %s\n\n' "$case_id"
         printf '## Executive summary\n'

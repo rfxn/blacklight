@@ -115,7 +115,16 @@ bl_run_step() {
         command rm -f "$pending_tmp"
         return "$BL_EX_OK"
     fi
-    local stdout_file="/tmp/bl-step-$step_id.out"
+    # mktemp-allocated stdout buffer — predictable `/tmp/bl-step-$step_id.out`
+    # was symlink-vulnerable on multi-user hosts (workspace standard: never
+    # use `$$`/predictable temp names). The step-id format guard already
+    # rejects traversal, but mktemp closes the predictable-name vector.
+    local stdout_file
+    stdout_file=$(command mktemp "/tmp/bl-step-${step_id}.XXXXXX") || {
+        bl_error_envelope run "mktemp failed for stdout buffer"
+        command rm -f "$pending_tmp"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
     local exec_rc=0
     bl_run_dispatch_verb "$verb" "$args_json" > "$stdout_file" || exec_rc=$?
     local writeback_ok=1

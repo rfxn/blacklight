@@ -16,6 +16,28 @@ https://github.com/rfxn/blacklight
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
 === M10 complete — blacklight v0.1.0 ship-ready ===
 
+- M9.5 P8 | Apr 25 2026 — hygiene cleanup (mktemp, magic encoding, wake-outbox case):
+[Fix] src/bl.d/60-run.sh — bl_run_step stdout buffer allocated via
+      mktemp instead of predictable /tmp/bl-step-$step_id.out;
+      symlink-attack-resistant on multi-user hosts (audit m3).
+[Fix] src/bl.d/70-case.sh — bl_case_close_render_brief_input output
+      path allocated via mktemp instead of /tmp/brief-$case_id-$$.md
+      (workspace standard prohibits $$ for temp names; audit m3).
+[Fix] src/bl.d/41-observe-collectors.sh — bl_observe_file magic field
+      now uses jq --arg (correct JSON encoding); prior --argjson with
+      hand-rolled `"<raw>"` wrapping produced malformed JSON when
+      file-magic strings contained `"` or `\`, silently dropping
+      observation records (audit m14).
+[Fix] schemas/outbox-wake.json — `case` field added to required +
+      properties with ^CASE-[0-9]{4}-[0-9]{4}$ pattern (audit m5).
+[Fix] src/bl.d/50-consult.sh — wake_payload jq builder includes
+      case:$c at top level. Outbox filename routing now partitions by
+      case-id correctly; previously every wake collapsed to
+      *-wake-global.json (audit m5).
+[Fix] src/bl.d/27-outbox.sh — bl_outbox_enqueue's per-kind pattern
+      enforcement adds wake) branch validating wake.case shape (audit m5).
+[Change] bl — regenerated.
+
 - M9.5 P7 | Apr 25 2026 — consult dedup INDEX fingerprint column (M10):
 [Change] case-templates/INDEX.md — added 6th `Fingerprint` column to row
       schema. New cases written by `bl_consult_update_index_row_append`

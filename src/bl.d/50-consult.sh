@@ -144,7 +144,7 @@ bl_consult_register_curator() {
         command rm -f "$trigger_payload_file"
         local wake_payload
         wake_payload=$(jq -n --arg c "$case_id" --arg f "$fp" --arg ft "$fenced_trigger" \
-            '{type:"user.message", content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f)}], trigger_fingerprint_fenced:$ft}')
+            '{type:"user.message", case:$c, content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f)}], trigger_fingerprint_fenced:$ft}')
         bl_outbox_enqueue wake "$wake_payload" || bl_warn "outbox enqueue failed; wake event lost for $case_id"
         return "$BL_EX_OK"
     fi

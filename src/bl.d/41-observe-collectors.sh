@@ -378,9 +378,13 @@ bl_observe_file() {
     fi
 
     # Magic
-    local magic="null"
+    # `jq -Rr '.'` emits raw input — same string in/out — so the prior code's
+    # `"<raw>"` wrapping produced malformed JSON when file-magic strings
+    # contained `"` or `\`. Pass the raw string via `--arg` and let jq emit a
+    # properly-encoded JSON string at line 405's record build site (audit m14).
+    local magic_raw="null"
     if command -v file >/dev/null 2>&1; then
-        magic="\"$(command file -b "$path" | jq -Rr '.' 2>/dev/null || command file -b "$path")\""   # jq error output suppressed; file -b fallback handles failure
+        magic_raw=$(command file -b "$path" 2>/dev/null || printf 'unknown')   # file failure → 'unknown' label; never propagates malformed magic into the JSON record
     fi
 
     # Strings
@@ -402,7 +406,7 @@ bl_observe_file() {
     rec=$(jq -n -c \
         --arg path "$path" \
         --arg sha256 "$sha256" \
-        --argjson magic "$magic" \
+        --arg magic "$magic_raw" \
         --argjson strings_sample "$strings_sample" \
         --argjson strings_total "$strings_total" \
         --argjson size_bytes "$size" \

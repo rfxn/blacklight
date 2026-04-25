@@ -124,6 +124,18 @@ bl_outbox_enqueue() {
                     return "$BL_EX_SCHEMA_VALIDATION_FAIL"
                 fi
                 ;;
+            wake)
+                # Wake-payload `case` field newly required (audit m5). Filename
+                # routing in bl_outbox_enqueue partitions outbox files by
+                # case-id; missing field collapsed every wake to
+                # `*-wake-global.json` and broke per-case audit grep-ability.
+                local wc
+                wc=$(printf '%s' "$payload" | jq -r '.case // ""')
+                if [[ ! "$wc" =~ ^CASE-[0-9]{4}-[0-9]{4}$ ]]; then
+                    bl_error_envelope outbox "wake.case fails pattern (got: $wc)"
+                    return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+                fi
+                ;;
         esac
     fi
 
