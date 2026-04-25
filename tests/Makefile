@@ -14,8 +14,15 @@ include infra/include/Makefile.tests
 # src/bl.d/*.sh parts drifted from committed bl. Runs BEFORE batsman's
 # container build so drift is caught fast. Post-include so this augments
 # (not replaces) the include's test / test-rocky9 / test-all targets.
-test test-rocky9 test-all: _bl-drift-check
+test test-rocky9 test-all test-quick: _bl-drift-check
 
 .PHONY: _bl-drift-check
 _bl-drift-check:
 	@$(MAKE) --no-print-directory -C .. bl-check
+
+# Rapid-iteration target — smoke + CLI surface only (19 tests, single container).
+# Inner loop for src/bl.d edits while CLAUDE.md "Development mode" banner is set.
+# Promote to `make test` (debian12) + `make test-rocky9` before commit when the
+# dev-mode banner is removed.
+test-quick:
+	$(BATSMAN_RUN_TESTS) -- /opt/tests/00-smoke.bats /opt/tests/01-cli-surface.bats
