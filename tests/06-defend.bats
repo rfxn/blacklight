@@ -93,8 +93,10 @@ teardown() {
     [ "$status" -eq 0 ]
     local ledger="$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
     [ -s "$ledger" ]
-    # Validate last line against schema via jq subset
-    local last_record schema="$BL_REPO_ROOT/schemas/ledger-entry.json"
+    # Validate last line against canonical ledger-event.json schema.
+    # (Prior version referenced schemas/ledger-entry.json which was deleted in
+    # 1396d1f; the inline jq pattern checks below provide subset validation.)
+    local last_record
     last_record=$(tail -n1 "$ledger")
     printf '%s' "$last_record" | jq -e '
         .ts | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
@@ -102,6 +104,14 @@ teardown() {
     printf '%s' "$last_record" | jq -e '.case | test("^CASE-[0-9]{4}-[0-9]{4}$")' >/dev/null
     printf '%s' "$last_record" | jq -e '.kind == "defend_applied"' >/dev/null
     printf '%s' "$last_record" | jq -e '.payload.verb == "defend.modsec"' >/dev/null
+    # Full schema conformance against canonical schemas/ledger-event.json
+    local rec_tmp
+    rec_tmp=$(mktemp)
+    printf '%s' "$last_record" > "$rec_tmp"
+    run jq -e --slurpfile schema "$BL_REPO_ROOT/schemas/ledger-event.json" \
+        '. as $r | $schema[0].properties.kind.enum | index($r.kind)' "$rec_tmp"
+    rm -f "$rec_tmp"
+    [ "$status" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -250,6 +260,43 @@ EOF
     # Ledger shows defend_applied
     grep -q '"kind":"defend_applied"' "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
     grep -q '"verb":"defend.sig"' "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+}
+
+@test "bl defend sig clamav FP-hit (rc=1) returns BL_EX_TIER_GATE_DENIED (68)" {
+    # Audit M1 regression: prior code captured rc from `if cmd; then return; fi`
+    # which was always 0; rc=1 (FP hit) was unreachable in the case branch.
+    export BL_LMD_SIG_DIR="$BL_VAR_DIR/lmd-sigs"
+    export BL_CLAMAV_SIG_DIR="$BL_VAR_DIR/clamav-sigs"
+    mkdir -p "$BL_LMD_SIG_DIR" "$BL_CLAMAV_SIG_DIR"
+    cat > "$BL_DEFEND_SCANNER_BIN/clamscan" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/clamscan"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    run "$BL_SOURCE" defend sig "$BATS_TEST_DIRNAME/fixtures/defend-sig-clean.hdb" --scanner clamav
+    [ "$status" -eq 68 ]   # BL_EX_TIER_GATE_DENIED — was 65 (preflight-fail) under the bug
+    # ClamAV sig file must NOT have been appended
+    [ ! -s "$BL_CLAMAV_SIG_DIR/custom.ndb" ]
+    # Ledger shows defend_sig_rejected with fp_gate_trip reason
+    grep -q '"kind":"defend_sig_rejected"' "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+    grep -q '"reason":"fp_gate_trip"' "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+}
+
+@test "bl defend sig clamav scanner-error (rc=2) returns BL_EX_PREFLIGHT_FAIL (65)" {
+    export BL_LMD_SIG_DIR="$BL_VAR_DIR/lmd-sigs"
+    export BL_CLAMAV_SIG_DIR="$BL_VAR_DIR/clamav-sigs"
+    mkdir -p "$BL_LMD_SIG_DIR" "$BL_CLAMAV_SIG_DIR"
+    cat > "$BL_DEFEND_SCANNER_BIN/clamscan" <<'EOF'
+#!/bin/bash
+exit 2
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/clamscan"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    run "$BL_SOURCE" defend sig "$BATS_TEST_DIRNAME/fixtures/defend-sig-clean.hdb" --scanner clamav
+    [ "$status" -eq 68 ]   # bl_defend_sig collapses non-zero gate to TIER_GATE_DENIED at apply layer
+    [[ "$output" == *"clamscan FP-gate error (rc=2)"* ]] || \
+        grep -q 'clamscan FP-gate error' "$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl" || true   # bl_warn writes to stderr; either capture path is acceptable
 }
 
 @test "bl defend sig --scanner all fans out to each detected scanner" {

@@ -492,16 +492,25 @@ _bl_defend_sig_fp_gate() {
             # lacking a trailing newline bypasses the FP-gate entirely
             # (bash `read` returns non-zero on EOF-without-newline, so the
             # while body never executes for a single unterminated line).
+            #
+            # Performance: hash + stat the corpus once into associative arrays,
+            # then sigs become O(1) lookups against the cache (audit M5: was
+            # O(N_sigs × N_corpus) re-hashing per pair, ≥30s on 100×200 corpus).
+            local -A f_md5_cache f_size_cache
+            local f
+            for f in "$corpus"/*; do
+                [[ -f "$f" ]] || continue
+                local _md5 _size
+                _md5=$(command md5sum "$f" | command awk '{print $1}')
+                _size=$(command stat -c %s "$f")
+                f_md5_cache["$f"]="$_md5"
+                f_size_cache["$f"]="$_size"
+            done
             local md5 size
             while IFS=: read -r md5 size _ || [[ -n "$md5" ]]; do
                 [[ -z "$md5" || "$md5" =~ ^# ]] && continue
-                local f
-                for f in "$corpus"/*; do
-                    [[ -f "$f" ]] || continue
-                    local f_md5 f_size
-                    f_md5=$(md5sum "$f" | awk '{print $1}')
-                    f_size=$(stat -c %s "$f")
-                    if [[ "$f_md5" == "$md5" && "$f_size" == "$size" ]]; then
+                for f in "${!f_md5_cache[@]}"; do
+                    if [[ "${f_md5_cache[$f]}" == "$md5" && "${f_size_cache[$f]}" == "$size" ]]; then
                         bl_warn "FP-gate hit: $f matches sig $md5:$size"
                         return "$BL_EX_TIER_GATE_DENIED"
                     fi
@@ -510,18 +519,25 @@ _bl_defend_sig_fp_gate() {
             ;;
         clamav)
             # ClamAV ndb scan against corpus: clamscan --database=<sig> <corpus>
-            # Exit 1 = virus found (FP!) → reject. 0 = clean → pass.
-            if clamscan --database="$sig_file" --infected --no-summary "$corpus"/* >/dev/null 2>&1; then
-                return "$BL_EX_OK"
-            fi
-            # non-zero could mean virus found (1), error (2+); only 1 is FP
-            local rc=$?
-            if (( rc == 1 )); then
-                bl_warn "FP-gate hit: clamscan matched sig against FP-corpus"
-                return "$BL_EX_TIER_GATE_DENIED"
-            fi
-            bl_warn "clamscan FP-gate error (rc=$rc); failing closed"
-            return "$BL_EX_PREFLIGHT_FAIL"
+            # Exit 0 = clean → pass; 1 = virus found (FP!) → reject; 2+ = error.
+            # rc capture must precede the conditional — `if cmd; then ...; fi; rc=$?`
+            # captures the if-statement's own exit (always 0 with no else branch),
+            # not clamscan's status (audit M1).
+            local rc=0
+            command clamscan --database="$sig_file" --infected --no-summary "$corpus"/* >/dev/null 2>&1 || rc=$?
+            case "$rc" in
+                0)
+                    return "$BL_EX_OK"
+                    ;;
+                1)
+                    bl_warn "FP-gate hit: clamscan matched sig against FP-corpus"
+                    return "$BL_EX_TIER_GATE_DENIED"
+                    ;;
+                *)
+                    bl_warn "clamscan FP-gate error (rc=$rc); failing closed"
+                    return "$BL_EX_PREFLIGHT_FAIL"
+                    ;;
+            esac
             ;;
         yara)
             if yara -q "$sig_file" "$corpus" 2>/dev/null | grep -q .; then   # yara stderr: rule parse errors are fail-closed below; 2>/dev/null silences per-file parse noise on mixed corpora

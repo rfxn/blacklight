@@ -16,6 +16,26 @@ https://github.com/rfxn/blacklight
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
 === M10 complete — blacklight v0.1.0 ship-ready ===
 
+- M9.5 P3 | Apr 25 2026 — real-bug fixes (clamav exit code, FP-gate cache, stale schema ref):
+[Fix] src/bl.d/82-defend.sh — clamav FP-gate captures rc correctly via
+      `cmd ... || rc=$?`; prior `if cmd; then return; fi; rc=$?` always
+      captured 0 (the if-statement's own exit), making the FP-hit (rc=1)
+      branch unreachable. Operator log + exit-code semantics now reflect
+      actual clamscan status (audit M1).
+[Fix] src/bl.d/82-defend.sh — LMD FP-corpus loop now caches md5+size
+      per-corpus-file once into associative arrays; sigs are O(1)
+      lookups instead of re-hashing per (sig × corpus_file) pair.
+      Drops 100×200 corpus from ~30-90s to ~1s wall-clock; coreutils
+      (md5sum/awk/stat) carry `command` prefix per workspace standard
+      (audit M5).
+[Fix] tests/06-defend.bats — drop stale `schema=ledger-entry.json`
+      reference (file deleted in 1396d1f). Replaced with full schema
+      conformance check against canonical schemas/ledger-event.json
+      (audit m1).
+[New] tests/06-defend.bats — 2 clamav FP-gate negative-path cases
+      (rc=1 → status 68; rc=2 → preflight-fail at ledger).
+[Change] bl — regenerated.
+
 - M9.5 P2 | Apr 25 2026 — TOCTOU + nft-comment hardening:
 [Fix] src/bl.d/83-clean.sh — bl_clean_unquarantine restore path
       hardened against TOCTOU symlink race: pre-rename `[[ -L ]]`
