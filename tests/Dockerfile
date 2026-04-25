@@ -39,6 +39,8 @@ COPY schemas/ /opt/schemas/
 COPY prompts/ /opt/prompts/
 COPY case-templates/ /opt/case-templates/
 COPY skills/ /opt/skills/
-RUN chmod +x /opt/bl
+COPY scripts/ /opt/scripts/
+COPY tools/ /opt/tools/
+RUN chmod +x /opt/bl /opt/tools/synth-corpus.sh
 
 WORKDIR /opt/tests

