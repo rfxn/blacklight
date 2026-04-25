@@ -205,7 +205,7 @@ Every defensive IR tool since 2005 has been a stateless batch analyzer. You subm
 
 **3. Pre-flight validation happens in the agent's own sandbox.** The curator's environment is provisioned with `apache2 + libapache2-mod-security2 + modsecurity-crs + yara + jq + duckdb`. When the agent authors a ModSec rule, the *agent itself* runs `apachectl -t` against its own config tree before promoting the rule to `bl-actions/pending/`. Tokens saved on iteration; operator time saved on bad rules reaching the fleet. No external validator service needed; no cross-machine handoff; no drift between "what the agent thought the rule would do" and "what apache would accept."
 
-**4. The event stream IS the operator surface.** Every `tool_use`, every `thinking` span, every file mount, every structured-output emit is a bidirectional SSE event. The demo UI is literally `curl .../events | jq .` with light rendering. No custom frontend, no event-bus infrastructure, no pub/sub fabric. The session's observable state is the session itself. For a 3-minute hackathon demo this means: the operator runs `bl consult`, the event stream renders in a side pane, the judges see Opus reasoning + tool-calling + memory writes in real time. That is a demo that is also an architecture diagram.
+**4. The event stream IS the operator surface.** Every `tool_use`, every reasoning content block, every file mount, every structured-output emit is a bidirectional SSE event. The demo UI is literally `curl .../events | jq .` with light rendering. No custom frontend, no event-bus infrastructure, no pub/sub fabric. The session's observable state is the session itself. For a 3-minute hackathon demo this means: the operator runs `bl consult`, the event stream renders in a side pane, the judges see Opus reasoning + tool-calling + memory writes in real time. That is a demo that is also an architecture diagram.
 
 **5. Workspace-scoped, commercially.** Sessions, skills, cases, evidence, deliverables all live in the workspace that authored them. A hosting provider deploying blacklight has their own workspace with their own skills extensions, their own case archive, their own fleet precedent. Zero multi-tenant engineering from us. The commercial boundary is enforced by the platform for free.
 
@@ -239,13 +239,13 @@ That is 8–12% of the 1M window. The curator reads the whole case on every wake
 
 **1. Cross-evidence correlation is the reasoning task.** The PolyShell incident had two non-overlapping attacker clusters (custom_options actors and customer_address actors, zero IP overlap) operating the same family of vulnerabilities across 97 hosts. That insight — "these are two campaigns, not one" — only falls out with both IP sets in view. A retriever that picks "most-recent 5 IPs" or "highest-confidence IPs" would smear them together.
 
-**2. Hypothesis revision is calibrated-reasoning work.** Opus 4.7's adaptive thinking (`thinking: {type: adaptive, display: summarized}`, depth via `output_config.effort`) budgets reasoning to problem shape: a major revision (day 5 vector pivot) gets deep thinking; a rotated-IP confirmation gets shallow. `budget_tokens` is retired in 4.7; the model handles the budget internally. This is the behavior Opus 4.7 was specifically trained for — hypothesis revision with confidence calibration, not a decorative overlay.
+**2. Hypothesis revision is calibrated-reasoning work.** Opus 4.7 allocates reasoning depth to the problem shape automatically: a major revision (day 5 vector pivot) receives deep reasoning; a rotated-IP confirmation receives shallow. The model handles the budget internally — calibrated to each turn, not to an operator-specified parameter. This is the behavior Opus 4.7 was specifically trained for — hypothesis revision with confidence calibration, not a decorative overlay.
 
-**3. Structured output via `output_config.format` + json_schema.** Opus 4.7 only: rejects forced `tool_choice` with thinking on (HTTP 400, verified 2026-04-22), so we use `output_config.format = {type: json_schema, ...}`. The synthesizer returns a schema-valid `{rules: [...], firewall_actions: [...], sigs: [...]}` object directly — no regex-scraping model output, no fallback to "please return JSON" cajoling. This is the load-bearing primitive for the defensive payload authoring surface. Sonnet 4.6 supports `tool_use` output shaping but not the same json_schema discipline on free-form content.
+**3. Structured output via `output_config.format` + json_schema.** The synthesizer uses `output_config.format = {type: json_schema, ...}` and returns a schema-valid `{rules: [...], firewall_actions: [...], sigs: [...]}` object directly — no regex-scraping model output, no fallback to "please return JSON" cajoling. This is the load-bearing primitive for the defensive payload authoring surface. Sonnet 4.6 supports `tool_use` output shaping but not the same json_schema discipline on free-form content. Note: `POST /v1/agents` rejects `output_config` at agent-create time; structured output is achieved through custom tool input_schemas, not `output_config.format` on the Managed Agents surface (verified 2026-04-24; see `DESIGN.md` §12).
 
 **4. Prompt caching amortizes the window.** Automatic 5-minute TTL, Anthropic-side. The skills corpus (~10K tokens) is cached after the first read. The stable case history (~30K tokens) is cached across consecutive turns. Only the new evidence delta in this turn is uncached (~5–30K). A long-running case gets *cheaper* per turn, not more expensive. This is the primitive that makes the "one curator session per case" architecture economically sane.
 
-**5. Sandbox tool-use integrates at native speed.** The curator runs `apachectl -t`, `jq`, `awk`, `duckdb` inside its Ubuntu 22.04 sandbox via the built-in `bash` tool. No cross-network round-trip to an external validator. Opus 4.7's tool-use is the current SOTA on reliable tool orchestration — chains bash → file-read → write-memory-store → thinking → tool-call without breaking structure.
+**5. Sandbox tool-use integrates at native speed.** The curator runs `apachectl -t`, `jq`, `awk`, `duckdb` inside its Ubuntu 22.04 sandbox via the built-in `bash` tool. No cross-network round-trip to an external validator. Opus 4.7's tool-use is the current SOTA on reliable tool orchestration — chains bash → file-read → write-memory-store → reason → tool-call without breaking structure.
 
 **Sonnet 4.6 could fake parts of this at 200K:** aggressive chunking, external retriever, manual summary-refresh logic. That is 2–3 days of additional engineering to ship sub-par correlation. **Opus 4.7 + 1M makes the architecture one-shot.** The model choice is the system design. That is the defense the README's "Why these models" section carries — specific, measurable, non-generic.
 
@@ -253,10 +253,10 @@ That is 8–12% of the 1M window. The curator reads the whole case on every wake
 
 | Role | Model | Features |
 |---|---|---|
-| Curator (the case-owning session) | Opus 4.7 | 1M context, adaptive thinking, Managed Agents session, all 20 skills loaded |
-| Synthesizer (defense authoring call) | Opus 4.7 | structured output via `output_config.format` json_schema, no forced `tool_choice` with thinking |
-| Intent reconstructor (shell analysis) | Opus 4.7 | extended thinking, runs against specific shell-sample files |
-| Hunter (Phase P3 roadmap) | Sonnet 4.6 | cheaper, faster, forced `tool_choice`, thinking off — Phase P3 roadmap via `callable_agents` (§17.4); not load-bearing in v2; v2 ships curator-only |
+| Curator (the case-owning session) | Opus 4.7 | 1M context, Managed Agents session, persistent case state, all 20 skills loaded |
+| Synthesizer (defense authoring call) | Opus 4.7 | structured output via custom tool input_schema; defense payload authoring surface |
+| Intent reconstructor (shell analysis) | Opus 4.7 | deep forensic reasoning; runs against specific shell-sample files |
+| Hunter (Phase P3 roadmap) | Sonnet 4.6 | cheaper, faster, forced `tool_choice` — Phase P3 roadmap via `callable_agents` (§17.4); not load-bearing in v2; v2 ships curator-only |
 
 Most v2 sessions run curator-only. Hunter parallelism is **deferred to Phase P3** (see §17.4 — `callable_agents` multi-agent for kernel/memory/network forensics) and is not exercised in v2.
 
@@ -537,7 +537,7 @@ No claim floats. No architecture element is unjustified.
 - **Project name**: blacklight. Repo: `rfxn/blacklight`. CLI: `bl`.
 - **Zero runtime Python, anywhere.** `bl setup` and `bl` are the only executables; both are bash. Operator workstation has no Python dependency; fleet host has no Python dependency. The only language runtime in the stack is the one inside Anthropic's Managed Agents sandbox, which we do not operate.
 - **Skills bundle**: ≥20 operator-voice files. Floor preserved and extended.
-- **Model assignments**: Opus 4.7 on curator/synth/intent with adaptive thinking + json_schema output. Sonnet 4.6 available for hunter parallel dispatch (not load-bearing in v2).
+- **Model assignments**: Opus 4.7 on curator/synth/intent — 1M context, Managed Agents session, structured output via custom tools. Sonnet 4.6 available for hunter parallel dispatch (not load-bearing in v2).
 - **Managed Agents** as architecture, not feature. Curator is a Managed Agent.
 - **Submission deadline**: 2026-04-26 16:00 EDT, 4h buffer.
 - **Demo runtime**: 3:00 hard cap.
@@ -677,7 +677,7 @@ What does "won" look like? Four dimensions.
 ### 18.3 Architecturally
 
 - Anthropic Managed Agents has proven the long-running agent model at production scale; session-state + hot-swap files + memory-store-mounted skills becomes the default pattern for any multi-day agentic workload. The beta graduates; the primitives remain stable enough to build long-running products on.
-- Opus 4.7 (and successors) + 1M-class context + adaptive thinking + structured output becomes the accepted baseline for correlation-heavy reasoning. Retrieval-only architectures are recognized as a compromise, not a default.
+- Opus 4.7 (and successors) + 1M-class context + Managed Agent persistence becomes the accepted baseline for correlation-heavy reasoning. Retrieval-only architectures are recognized as a compromise, not a default.
 - The three-layer pattern — native primitives + skills-loaded agent + thin language-agnostic wrapper — becomes a well-known architectural idiom applied across domains, not just security.
 
 ### 18.4 Commercially (for R-fx Networks)

@@ -116,24 +116,21 @@ for the full setup-and-reuse contract.
 
 ## Why Opus 4.7 + 1M context
 
-Post-incident reconstruction requires the whole evidence bundle in a single reasoning
-pass. A realistic APSB25-94-shaped case accumulates Apache access logs, ModSec audit
-entries, filesystem mtime clusters, crontab diffs, and process snapshots — routinely
-250,000 to 400,000 tokens of raw evidence before the curator has authored a single
-hypothesis. Chunking that evidence across multiple calls destroys the cross-stream
-correlation that distinguishes signal from noise: the webshell URL in the access log,
-the double-extension filesystem path, and the injected cron entry are only causally
-connected when the curator can see all three at once. The 1M context window makes that
-possible without compromise. Opus 4.7 with adaptive thinking provides the reasoning
-depth needed for forensic synthesis — distinguishing a staging artifact from a false
-positive requires the model to apply knowledge from ModSecurity grammar, Magento path
-conventions, and attacker TTPs simultaneously. The `exhibits/fleet-01/` directory in
-this repository contains a worked APSB25-94-shaped case that exercises the full bundle
-shape, reconstructed entirely from the public Adobe security advisory. Adaptive
-thinking depth is model-internal on Opus 4.7 (engaged automatically on
-correlation-heavy turns) — operator-configurable `thinking` kwargs on
-`POST /v1/agents` are rejected by the `managed-agents-2026-04-01` beta
-(verified 2026-04-24; see `DESIGN.md` §12.1).
+Post-incident reconstruction requires cross-stream correlation — the webshell URL in
+the access log, the double-extension filesystem path, and the injected cron entry are
+only causally connected when the curator can see all three streams simultaneously. A
+realistic APSB25-94-shaped case accumulates Apache access logs, ModSec audit entries,
+filesystem mtime clusters, crontab diffs, and process snapshots — routinely 250,000 to
+400,000 tokens of raw evidence before the curator has authored a single hypothesis.
+Chunking that evidence across multiple calls destroys the correlation that distinguishes
+signal from noise: a retriever picking "top 5 evidence items" will miss the one that
+matters precisely because it does not look relevant in isolation. The 1M context window
+makes full-bundle correlation possible without a retrieval layer. Opus 4.7 provides the
+forensic reasoning depth needed to distinguish a staging artifact from a false positive
+by applying knowledge from ModSecurity grammar, Magento path conventions, and attacker
+TTPs simultaneously. The `exhibits/fleet-01/` directory in this repository contains a
+worked APSB25-94-shaped case that exercises the full bundle shape, reconstructed
+entirely from the public Adobe security advisory.
 
 ## Skills architecture
 
@@ -158,7 +155,7 @@ Skill authoring discipline and bundle structure are documented in
 
 | Role | Model | Rationale |
 |------|-------|-----------|
-| Curator agent | `claude-opus-4-7` | Forensic synthesis across 250k-400k token evidence bundles; 1M context; adaptive thinking for hypothesis ranking |
+| Curator agent | `claude-opus-4-7` | Forensic synthesis across 250k-400k token evidence bundles; 1M context; Managed Agent session with persistent case state |
 | Step execution | `claude-sonnet-4-6` | Lower latency for tier-gated operator confirmations; sufficient reasoning depth for step validation |
 | FP corpus gating | `claude-haiku-4-5` | Lightweight classification before signature append; high throughput, low cost for yes/no FP gate decisions |
 

@@ -291,7 +291,7 @@ Event names follow `{domain}.{action}`. Every event carries `processed_at` (null
 | Type                              | Purpose                                                      |
 |-----------------------------------|--------------------------------------------------------------|
 | `agent.message`                   | Text content blocks from the model.                          |
-| `agent.thinking`                  | Thinking content (emitted separately from messages).         |
+| `agent.thinking`                  | Model reasoning content (emitted separately from messages).  |
 | `agent.tool_use`                  | Invocation of a pre-built tool (bash, read, etc.).           |
 | `agent.tool_result`               | Result of a pre-built tool invocation.                       |
 | `agent.mcp_tool_use`              | MCP server tool invocation.                                   |
@@ -810,10 +810,10 @@ This section binds the Managed Agents primitives to blacklight's curator design 
 
 ### Agents (plural)
 
-- **`bl-curator`** — Opus 4.7, extended thinking on (adaptive). System prompt = curator voice + IR playbook anchors. Tools: `agent_toolset_20260401` + custom tool `bl_dispatch_hunter` + custom tool `bl_emit_action`. Skills: custom blacklight skill bundle (case-lifecycle, webshell-families, defense-synthesis, false-positives, hosting-stack, ic-brief-format, …). Memory stores: all five in §below. **This is the Managed Agent.**
-- **`bl-hunter-filesystem`, `bl-hunter-logs`, `bl-hunter-timeline`** — Sonnet 4.6, no extended thinking. Separate agent IDs. Dispatched from the curator as sub-agents (via `callable_agents` once multi-agent is enabled; until then, spawned via direct `messages.create` calls with structured outputs).
-- **`bl-intent-reconstructor`** — Opus 4.7, extended thinking on. Sub-agent.
-- **`bl-synthesizer`** — Opus 4.7, extended thinking off. Sub-agent.
+- **`bl-curator`** — Opus 4.7, 1M context. System prompt = curator voice + IR playbook anchors. Tools: `agent_toolset_20260401` + custom tool `bl_dispatch_hunter` + custom tool `bl_emit_action`. Skills: custom blacklight skill bundle (case-lifecycle, webshell-families, defense-synthesis, false-positives, hosting-stack, ic-brief-format, …). Memory stores: all five in §below. **This is the Managed Agent.**
+- **`bl-hunter-filesystem`, `bl-hunter-logs`, `bl-hunter-timeline`** — Sonnet 4.6. Separate agent IDs. Dispatched from the curator as sub-agents (via `callable_agents` once multi-agent is enabled; until then, spawned via direct `messages.create` calls with structured outputs).
+- **`bl-intent-reconstructor`** — Opus 4.7. Sub-agent.
+- **`bl-synthesizer`** — Opus 4.7. Sub-agent.
 
 Model choice rationale is load-bearing for the "Why these models" README section — defended in §14 below.
 

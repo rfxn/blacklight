@@ -34,7 +34,7 @@ Scope: architecture, command surface, runtime flow, state model, safety gates, e
                                               ↓
 ┌─ Layer B — Managed Agent session (Anthropic-hosted) ─────────────────────┐
 │                                                                           │
-│  agent         bl-curator  (Opus 4.7 + adaptive thinking + 1M context)   │
+│  agent         bl-curator  (Opus 4.7 + 1M context, Managed Agent session) │
 │  environment   bl-curator-env  (apt: apache2, mod_security2, yara,       │
 │                jq, zstd, duckdb — installed once at env creation)        │
 │  memory store  bl-skills   ~22 operator-voice files, read_only           │
@@ -679,7 +679,7 @@ rendering pass `BL_BRIEF_MIMES=text/markdown` to skip the stage-2 delegate.
 
 ## 12. Model calls
 
-**One model, one agent, three tool-channelled reasoning modes.** v2 runs a single `bl-curator` agent record — Opus 4.7, 1M context, adaptive thinking model-internal — with three custom tools that specialise its emit surface: `report_step` (wrapper actions), `synthesize_defense` (rule/firewall/sig authoring), `reconstruct_intent` (shell-sample analysis). "Synthesizer" and "Intent reconstructor" are NOT separate agents or separate model calls in v2; they are structured-emit modes of the same curator session. This collapse is deliberate — PIVOT-v2.md §4.2 explicitly cuts multi-session hunter dispatch in favor of a single 1M-context curator.
+**One model, one agent, three tool-channelled reasoning modes.** v2 runs a single `bl-curator` agent record — Opus 4.7, 1M context — with three custom tools that specialise its emit surface: `report_step` (wrapper actions), `synthesize_defense` (rule/firewall/sig authoring), `reconstruct_intent` (shell-sample analysis). "Synthesizer" and "Intent reconstructor" are NOT separate agents or separate model calls in v2; they are structured-emit modes of the same curator session. This collapse is deliberate — PIVOT-v2.md §4.2 explicitly cuts multi-session hunter dispatch in favor of a single 1M-context curator.
 
 **Agent-create constraint (verified 2026-04-24 against `managed-agents-2026-04-01`):** `POST /v1/agents` rejects `thinking` and `output_config` as extra inputs (HTTP 400 `invalid_request_error`). The only create-time shape-controls on Managed Agents today are `name`, `model`, `system`, `tools`, `mcp_servers`, `skills`, `callable_agents`, `description`, `metadata`. Thinking is model-internal and not operator-configurable; structured output ships through custom tools.
 
@@ -701,7 +701,7 @@ rendering pass `BL_BRIEF_MIMES=text/markdown` to skip the stage-2 delegate.
   ```
 - Memory stores: `bl-skills` (read-only) + `bl-case` (read-write), attached at session creation as `resources[]`.
 - Lifetime: one session per case; resumable across 30-day checkpoint window; files hot-swap via `/v1/sessions/:sid/resources`.
-- Thinking behavior: Opus 4.7 applies adaptive thinking internally. The `agent.thinking` event stream surfaces thinking content at runtime; blacklight does not control depth or effort — those are model-internal on 4.7.
+- Reasoning behavior: Opus 4.7 reasoning is model-internal. The platform SSE stream surfaces reasoning content at runtime via dedicated event types; blacklight does not configure or control reasoning depth — it is not an operator-settable parameter on the Managed Agents surface.
 
 `schemas/defense.json` and `schemas/intent.json` are stubs as of this commit (authored alongside `report_step`'s wire form when §12.2 / §12.3 land in the build stream).
 
@@ -759,7 +759,7 @@ description:  Propose a defensive payload for this case. Payload kind is one
 input_schema: schemas/defense.json
 ```
 
-Thinking during synthesis is model-internal. The curator's sandbox runs `apachectl -t` on synthesized ModSec rules and FP-scans sigs against `/var/lib/bl/fp-corpus/` before the action is promoted — the validation is sandbox-side, not operator-side. (Schema stub; authored in the §12.2 build stream.)
+Reasoning during synthesis is model-internal. The curator's sandbox runs `apachectl -t` on synthesized ModSec rules and FP-scans sigs against `/var/lib/bl/fp-corpus/` before the action is promoted — the validation is sandbox-side, not operator-side. (Schema stub; authored in the §12.2 build stream.)
 
 ### 12.3 `reconstruct_intent` custom tool (sample-analysis surface)
 
