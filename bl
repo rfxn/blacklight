@@ -1771,7 +1771,17 @@ bl_observe_log_journal() {
 # ---------------------------------------------------------------------------
 bl_observe_file() {
     unset _BL_OBS_ID _BL_OBS_CLUSTER_N
-    local path="${1:-}"
+    local path="" attribution_from=""
+    while (( $# > 0 )); do
+        case "$1" in
+            --attribution-from)
+                [[ -z "${2:-}" ]] && { bl_error_envelope observe "file: --attribution-from requires <attr-id>"; return "$BL_EX_USAGE"; }
+                attribution_from="$2"; shift 2
+                ;;
+            -*) bl_error_envelope observe "file: unknown flag: $1"; return "$BL_EX_USAGE" ;;
+            *)  path="$1"; shift ;;
+        esac
+    done
     if [[ -z "$path" ]]; then
         bl_error_envelope observe "file: <path> required"
         return "$BL_EX_USAGE"
@@ -1824,6 +1834,35 @@ bl_observe_file() {
     local size
     size=$(command stat -c '%s' "$path" 2>/dev/null) || size=$(command stat -f '%z' "$path" 2>/dev/null) || size=0   # BSD stat fallback
 
+    # Optional curator attribution payload (P8: reconstruct_intent reply consumption).
+    # Without --attribution-from the field is null and the JSONL record shape is
+    # unchanged from M5. With it: case-resolve, memstore fetch, schema-check,
+    # embed. Failures propagate as 64/65/67/69/72 (see schemas/intent.md).
+    local attribution_json="null"
+    if [[ -n "$attribution_from" ]]; then
+        if [[ ! "$attribution_from" =~ ^attr-[A-Za-z0-9_-]{1,64}$ ]]; then
+            bl_error_envelope observe "attribution-from: malformed attr_id (expected ^attr-[A-Za-z0-9_-]{1,64}\$)"
+            return "$BL_EX_USAGE"
+        fi
+        local case_id_attr
+        case_id_attr=$(bl_case_current)
+        [[ -z "$case_id_attr" ]] && { bl_error_envelope observe "attribution-from: no active case"; return "$BL_EX_NOT_FOUND"; }
+        local memstore_id
+        memstore_id="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state-file may legitimately be absent on first-run; fall back to canonical default name
+        local attr_body
+        attr_body=$(bl_api_call GET "/v1/memory_stores/$memstore_id/memories/bl-case%2F$case_id_attr%2Fattributions%2F$attribution_from.json") || return $?
+        attribution_json=$(printf '%s' "$attr_body" | jq -r '.content')
+        local attr_tmp
+        attr_tmp=$(command mktemp)
+        printf '%s' "$attribution_json" > "$attr_tmp"
+        local repo_root="${BL_REPO_ROOT:-$(command dirname "$(readlink -f "$0" 2>/dev/null || printf '.')" 2>/dev/null || printf '.')}"   # 2>/dev/null × 2: readlink absent on BSD / $0 may be 'bash' under sourced exec — fall back to CWD
+        if ! bl_jq_schema_check "$repo_root/schemas/intent.json" "$attr_tmp"; then
+            command rm -f "$attr_tmp"
+            return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+        fi
+        command rm -f "$attr_tmp"
+    fi
+
     local stream_path
     stream_path="$(_bl_obs_open_stream 'file')"
 
@@ -1835,7 +1874,8 @@ bl_observe_file() {
         --argjson strings_sample "$strings_sample" \
         --argjson strings_total "$strings_total" \
         --argjson size_bytes "$size" \
-        '{path:$path,sha256:$sha256,magic:$magic,strings_sample:$strings_sample,strings_total:$strings_total,size_bytes:$size_bytes}')
+        --argjson attribution "$attribution_json" \
+        '{path:$path,sha256:$sha256,magic:$magic,strings_sample:$strings_sample,strings_total:$strings_total,size_bytes:$size_bytes,attribution:$attribution}')
     _bl_obs_emit_jsonl 'file.triage' "$rec" "$stream_path" || return "$BL_EX_SCHEMA_VALIDATION_FAIL"
 
     local summary

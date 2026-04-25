@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rfxn.github.io/blacklight/schemas/intent.json",
-  "title": "blacklight reconstruct_intent custom-tool input",
+  "title": "blacklight reconstruct_intent custom-tool input + reply",
   "type": "object",
   "required": ["file_id", "depth", "case_id"],
   "properties": {
@@ -18,6 +18,25 @@
     },
     "reasoning": {
       "type": "string"
+    },
+    "attribution_id": {
+      "type": "string",
+      "pattern": "^attr-[A-Za-z0-9_-]{1,64}$"
+    },
+    "layers_observed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["base64", "gzinflate", "chr_ladder", "rot13", "string_concat", "eval_indirection", "html_polyglot", "binary_polyglot"]
+      }
+    },
+    "observed_capability": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "dormant_capability": {
+      "type": "array",
+      "items": { "type": "string" }
     }
   }
 }
