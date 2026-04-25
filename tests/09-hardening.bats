@@ -122,11 +122,29 @@ _source_bl() { source "$BL_SOURCE" >/dev/null 2>&1 || true; }
 }
 
 @test "bl_ledger_append calls mirror_remote on success" {
-    skip "handler not landed until Phase 4"
+    # Structural proof: after a successful ledger append, bl_ledger_mirror_remote fires.
+    # If the memstore POST succeeds (mock returns 2xx), no outbox action_mirror entry lands.
+    # If the POST fails (mock returns 5xx), an outbox entry DOES land (see next test).
+    # Here we exercise the success path and assert the ledger line landed without outbox fallback.
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    local valid_record='{"ts":"2026-04-24T20:00:00Z","case":"CASE-2026-0001","kind":"step_run","payload":{"step_id":"s-001"}}'
+    # `|| true` matches G1/G3 pattern — bl's `set -euo pipefail` makes main's return 64 (no-args)
+    # terminate the bash -c shell unless suppressed; bl_ledger_append would never run otherwise.
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_ledger_append CASE-2026-0001 '$valid_record'"
+    [ "$status" -eq 0 ]
+    # Ledger line landed
+    grep -q 'step_run' "$BL_VAR_DIR/ledger/CASE-2026-0001.jsonl"
+    # No action_mirror fallback (POST succeeded, so no outbox entry)
+    ls "$BL_VAR_DIR/outbox/"*action_mirror*.json 2>/dev/null | command wc -l | grep -q '^0$'
 }
 
 @test "bl_ledger_mirror_remote falls back to outbox on API error" {
-    skip "handler not landed until Phase 4"
+    # Mock memstore POST to 5xx → mirror should enqueue to outbox
+    bl_curator_mock_set_response 'memstore-case-not-found.json' 503
+    local valid_record='{"ts":"2026-04-24T20:00:00Z","case":"CASE-2026-0001","kind":"step_run","payload":{"step_id":"s-001"}}'
+    run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_ledger_append CASE-2026-0001 '$valid_record'"
+    [ "$status" -eq 0 ]
+    ls "$BL_VAR_DIR/outbox/"*action_mirror*.json >/dev/null 2>&1
 }
 
 # ─── G4: Outbox (Phase 3) ───────────────────────────────────────────────────

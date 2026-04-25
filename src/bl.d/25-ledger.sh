@@ -56,6 +56,30 @@ bl_ledger_append() {
     fi
     printf '%s\n' "$compact_record" >> "$ledger_file"
     exec 200<&-
-    # NOTE: bl_ledger_mirror_remote call added in Phase 4 (depends on 27-outbox.sh)
+    # M9 P4: mirror to bl-case/actions/applied/ best-effort (never affects return code)
+    bl_ledger_mirror_remote "$case_id" "$compact_record" >/dev/null 2>&1 || true   # mirror is best-effort
+    return "$BL_EX_OK"
+}
+
+bl_ledger_mirror_remote() {
+    # bl_ledger_mirror_remote <case-id> <jsonl-record> — 0 (best-effort; no ledger emission)
+    # Cycle-break invariant per spec §4.5 rule 2: the validated-append helper is never invoked from this path.
+    local case_id="$1" record="$2"
+    local ts kind event_id
+    ts=$(printf '%s' "$record" | jq -r '.ts')
+    kind=$(printf '%s' "$record" | jq -r '.kind')
+    event_id=$(printf '%s%s%s' "$ts" "$case_id" "$kind" | sha256sum | cut -c1-16)
+    local target_key="bl-case/$case_id/actions/applied/$event_id.json"
+    local body_tmp
+    body_tmp=$(mktemp)
+    jq -n --arg k "$target_key" --arg c "$record" \
+        '{key:$k, content:$c, metadata:{}}' > "$body_tmp"
+    if ! bl_api_call POST "/v1/memory_stores/${BL_MEMSTORE_CASE_ID:-memstore_bl_case}/memories" "$body_tmp" >/dev/null 2>&1; then   # mirror best-effort; remote may be unreachable
+        # Mirror failed → enqueue to outbox (best-effort; no ledger emission for this failure)
+        local mirror_payload
+        mirror_payload=$(jq -n --argjson r "$record" --arg k "$target_key" '{record:$r, target_key:$k}')
+        bl_outbox_enqueue action_mirror "$mirror_payload" >/dev/null 2>&1 || true   # outbox enqueue best-effort
+    fi
+    command rm -f "$body_tmp"
     return "$BL_EX_OK"
 }

@@ -62,6 +62,8 @@ BOOTSTRAP_EOF
 
     printf '%s' "$BL_AGENT_ID" > "$BL_AGENT_ID_FILE"
     bl_debug "bl_preflight: seeded agent-id $BL_AGENT_ID cached to $BL_AGENT_ID_FILE"
+    # M9 P4: opportunistic outbox drain (best-effort; never fails preflight)
+    bl_outbox_drain --max "$BL_OUTBOX_DRAIN_DEFAULT_MAX" --deadline "$BL_OUTBOX_DRAIN_DEFAULT_DEADLINE_SECS" >/dev/null 2>&1 || true   # drain is best-effort; preflight must still succeed
     return "$BL_EX_OK"
 }
 

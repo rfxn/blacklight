@@ -3,6 +3,18 @@ Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
 
+- M9 P4 | Apr 24 2026 — dual-write mirror + drain hook:
+[Change] src/bl.d/25-ledger.sh — bl_ledger_mirror_remote (best-effort remote
+      replication to bl-case/actions/applied/<event-id>.json; outbox fallback
+      on API error). Cycle-break invariant per spec §4.5 rule 2: mirror path
+      emits no ledger events and never calls the validated-append helper.
+      bl_ledger_append now invokes mirror_remote after successful local append
+      (best-effort; never affects return code).
+[Change] src/bl.d/30-preflight.sh — opportunistic bl_outbox_drain at end of
+      preflight (max=16, deadline=5s; best-effort, never fails preflight).
+[Change] tests/09-hardening.bats — 2 G3 mirror @tests unskipped (mirror_remote
+      success path + outbox fallback on 5xx). All G1+G3+G4+G5+G6-outbox green.
+
 - M9 P3 | Apr 24 2026 — outbox + backpressure + per-kind schemas:
 [New] src/bl.d/27-outbox.sh — bl_outbox_enqueue / bl_outbox_drain /
       bl_outbox_depth / bl_outbox_oldest_age_secs. Filename convention
