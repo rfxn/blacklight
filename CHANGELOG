@@ -18,9 +18,12 @@ https://github.com/rfxn/blacklight
       FP-corpus gate against /var/lib/bl/fp-corpus/; append to custom.hdb /
       custom.ndb / custom.yar; best-effort reload (clamdscan --reload);
       --scanner all fan-out; defend_sig_rejected ledger entry on gate trip.
-[New] schemas/ledger-entry.json — JSONL record schema consumed by M6+
-      (kinds: defend_applied / defend_rollback / defend_refused /
-      defend_sig_rejected + pre-existing M5 kinds).
+[Change] schemas/ledger-event.json — defend_applied / defend_rollback /
+         defend_refused / defend_sig_rejected added to kind enum so M6
+         records pass M9's bl_ledger_append schema validation. (M9 hardening
+         landed before M6 merge; the canonical ledger schema is M9's
+         ledger-event.json — M6's draft ledger-entry.json is removed as
+         redundant.)
 [New] tests/06-defend.bats — 14 fixture-driven scenarios (6 modsec, 4
       firewall, 4 sig) including FP-gate trip, CDN-safelist refusal,
       configtest rollback, ledger schema conformance.

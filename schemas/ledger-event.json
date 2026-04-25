@@ -13,6 +13,8 @@
       "schema_reject", "unknown_tier_deny", "preflight_fail",
       "operator_decline", "step_run",
       "clean_apply", "clean_undo", "clean_unquarantine",
+      "defend_applied", "defend_rollback", "defend_refused",
+      "defend_sig_rejected",
       "outbox_drain", "outbox_retry", "outbox_quarantine",
       "backpressure_reject", "fence_collision_deny",
       "result_schema_reject"
