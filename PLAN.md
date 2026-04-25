@@ -44,7 +44,7 @@ M0 Contracts (spec-only) ─┐
 | M6 | `bl defend` | M1, M5.5 | plan | M7, M8 (disjoint part files) |
 | M7 | `bl clean` | M1, M5.5 | plan | M6, M8 |
 | M8 | `bl setup` implementation | M1, M0, M5.5 | plan | M6, M7 |
-| M9 | Security hardening pass | M4, M5, M3 | spec-then-plan | (solo) |
+| M9 | Security hardening pass — **DONE** (`6595cda..eb6e4f3`) | M4, M5, M3 | spec-then-plan | (solo) |
 | M10 | Ship-ready (README, install, packaging) | M9 | plan | (solo) |
 | M11 | Demo + narrative | M10 | deferred | — |
 
@@ -319,24 +319,24 @@ Any test delta = refactor introduced a bug; bisect the drift by comparing pre/po
 
 ---
 
-### M9 — Security hardening pass (solo, post-M4+M5+M3)
+### M9 — Security hardening pass (solo, post-M4+M5+M3) — **COMPLETE**
 
-**Scope:** Lift DESIGN.md §13 from spec to implementation. This is a cross-cutting pass — new spec needed for implementation-level details.
+**Status:** shipped 2026-04-24 — commits `6595cda..eb6e4f3` (P1-P8 build + P9 sentinel fixup). Tests 168/168 green debian12+rocky9.
+**Spec:** `docs/specs/2026-04-24-M9-hardening-impl.md` (commit `3b24937`).
+**Plan:** `PLAN-M9.md` (working file; not committed).
+**Sentinel:** CONCERNS verdict, 0 MUST-FIX + 6 SHOULD-FIX + 2 INFO — all SHOULD-FIX cleared in P9 fixup `eb6e4f3`; INFO 2 (step_id pattern guard) deferred to M11+.
 
-**Spec-then-plan deliverables:**
+**Delivered:**
+- Fence primitive (`src/bl.d/26-fence.sh`) — derive/wrap/unwrap/kind with token-bound `</untrusted-TOKEN>` close tag (closes payload-escape surface)
+- Outbox primitives (`src/bl.d/27-outbox.sh`) — enqueue/drain/depth/oldest_age, backpressure (HIGH=1000), per-kind schemas (wake/signal_upload/action_mirror)
+- Ledger schema (`schemas/ledger-event.json`, 18 kinds) + validated `bl_ledger_append` + `bl_ledger_mirror_remote` (best-effort dual-write to `bl-case/actions/applied/`)
+- Run writeback fence-wrap + result envelope schema (`schemas/result.json`)
+- Consult wake migration to `bl_outbox_enqueue` + fenced trigger
+- `bl flush --outbox` CLI verb
+- 4-class injection corpus (`tests/fixtures/injection-corpus/`) + 29-test hardening suite
+- Cycle-break invariants verified at every call site (enqueue/mirror/drain)
 
-Spec first (`docs/hardening-impl.md`):
-- Fence token derivation: `sha256(case_id||payload||nonce)[:16]` — exact format, where it's generated, where it's verified
-- Untrusted-content wrapping format on evidence records (prefix/suffix, escape rules for the fence token inside the wrapped content)
-- jq schema-check invocation pattern for step emissions at `bl run` entry
-- Local ledger JSONL shape at `/var/lib/bl/ledger/<case-id>.jsonl`; sync semantics with `bl-case/actions/applied/`
-- Rate-limit queue: `outbox/` filename convention, drain policy, backpressure
-
-Plan implements the spec against existing M4/M5/M3 code.
-
-Test deliverables:
-- `tests/09-hardening.bats` — injection corpus per §13.2 taxonomy (ignore-previous, role reassignment, schema override, verdict flip); each attack fixture is a pending-step JSON with adversarial content in a field the curator authored; assert `bl run` rejects with the right exit code and writes a ledger entry.
-- `tests/fixtures/injection-corpus/` — one file per attack class; canonical form documented in the hardening spec.
+**Original scope (preserved for reference):** Lift DESIGN.md §13 from spec to implementation. Spec-then-plan: spec at `docs/specs/2026-04-24-M9-hardening-impl.md`, plan at `PLAN-M9.md`. Tests: `tests/09-hardening.bats` injection corpus per §13.2 taxonomy (ignore-previous, role-reassignment, schema-override, verdict-flip).
 
 ---
 
