@@ -27,6 +27,48 @@ Always load, regardless of signal. Minimum set; cheap; universally useful.
 
 ## Route by observable signal
 
+### Before any defend.* step (substrate enumeration is a precondition)
+
+```
+IF defend.* step pending AND substrate-report not yet read this case
+  → load ride-the-substrate/SKILL.md FIRST
+  AND ride-the-substrate/enumeration-before-action.md
+IF webserver != Apache OR substrate-report flags webserver.litespeed
+  → ALSO load ride-the-substrate/apache-vs-nginx-vs-litespeed.md
+IF defend firewall pending
+  → ALSO load ride-the-substrate/firewall-backend-divergence.md
+IF bl observe log * pending
+  → ALSO load ride-the-substrate/journal-vs-syslog-vs-files.md
+IF host-tampering hypothesis under construction
+  → ALSO load ride-the-substrate/package-integrity-as-baseline.md
+```
+
+### When the host predates systemd or the /usr merge
+
+```
+IF substrate-report os.id ∈ {centos6, rhel6, ubuntu1204, ubuntu1404}
+   OR substrate-report bash.version < 4.2
+   OR substrate-report os.usrmerge = false
+   OR substrate-report init.system ∈ {sysvinit, upstart}
+  → load legacy-os-pitfalls/SKILL.md
+  AND legacy-os-pitfalls/pre-usr-merge-coreutils.md (if usrmerge = false)
+  AND legacy-os-pitfalls/no-systemd-no-journal.md (if init != systemd)
+  AND legacy-os-pitfalls/bash-4.1-floor-features.md (if bash.version < 4.2)
+IF curator authoring shell content for clean.* or defend.* step
+  → ALSO load legacy-os-pitfalls/bash-4.1-floor-features.md (always — protects modern hosts from regression)
+```
+
+### When the case opens against a fresh advisory (--sweep-mode --cve <id>)
+
+```
+IF bl consult --sweep-mode --cve OR trigger names a CVE / advisory ID
+  → load agentic-minutes-playbook/SKILL.md
+  AND agentic-minutes-playbook/advisory-to-detection-flow.md
+  AND agentic-minutes-playbook/pre-alert-deployment.md
+  AND existing apsb25-94/exploit-chain.md (worked example)
+  AND existing apsb25-94/indicators.md
+```
+
 ### When the stack includes Magento
 
 ```
@@ -120,6 +162,17 @@ IF compromise topology spans multiple hosts on shared platform
   → load hosting-stack/cpanel-anatomy.md
   AND IF CloudLinux indicators present (/var/cagefs/, /var/lve/)
     → ALSO load hosting-stack/cloudlinux-cagefs-quirks.md
+IF substrate-report shared_hosting_layer != none
+  → load shared-hosting-attack-shapes/SKILL.md
+  AND IF shared_hosting_layer = cpanel
+    → load shared-hosting-attack-shapes/cpanel-vhost-anatomy.md
+    AND existing hosting-stack/cpanel-anatomy.md (sibling layout reference)
+  AND IF shared_hosting_layer = plesk
+    → load shared-hosting-attack-shapes/plesk-vhost-anatomy.md
+  AND IF shared_hosting_layer = directadmin
+    → load shared-hosting-attack-shapes/directadmin-vhost-anatomy.md
+  AND IF reasoning about file-permission evidence
+    → ALSO load shared-hosting-attack-shapes/homedir-perms-traps.md
 ```
 
 ### When false-positive triage is needed
@@ -197,6 +250,10 @@ is the wrong cut.
 - `ic-brief-format/` (brief conventions + compliance addendum)
 - `ioc-aggregation/` (feature-based pattern extraction)
 - `remediation/cleanup-choreography.md` — cleanup ordering
+- `ride-the-substrate/` (substrate enumeration before defense synthesis)
+- `legacy-os-pitfalls/` (CentOS 6 / pre-systemd / pre-/usr-merge / bash 4.1 floor)
+- `shared-hosting-attack-shapes/` (cPanel / Plesk / DirectAdmin compromise tells)
+- `agentic-minutes-playbook/` (advisory-driven detection emit + pre-alert gate)
 
 The rest — `apsb25-94/`, `modsec-grammar/`, `apf-grammar/`, `magento-attacks/`,
 `linux-forensics/`, `obfuscation/`, `timeline/`, `actor-attribution/` (and
@@ -207,7 +264,7 @@ MITRE / Sansec / OWASP / upstream documentation.
 
 ## Bundle depth
 
-46 skill files across 16 subtrees. Depth over breadth — every file satisfies
+64 skill files across 20 subtrees. Depth over breadth — every file satisfies
 `DESIGN.md §9.2` (scenario-first opening, non-obvious rule, public-source
 example, named failure mode). Three operator-facing concerns originally
 gap-flagged in `ir-playbook/case-lifecycle.md` (escalation routing, FP
