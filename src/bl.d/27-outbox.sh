@@ -12,7 +12,6 @@ readonly BL_OUTBOX_WATERMARK_HIGH=1000
 readonly BL_OUTBOX_WATERMARK_WARN=500
 readonly BL_OUTBOX_DRAIN_DEFAULT_MAX=16
 readonly BL_OUTBOX_DRAIN_DEFAULT_DEADLINE_SECS=5
-# shellcheck disable=SC2034  # consumed by P4 preflight age-based drain trigger
 readonly BL_OUTBOX_AGE_WARN_SECS=3600
 readonly BL_OUTBOX_RETRY_MAX=3
 
