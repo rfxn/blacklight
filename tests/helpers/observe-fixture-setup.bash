@@ -89,3 +89,19 @@ stage_fs_mtime_cluster() {
     touch -d "2026-04-23T14:22:10Z" "$dest_dir/f.php"
     touch -d "2026-04-23T14:22:11Z" "$dest_dir/g.php"
 }
+
+stage_substrate_fixture() {
+    # $1 = probe-root directory (will be created); seeds /etc/os-release and
+    # /run/systemd/system to look like a debian12 host. Tests that want
+    # missing-tool degradation pass an empty mktemp -d directly without
+    # calling this helper.
+    local root="$1"
+    mkdir -p "$root/etc" "$root/run/systemd/system"
+    cat > "$root/etc/os-release" <<'EOF'
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+NAME="Debian GNU/Linux"
+VERSION_ID="12"
+VERSION="12 (bookworm)"
+ID=debian
+EOF
+}

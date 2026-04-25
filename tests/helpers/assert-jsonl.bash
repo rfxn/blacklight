@@ -114,6 +114,13 @@ assert_jsonl_record() {
                 .source == "sig.loaded" and
                 (.record | has("scanner"))' >/dev/null
             ;;
+        substrate.category)
+            echo "$line" | jq -e '
+                .source == "substrate.category" and
+                (.record | (
+                    has("category") and has("present") and has("detected")
+                ))' >/dev/null
+            ;;
         observe.summary)
             echo "$line" | jq -e '
                 .source == "observe.summary" and

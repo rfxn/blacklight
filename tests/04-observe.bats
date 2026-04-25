@@ -597,6 +597,81 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# Group: substrate — bl_observe_substrate (host-substrate enumeration)
+# ---------------------------------------------------------------------------
+
+@test "bl observe: 'substrate' dispatches to bl_observe_substrate" {
+    run "$BL_SOURCE" observe substrate
+    [ "$status" -eq 0 ]
+}
+
+@test "bl observe substrate: rejects unknown options" {
+    run "$BL_SOURCE" observe substrate --bogus
+    [ "$status" -eq 64 ]
+    [[ "$output" == *"no options accepted"* ]]
+}
+
+@test "bl observe substrate: emits >= 13 JSONL lines (12 records + summary)" {
+    run "$BL_SOURCE" observe substrate
+    [ "$status" -eq 0 ]
+    local json_count
+    json_count=$(printf '%s\n' "$output" | grep -c '^{') || true
+    [ "$json_count" -ge 13 ]
+}
+
+@test "bl observe substrate: every record has substrate.category source + JSONL preamble" {
+    run "$BL_SOURCE" observe substrate
+    [ "$status" -eq 0 ]
+    local first
+    first=$(printf '%s\n' "$output" | grep '^{' | head -1)
+    assert_jsonl_preamble "$first"
+    assert_jsonl_record "$first" substrate.category
+}
+
+@test "bl observe substrate: every category record carries category + present + detected" {
+    run "$BL_SOURCE" observe substrate
+    [ "$status" -eq 0 ]
+    local cat_lines
+    cat_lines=$(printf '%s\n' "$output" | grep '^{' | jq -c 'select(.source == "substrate.category")')
+    [ -n "$cat_lines" ]
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        printf '%s' "$line" | jq -e 'has("record") and (.record | has("category") and has("present") and has("detected"))' >/dev/null
+    done <<<"$cat_lines"
+}
+
+@test "bl observe substrate: missing-tool degradation does not fail the verb" {
+    local empty_root
+    empty_root=$(mktemp -d)
+    run env BL_SUBSTRATE_PROBE_ROOT="$empty_root" PATH="/usr/bin:/bin" \
+        BL_VAR_DIR="$BL_VAR_DIR" ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" BL_HOST_LABEL="$BL_HOST_LABEL" \
+        "$BL_SOURCE" observe substrate
+    [ "$status" -eq 0 ]
+    rm -rf "$empty_root"
+}
+
+@test "bl observe substrate: summary trailer carries categories_present + categories_absent + elapsed_ms" {
+    run "$BL_SOURCE" observe substrate
+    [ "$status" -eq 0 ]
+    local last
+    last=$(printf '%s\n' "$output" | grep '^{' | tail -1)
+    [[ "$last" == *"observe.summary"* ]]
+    [[ "$last" == *"categories_present"* ]]
+    [[ "$last" == *"categories_absent"* ]]
+    [[ "$last" == *"elapsed_ms"* ]]
+}
+
+@test "bl observe substrate: completes in under 3 seconds on CI" {
+    local start_s end_s elapsed
+    start_s=$(date +%s)
+    run "$BL_SOURCE" observe substrate
+    end_s=$(date +%s)
+    [ "$status" -eq 0 ]
+    elapsed=$((end_s - start_s))
+    [ "$elapsed" -lt 3 ]
+}
+
+# ---------------------------------------------------------------------------
 # Group: bundle — bl_bundle_build
 # ---------------------------------------------------------------------------
 

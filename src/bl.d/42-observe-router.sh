@@ -249,6 +249,7 @@ bl_observe() {
             ;;
         firewall) bl_observe_firewall "$@"; return $? ;;
         sigs)     bl_observe_sigs "$@"; return $? ;;
+        substrate) bl_observe_substrate "$@"; return $? ;;
         bundle)   bl_bundle_build "$@"; return $? ;;
         *)
             bl_error_envelope observe "unknown sub-verb: $sub"
