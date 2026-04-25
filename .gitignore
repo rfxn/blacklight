@@ -35,3 +35,21 @@ Thumbs.db
 !.env.example
 .secrets/*
 !.secrets/env.example
+
+# demo collateral — operator-local until pre-recording.
+# Paths preserved on the working tree (PLAN.md / CHANGELOG / schemas
+# cross-references resolve locally); never surfaced via the public repo.
+docs/demo-*.md
+docs/live-traces/
+
+# planning surface — specs + plans live operator-local alongside PLAN-M*.md.
+# Source/CHANGELOG references stay grep-resolvable on the working tree.
+docs/specs/
+docs/plans/
+
+# build collateral — dev-internal capture, distillation, and scaffolding.
+# Files stay on disk for grep/runtime cross-references; never published.
+docs/install-validation.md
+docs/managed-agents.md
+pkg/test/
+scripts/synthesize-fixture-logs.sh
