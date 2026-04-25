@@ -39,13 +39,13 @@ bl observe fs --mtime-since --since 2026-03-20T00:00:00Z --under /var/www/html -
 ```
 
 ```
-blacklight: obs-0001 apache log sweep complete — 3 findings
-  url_evasion  203.0.113.42  GET /pub/media/catalog/product/.cache/a.php/banner.jpg  (14:22:07Z)
-  url_evasion  203.0.113.42  POST /pub/media/catalog/product/.cache/a.php  (14:23:51Z)
-  url_evasion  203.0.113.42  GET /pub/media/catalog/product/.cache/a.php/logo.gif  (14:31:09Z)
+blacklight: obs-0001 apache log records → bl-case/CASE-2026-0001/evidence/obs-0001-apache.transfer.json (3 records)
+{"ts":"2026-03-22T14:22:07Z","host":"magento-prod-01","source":"apache.transfer","record":{"client_ip":"203.0.113.42","method":"GET","path":"/pub/media/catalog/product/.cache/a.php/banner.jpg","status":200,"path_class":"polyglot","is_post_to_php":false}}
+{"ts":"2026-03-22T14:23:51Z","host":"magento-prod-01","source":"apache.transfer","record":{"client_ip":"203.0.113.42","method":"POST","path":"/pub/media/catalog/product/.cache/a.php","status":200,"path_class":"php_in_cache","is_post_to_php":true}}
+{"ts":"2026-03-22T14:31:09Z","host":"magento-prod-01","source":"apache.transfer","record":{"client_ip":"203.0.113.42","method":"GET","path":"/pub/media/catalog/product/.cache/a.php/logo.gif","status":200,"path_class":"polyglot","is_post_to_php":false}}
 
-blacklight: obs-0002 fs scan complete — 1 finding
-  unusual_php_path  /var/www/html/pub/media/catalog/product/.cache/a.php  (mtime 2026-03-21T23:58Z)
+blacklight: obs-0002 fs records → bl-case/CASE-2026-0001/evidence/obs-0002-fs.mtime-since.json (1 record)
+{"ts":"2026-04-25T00:00:00Z","host":"magento-prod-01","source":"fs.mtime-since","record":{"path":"/var/www/html/pub/media/catalog/product/.cache/a.php","mtime":"2026-03-21T23:58Z","ext":"php"}}
 ```
 
 **Step 2 — open a case and consult the curator:**
