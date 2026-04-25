@@ -4,6 +4,7 @@
 
 setup() {
     BL_SOURCE="${BL_SOURCE:-$BATS_TEST_DIRNAME/../bl}"
+    export BL_REPO_ROOT="$BATS_TEST_DIRNAME/.."
     export BL_VAR_DIR="$(mktemp -d)"
 }
 
@@ -124,4 +125,32 @@ teardown() {
     run "$BL_SOURCE"
     [ "$status" -eq 64 ]
     [[ "$output" == *"no command"* ]]
+}
+
+@test "bl <verb> --help dispatches per-verb (all verbs)" {
+    for verb in observe consult run defend clean case setup flush; do
+        run "$BL_SOURCE" "$verb" --help
+        [ "$status" -eq 0 ]
+        [[ "$output" == bl*"$verb"*—* ]] || { echo "verb=$verb output=$output"; return 1; }
+    done
+}
+
+@test "bl --version matches src/bl.d/00-header.sh BL_VERSION" {
+    run "$BL_SOURCE" --version
+    [ "$status" -eq 0 ]
+    # Locate the source header; the container copies the full project to
+    # /opt/blacklight-src while BL_SOURCE lives at /opt/bl.
+    local header_file
+    header_file="${BL_REPO_ROOT}/src/bl.d/00-header.sh"
+    if [[ ! -r "$header_file" ]]; then
+        header_file="/opt/blacklight-src/src/bl.d/00-header.sh"
+    fi
+    src_ver=$(grep -oE 'readonly BL_VERSION="[^"]+"' "$header_file" | awk -F'"' '{print $2}')
+    [[ "$output" == "bl $src_ver" ]]
+}
+
+@test "bl unknown-verb --help rejects with usage error" {
+    run "$BL_SOURCE" bogus-verb --help
+    [ "$status" -eq 64 ]
+    [[ "$output" == *"unknown command"* ]]
 }

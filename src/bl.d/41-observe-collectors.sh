@@ -1071,5 +1071,308 @@ bl_observe_sigs() {
 }
 
 # ---------------------------------------------------------------------------
+# bl_observe_substrate — host-substrate enumeration (12 categories, read-only)
+# ---------------------------------------------------------------------------
+# Emits one substrate.category record per axis the curator reasons about
+# before authoring defense: kernel, libc, init, web, firewall, scanner,
+# log_surface, cron, package_mgr, integrity, panel, virtualization. The
+# substrate report is the curator's action-menu — without it every defend.*
+# step is guesswork. Read-only: zero filesystem writes, zero network calls.
+# Test affordance: BL_SUBSTRATE_PROBE_ROOT prefixes filesystem reads so a
+# stripped-PATH + empty-root run exercises the missing-tool degradation path.
+bl_observe_substrate() {
+    unset _BL_OBS_ID _BL_OBS_CLUSTER_N
+
+    if [[ $# -gt 0 ]]; then
+        bl_error_envelope observe "substrate: no options accepted (got: $1)"
+        return "$BL_EX_USAGE"
+    fi
+
+    local R="${BL_SUBSTRATE_PROBE_ROOT:-}"
+    local stream_path
+    stream_path="$(_bl_obs_open_stream 'substrate')"
+
+    local start_s end_s
+    start_s=$(command date +%s)
+
+    local categories_present=()
+    local categories_absent=()
+
+    _emit_substrate() {
+        local category="$1"
+        local present_str="$2"   # "true" or "false" — JSON literal
+        local extra_json="$3"    # additional fields object
+        if [[ "$present_str" == "true" ]]; then
+            categories_present+=("$category")
+        else
+            categories_absent+=("$category")
+        fi
+        local rec
+        rec=$(jq -n -c \
+            --arg category "$category" \
+            --argjson present "$present_str" \
+            --argjson extra "$extra_json" \
+            '$extra + {category:$category, present:$present}') || return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+        _bl_obs_emit_jsonl 'substrate.category' "$rec" "$stream_path" || return "$?"
+    }
+
+    # 1. kernel + distro
+    local os_id="" os_version_id="" kernel_release="" kernel_machine=""
+    kernel_release=$(command uname -r 2>/dev/null) || true   # uname missing on stripped PATH — empty acceptable
+    kernel_machine=$(command uname -m 2>/dev/null) || true   # uname missing on stripped PATH — empty acceptable
+    if [[ -r "$R/etc/os-release" ]]; then
+        os_id=$(command grep -E '^ID=' "$R/etc/os-release" | command head -1 | command sed -E 's/^ID=//;s/^"//;s/"$//') || true   # grep exit 1 when missing — empty acceptable
+        os_version_id=$(command grep -E '^VERSION_ID=' "$R/etc/os-release" | command head -1 | command sed -E 's/^VERSION_ID=//;s/^"//;s/"$//') || true   # grep exit 1 when missing — empty acceptable
+    fi
+    local kernel_extra
+    kernel_extra=$(jq -n -c \
+        --arg os_id "$os_id" \
+        --arg os_version_id "$os_version_id" \
+        --arg kernel_release "$kernel_release" \
+        --arg kernel_machine "$kernel_machine" \
+        '{os_id:$os_id,os_version_id:$os_version_id,kernel_release:$kernel_release,kernel_machine:$kernel_machine,detected:[]}')
+    if [[ -n "$kernel_release" || -n "$os_id" ]]; then
+        _emit_substrate "kernel" true "$kernel_extra"
+    else
+        _emit_substrate "kernel" false "$kernel_extra"
+    fi
+
+    # 2. libc
+    local libc_flavor="unknown" libc_version=""
+    if command -v ldd >/dev/null 2>&1; then
+        local ldd_out
+        ldd_out=$(command ldd --version 2>&1 | command head -1) || true   # ldd --version exits 1 on musl — fallthrough handles it
+        # GNU/glibc ldd output varies: "ldd (GNU libc) 2.39" / "ldd (Ubuntu GLIBC 2.35-...)" / "ldd (Debian GLIBC 2.36-...)"
+        if [[ "$ldd_out" == *"GLIBC"* || "$ldd_out" == *"GNU libc"* || "$ldd_out" == *"GNU C Library"* || "$ldd_out" == *"glibc"* ]]; then
+            libc_flavor="glibc"
+            libc_version=$(printf '%s' "$ldd_out" | command grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | command head -1) || true   # version extraction may fail on unexpected output — empty acceptable
+        elif [[ "$ldd_out" == *"musl"* ]]; then
+            libc_flavor="musl"
+            libc_version=$(printf '%s' "$ldd_out" | command grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | command head -1) || true   # version extraction may fail — empty acceptable
+        fi
+    fi
+    local libc_extra
+    libc_extra=$(jq -n -c --arg flavor "$libc_flavor" --arg version "$libc_version" '{flavor:$flavor,version:$version,detected:[]}')
+    if [[ "$libc_flavor" != "unknown" ]]; then
+        _emit_substrate "libc" true "$libc_extra"
+    else
+        _emit_substrate "libc" false "$libc_extra"
+    fi
+
+    # 3. init system
+    local init_flavor="unknown"
+    if [[ -d "$R/run/systemd/system" ]]; then
+        init_flavor="systemd"
+    elif command -v openrc-init >/dev/null 2>&1 || [[ -d "$R/etc/runlevels" ]]; then
+        init_flavor="openrc"
+    elif [[ -f "$R/etc/inittab" && -d "$R/etc/init" ]]; then
+        init_flavor="upstart"
+    elif [[ -f "$R/etc/inittab" || -d "$R/etc/init.d" ]]; then
+        init_flavor="sysvinit"
+    fi
+    local init_extra
+    init_extra=$(jq -n -c --arg flavor "$init_flavor" '{flavor:$flavor,detected:[]}')
+    if [[ "$init_flavor" != "unknown" ]]; then
+        _emit_substrate "init" true "$init_extra"
+    else
+        _emit_substrate "init" false "$init_extra"
+    fi
+
+    # 4. web server + modsec
+    local web_detected='[]' web_present="false" modsec_loaded="false"
+    local _web_probe
+    for _web_probe in httpd apache2 nginx lighttpd openlitespeed litespeed; do
+        if command -v "$_web_probe" >/dev/null 2>&1; then
+            local _path
+            _path=$(command -v "$_web_probe")
+            web_detected=$(printf '%s' "$web_detected" | jq -c --arg n "$_web_probe" --arg p "$_path" '. + [{name:$n,version:null,path:$p,evidence:"command -v"}]')
+            web_present="true"
+        fi
+    done
+    if [[ -f "$R/etc/httpd/modules/mod_security2.so" \
+       || -f "$R/etc/apache2/mods-enabled/security2.load" \
+       || -d "$R/etc/modsecurity" \
+       || -d "$R/etc/apache2/modsecurity.d" ]]; then
+        modsec_loaded="true"
+    fi
+    local web_extra
+    web_extra=$(jq -n -c --argjson detected "$web_detected" --argjson modsec_loaded "$modsec_loaded" '{detected:$detected,modsec_loaded:$modsec_loaded}')
+    _emit_substrate "web" "$web_present" "$web_extra"
+
+    # 5. firewall — reuse helper
+    local fw_backend
+    if fw_backend=$(_bl_obs_detect_firewall 2>/dev/null); then
+        local fw_extra
+        fw_extra=$(jq -n -c --arg backend "$fw_backend" '{backend:$backend,detected:[{name:$backend,version:null,path:null,evidence:"_bl_obs_detect_firewall"}]}')
+        _emit_substrate "firewall" true "$fw_extra"
+    else
+        local fw_extra
+        fw_extra=$(jq -n -c '{backend:"none",detected:[]}')
+        _emit_substrate "firewall" false "$fw_extra"
+    fi
+
+    # 6. scanner stack (presence-only)
+    local scanner_present_list='[]' scanner_present="false"
+    local _sc_probe _sc_pairs="maldet:lmd clamscan:clamav yara:yara rkhunter:rkhunter"
+    for _sc_probe in $_sc_pairs; do
+        local _bin="${_sc_probe%%:*}" _name="${_sc_probe##*:}"
+        if command -v "$_bin" >/dev/null 2>&1; then
+            scanner_present_list=$(printf '%s' "$scanner_present_list" | jq -c --arg n "$_name" '. + [$n]')
+            scanner_present="true"
+        fi
+    done
+    local scanner_extra
+    scanner_extra=$(jq -n -c --argjson present_list "$scanner_present_list" '{present_list:$present_list,detected:[]}')
+    _emit_substrate "scanner" "$scanner_present" "$scanner_extra"
+
+    # 7. log surface
+    local log_flavor="none" log_journalctl_avail="false"
+    if command -v journalctl >/dev/null 2>&1; then
+        log_journalctl_avail="true"
+        log_flavor="journald"
+    elif [[ -d "$R/etc/rsyslog.d" || -f "$R/etc/rsyslog.conf" ]]; then
+        log_flavor="rsyslog"
+    elif [[ -f "$R/etc/syslog-ng/syslog-ng.conf" ]]; then
+        log_flavor="syslog-ng"
+    elif [[ -f "$R/etc/syslog.conf" ]]; then
+        log_flavor="syslog"
+    fi
+    local log_extra
+    log_extra=$(jq -n -c --arg flavor "$log_flavor" --argjson journalctl_available "$log_journalctl_avail" '{flavor:$flavor,journalctl_available:$journalctl_available,detected:[]}')
+    if [[ "$log_flavor" != "none" ]]; then
+        _emit_substrate "log_surface" true "$log_extra"
+    else
+        _emit_substrate "log_surface" false "$log_extra"
+    fi
+
+    # 8. cron
+    local cron_flavors='[]' cron_present="false"
+    if [[ -d "$R/etc/cron.d" ]]; then
+        cron_flavors=$(printf '%s' "$cron_flavors" | jq -c '. + ["cron.d"]'); cron_present="true"
+    fi
+    if command -v crontab >/dev/null 2>&1; then
+        cron_flavors=$(printf '%s' "$cron_flavors" | jq -c '. + ["crontab"]'); cron_present="true"
+    fi
+    if [[ -d "$R/etc/systemd/system" ]] && command -v systemctl >/dev/null 2>&1; then
+        if command find "$R/etc/systemd/system" -maxdepth 2 -name '*.timer' 2>/dev/null | command head -1 | command grep -q .; then
+            cron_flavors=$(printf '%s' "$cron_flavors" | jq -c '. + ["systemd-timers"]'); cron_present="true"
+        fi
+    fi
+    if command -v fcron >/dev/null 2>&1; then
+        cron_flavors=$(printf '%s' "$cron_flavors" | jq -c '. + ["fcron"]'); cron_present="true"
+    fi
+    local cron_extra
+    cron_extra=$(jq -n -c --argjson flavors "$cron_flavors" '{flavors:$flavors,detected:[]}')
+    _emit_substrate "cron" "$cron_present" "$cron_extra"
+
+    # 9. package manager
+    local pkg_flavor="unknown"
+    if command -v rpm >/dev/null 2>&1; then pkg_flavor="rpm"
+    elif command -v dpkg >/dev/null 2>&1; then pkg_flavor="dpkg"
+    elif command -v apk >/dev/null 2>&1; then pkg_flavor="apk"
+    elif command -v emerge >/dev/null 2>&1; then pkg_flavor="portage"
+    elif command -v pkg >/dev/null 2>&1; then pkg_flavor="pkg"
+    fi
+    local pkg_extra
+    pkg_extra=$(jq -n -c --arg flavor "$pkg_flavor" '{flavor:$flavor,detected:[]}')
+    if [[ "$pkg_flavor" != "unknown" ]]; then
+        _emit_substrate "package_mgr" true "$pkg_extra"
+    else
+        _emit_substrate "package_mgr" false "$pkg_extra"
+    fi
+
+    # 10. integrity tooling
+    local integrity_tools='[]' integrity_present="false"
+    if command -v rpm >/dev/null 2>&1; then
+        integrity_tools=$(printf '%s' "$integrity_tools" | jq -c '. + ["rpm-V"]'); integrity_present="true"
+    fi
+    if command -v dpkg >/dev/null 2>&1; then
+        integrity_tools=$(printf '%s' "$integrity_tools" | jq -c '. + ["dpkg-verify"]'); integrity_present="true"
+    fi
+    if command -v debsums >/dev/null 2>&1; then
+        integrity_tools=$(printf '%s' "$integrity_tools" | jq -c '. + ["debsums"]'); integrity_present="true"
+    fi
+    if command -v aide >/dev/null 2>&1; then
+        integrity_tools=$(printf '%s' "$integrity_tools" | jq -c '. + ["aide"]'); integrity_present="true"
+    fi
+    if command -v tripwire >/dev/null 2>&1; then
+        integrity_tools=$(printf '%s' "$integrity_tools" | jq -c '. + ["tripwire"]'); integrity_present="true"
+    fi
+    local integrity_extra
+    integrity_extra=$(jq -n -c --argjson tools "$integrity_tools" '{tools:$tools,detected:[]}')
+    _emit_substrate "integrity" "$integrity_present" "$integrity_extra"
+
+    # 11. shared-hosting panel
+    local panel_flavor="none" panel_version=""
+    if [[ -d "$R/usr/local/cpanel" ]]; then
+        panel_flavor="cpanel"
+        # shellcheck disable=SC2015  # A && B || true is intentional: empty version is acceptable when file is absent/unreadable
+        [[ -r "$R/usr/local/cpanel/version" ]] && panel_version=$(command head -1 "$R/usr/local/cpanel/version" 2>/dev/null) || true   # version file may be absent on partial installs — empty acceptable
+    elif [[ -d "$R/usr/local/psa" || -d "$R/opt/psa" ]]; then
+        panel_flavor="plesk"
+    elif [[ -d "$R/usr/local/directadmin" ]]; then
+        panel_flavor="directadmin"
+    elif [[ -d "$R/usr/local/CyberCP" ]]; then
+        panel_flavor="cyberpanel"
+    elif [[ -d "$R/usr/local/cwpsrv" ]]; then
+        panel_flavor="cwp"
+    elif [[ -d "$R/usr/local/vesta" ]]; then
+        panel_flavor="vesta"
+    fi
+    local panel_extra
+    panel_extra=$(jq -n -c --arg flavor "$panel_flavor" --arg version "$panel_version" '{flavor:$flavor,version:$version,detected:[]}')
+    if [[ "$panel_flavor" != "none" ]]; then
+        _emit_substrate "panel" true "$panel_extra"
+    else
+        _emit_substrate "panel" false "$panel_extra"
+    fi
+
+    # 12. virtualization
+    local virt_flavor="bare"
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        local _v
+        _v=$(command systemd-detect-virt 2>/dev/null) || _v="none"
+        case "$_v" in
+            none) virt_flavor="bare" ;;
+            kvm|qemu) virt_flavor="kvm" ;;
+            lxc|lxc-libvirt) virt_flavor="lxc" ;;
+            docker) virt_flavor="docker" ;;
+            vmware) virt_flavor="vmware" ;;
+            *) [[ -n "$_v" && "$_v" != "none" ]] && virt_flavor="$_v" ;;
+        esac
+    elif [[ -e "$R/.dockerenv" ]]; then
+        virt_flavor="docker"
+    elif [[ -d "$R/proc/vz" ]]; then
+        virt_flavor="openvz"
+    elif [[ -r "$R/proc/1/cgroup" ]]; then
+        if command grep -qE 'docker|kubepods' "$R/proc/1/cgroup" 2>/dev/null; then virt_flavor="docker"
+        elif command grep -q 'lxc' "$R/proc/1/cgroup" 2>/dev/null; then virt_flavor="lxc"
+        fi
+    fi
+    local virt_extra
+    virt_extra=$(jq -n -c --arg flavor "$virt_flavor" '{flavor:$flavor,detected:[]}')
+    _emit_substrate "virtualization" true "$virt_extra"
+
+    end_s=$(command date +%s)
+    local elapsed_ms=$(( (end_s - start_s) * 1000 ))
+
+    local present_json missing_json
+    present_json=$(printf '%s\n' "${categories_present[@]+"${categories_present[@]}"}" | jq -Rsc 'split("\n")|map(select(.!=""))' 2>/dev/null) || present_json='[]'   # jq fails on empty array — fallback safe
+    missing_json=$(printf '%s\n' "${categories_absent[@]+"${categories_absent[@]}"}" | jq -Rsc 'split("\n")|map(select(.!=""))' 2>/dev/null) || missing_json='[]'   # jq fails on empty array — fallback safe
+
+    local summary
+    summary=$(jq -n -c \
+        --argjson total 12 \
+        --argjson present "$present_json" \
+        --argjson missing "$missing_json" \
+        --argjson elapsed_ms "$elapsed_ms" \
+        '{source:"substrate.category",total_records:$total,categories_present:$present,categories_absent:$missing,elapsed_ms:$elapsed_ms}')
+    _bl_obs_close_stream "$stream_path" 'substrate.category' "$summary"
+
+    unset -f _emit_substrate
+    return "$BL_EX_OK"
+}
+
+# ---------------------------------------------------------------------------
 # bl_bundle_build — package current case evidence into a .tgz bundle
 # ---------------------------------------------------------------------------

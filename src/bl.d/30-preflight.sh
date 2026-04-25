@@ -76,16 +76,17 @@ bl_usage() {
 bl — blacklight operator CLI
 
 Usage: bl <command> [options]
+       bl <command> --help      per-verb help
 
 Commands:
-  observe   Read-only evidence extraction (logs, fs, crons, htaccess)  [M4]
-  consult   Open / attach to an investigation case                      [M5]
-  run       Execute an agent-prescribed step                            [M5]
-  case      Inspect, log, close, reopen cases                           [M5]
-  defend    Apply agent-authored defensive payload (ModSec, FW, sig)    [M6]
-  clean     Apply agent-prescribed remediation (diff-confirmed)         [M7]
-  setup     Provision or sync the Anthropic workspace                   [M8]
-  flush     Drain outbox (cron-driven or on-demand)                     [M9]
+  observe   Read-only evidence extraction (logs/fs/crons/htaccess/substrate)
+  consult   Open / attach an investigation case via the curator agent
+  run       Execute an agent-prescribed step (tier-gated)
+  defend    Apply a defensive payload (modsec / firewall / signature)
+  clean     Apply remediation (diff-confirmed; quarantine preserved)
+  case      Inspect / log / close / reopen cases
+  setup     Provision or sync the Anthropic workspace
+  flush     Drain queued outbox records
 
 Options:
   -h, --help       show this message
@@ -93,7 +94,7 @@ Options:
 
 Environment:
   ANTHROPIC_API_KEY  (required)  your Anthropic workspace API key
-  BL_LOG_LEVEL       (optional)  one of {debug,info,warn,error} — default info
+  BL_LOG_LEVEL       (optional)  one of {debug,info,warn,error}
   BL_REPO_URL        (optional)  alternate git repo for skill content
 
 Exit codes: docs/exit-codes.md
@@ -103,4 +104,141 @@ USAGE_EOF
 
 bl_version() {
     printf 'bl %s\n' "$BL_VERSION"
+}
+
+# ----------------------------------------------------------------------------
+# Per-verb help surfaces — bypass preflight (help should work unseeded).
+# Called from main() when the second argument is --help / -h / help.
+# ----------------------------------------------------------------------------
+
+bl_help_observe() {
+    command cat <<'HELP_EOF'
+bl observe — read-only evidence extraction into the case bundle.
+
+Usage: bl observe <verb> [options]
+
+Verbs:
+  apache     collect access_log / error_log / modsec2 audit windows
+  fs         enumerate mtime-clustered paths under a root
+  crons      snapshot crontabs (system + user) with diff vs baseline
+  htaccess   walk .htaccess trees under a web root
+  bundle     assemble all collected artifacts into a single case bundle
+
+Options:
+  --case <id>        case id (default: current case from /var/lib/bl/state)
+  --from / --to      time window for log collectors (ISO 8601)
+  --root <path>      root for fs/htaccess walkers
+  --json             emit JSONL summary instead of human log lines
+
+Exit codes: docs/exit-codes.md
+HELP_EOF
+}
+
+bl_help_consult() {
+    command cat <<'HELP_EOF'
+bl consult — open or attach to an investigation case with the curator agent.
+
+Usage: bl consult "<case description>" [--case <id>]
+       bl consult --attach <id>
+
+Posts the current case bundle (observed artifacts, prior ledger entries)
+to the bl-curator Managed Agent and receives an action-tier recommendation.
+
+See DESIGN.md §5.
+HELP_EOF
+}
+
+bl_help_run() {
+    command cat <<'HELP_EOF'
+bl run — execute an agent-prescribed step (tier-gated).
+
+Usage: bl run [--yes] [--tier <auto|suggested|destructive>]
+
+Pulls the next pending step from the curator, validates against action-
+tiers.md policy, prompts for confirmation (unless --yes and tier permits),
+executes, appends ledger + memstore entries.
+
+Tier policy: docs/action-tiers.md
+HELP_EOF
+}
+
+bl_help_defend() {
+    command cat <<'HELP_EOF'
+bl defend — apply an agent-authored defensive payload.
+
+Usage: bl defend <backend> <subcommand> [options]
+
+Backends:
+  modsec      ModSecurity rule apply / --remove / rollback
+  firewall    iptables / nftables add / remove (CDN-safelist aware)
+  sig         ClamAV / LMD signature append (FP-corpus gated)
+
+All subcommands emit ledger events to /var/lib/bl/ledger and are
+safe to roll back via 'bl defend <backend> --rollback <event-id>'.
+HELP_EOF
+}
+
+bl_help_clean() {
+    command cat <<'HELP_EOF'
+bl clean — apply agent-prescribed remediation (diff-confirmed).
+
+Usage: bl clean <kind> [options]
+       bl clean --undo <backup-id>
+       bl clean --unquarantine <entry-id>
+
+Kinds:
+  file          unlink file (diff pre-shown, quarantine preserved)
+  htaccess      revert .htaccess to clean template
+  cron          remove injected crontab entry
+  proc          SIGTERM + verify argv match
+
+Options:
+  --undo <backup-id>       restore a previous clean operation from backup
+  --unquarantine <entry-id>  restore a quarantined file to original path
+
+All clean operations quarantine originals under /var/lib/bl/quarantine.
+HELP_EOF
+}
+
+bl_help_case() {
+    command cat <<'HELP_EOF'
+bl case — inspect, log, close, reopen cases.
+
+Usage: bl case <verb>
+
+Verbs:
+  open <id>     open a new case
+  list          list cases on this host
+  show <id>     print case summary + ledger tail
+  note "..."    append a manual note to the current case
+  close <id>    mark case closed; persists memstore record
+  reopen <id>   reopen a closed case
+HELP_EOF
+}
+
+bl_help_setup() {
+    command cat <<'HELP_EOF'
+bl setup — provision or sync the Anthropic workspace.
+
+Usage: bl setup [--sync | --check]
+
+One-time per workspace: creates bl-curator agent, bl-curator-env
+environment, bl-skills + bl-case memory stores, seeds skills/.
+
+--sync      delta-push skills/*.md against bl-skills memstore
+--check     verify workspace state; no writes
+
+Spec: DESIGN.md §8.
+HELP_EOF
+}
+
+bl_help_flush() {
+    command cat <<'HELP_EOF'
+bl flush — drain queued outbox records.
+
+Usage: bl flush --outbox
+
+Best-effort cron-driven drain of /var/lib/bl/outbox against the
+curator's memory-store API. Safe to invoke manually.
+HELP_EOF
 }
