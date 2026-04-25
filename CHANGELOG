@@ -3,6 +3,18 @@ Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
 
+- M9 P5 | Apr 24 2026 — consult wake migration to bl_outbox_enqueue + fenced trigger:
+[Change] src/bl.d/50-consult.sh — bl_consult_register_curator wake-enqueue path
+      now routes through bl_outbox_enqueue wake instead of writing
+      $BL_VAR_DIR/outbox/*.json inline. Wake payload gains a
+      trigger_fingerprint_fenced field built via bl_fence_wrap kind=wake_trigger
+      so the trigger payload is sealed against prompt-injection before it ever
+      reaches the curator session on next drain. Filename now follows the
+      P3-introduced YYYYMMDDTHHMMSSZ-NNNN-wake-<case>.json convention with
+      validated payload via schemas/outbox-wake.json (P3).
+[Change] tests/09-hardening.bats — G2 consult-wake test unskipped (asserts
+      wake outbox file presence + trigger_fingerprint_fenced field shape).
+
 - M9 P4 | Apr 24 2026 — dual-write mirror + drain hook:
 [Change] src/bl.d/25-ledger.sh — bl_ledger_mirror_remote (best-effort remote
       replication to bl-case/actions/applied/<event-id>.json; outbox fallback

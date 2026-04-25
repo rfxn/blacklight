@@ -236,7 +236,31 @@ _source_bl() { source "$BL_SOURCE" >/dev/null 2>&1 || true; }
 }
 
 @test "bl_consult_register_curator enqueues wake via bl_outbox_enqueue with fenced trigger" {
-    skip "handler not landed until Phase 5"
+    # No session-id → wake falls through to outbox; assert filename + fenced content.
+    # Suite setup() exports BL_SESSION_ID to drive happy-path tests; unset here so the
+    # register-curator step takes the no-session branch that routes to bl_outbox_enqueue.
+    unset BL_SESSION_ID
+    # Mirror the G1 mock topology in 05-consult-run-case.bats — happy 200 default,
+    # INDEX route flips to 404 to exercise the create-from-template path.
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    bl_curator_mock_add_route 'memories/bl-case%2FINDEX' 'memstore-case-not-found.json' 404
+    local trigger
+    trigger=$(mktemp)
+    printf 'apsb25-94-htaccess-sample\n' > "$trigger"
+    run "$BL_SOURCE" consult --new --trigger "$trigger"
+    rm -f "$trigger"
+    [ "$status" -eq 0 ]
+    # Wake file landed in outbox
+    local wake_file
+    wake_file=$(ls "$BL_VAR_DIR/outbox/"*-wake-*.json 2>/dev/null | head -n1)
+    [ -n "$wake_file" ]
+    # Content must contain a fenced trigger payload — extract the field as a raw
+    # string so the regex matches the unescaped envelope bytes (jq JSON-escapes
+    # the inner double-quotes when writing to disk).
+    grep -q 'trigger_fingerprint_fenced' "$wake_file"
+    local fenced
+    fenced=$(jq -r '.trigger_fingerprint_fenced' "$wake_file")
+    [[ "$fenced" =~ ^\<untrusted\ fence=\"[a-f0-9]{16}\" ]]
 }
 
 @test "bl run executes class 2.1 (ignore-previous) step; stdout fenced; ledger records step_run" {
