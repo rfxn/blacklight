@@ -10,6 +10,7 @@ https://github.com/rfxn/blacklight
 [New] M10 P5 — bl observe substrate verb (read-only host-substrate enumeration: kernel/libc/init/web+modsec/firewall/scanner/log_surface/cron/package_mgr/integrity/panel/virtualization; 12 substrate.category JSONL records + observe.summary trailer with categories_present/absent/elapsed_ms; BL_SUBSTRATE_PROBE_ROOT test affordance; <2s budget; reuses _bl_obs_detect_firewall + emit/close stream helpers; +7 BATS cases in tests/04-observe.bats)
 [New] M10 P6 — tests/10-install-paths.bats install roundtrip (8 tests; install.sh --local → bl --version → uninstall.sh --yes covering: 0755 perms, idempotent overwrite, missing-src rejection, state backup, --keep-state preserve, fresh-prefix uninstall, non-interactive state-preserve)
 [New] M10 P9 — pkg.manifest + pkg/ scaffold via pkg_gen.sh (single-binary layout: /usr/bin/bl + /var/lib/bl/{state,ledger,outbox} state dirs, no conffiles, no symlink farm, no legacy migration; VERSION resolves from $(PROJDIR)/bl)
+[New] M10 P10 — RPM build + install validation (rocky9 + centos7); test-rpm-centos7 target; Dockerfile.test-rpm BASE_IMAGE arg + RPM_GLOB arg + epel-release conditional for el7 jq dep; spec: %license dedup + changelog day-of-week fix; Dockerfile.rpm-el7: git dep for source tarball; both targets: 9 PASS / 0 FAIL
 
 - M9.5 P1 | Apr 25 2026 — security input-validation guards (audit-driven hardening):
 [Fix] schemas/step.json — step_id property now carries pattern

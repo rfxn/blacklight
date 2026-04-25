@@ -33,7 +33,6 @@ rm -rf %{buildroot}
 install -D -m 755 bl %{buildroot}/usr/bin/bl
 install -D -m 644 README.md %{buildroot}/usr/share/doc/blacklight/README.md
 install -D -m 644 CHANGELOG %{buildroot}/usr/share/doc/blacklight/CHANGELOG
-install -D -m 644 LICENSE %{buildroot}/usr/share/doc/blacklight/LICENSE
 install -d -m 750 %{buildroot}/var/lib/bl
 install -d -m 750 %{buildroot}/var/lib/bl/state
 install -d -m 750 %{buildroot}/var/lib/bl/ledger
@@ -66,5 +65,5 @@ fi
 %doc /usr/share/doc/blacklight/CHANGELOG
 
 %changelog
-* Thu Apr 24 2026 R-fx Networks <proj@rfxn.com> - 0.1.0-1
+* Fri Apr 24 2026 R-fx Networks <proj@rfxn.com> - 0.1.0-1
 - Initial package release

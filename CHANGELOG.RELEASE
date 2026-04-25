@@ -6,3 +6,4 @@
 [New] M10 P5 — bl observe substrate verb (read-only host-substrate enumeration; 12 categories; <2s)
 [New] M10 P6 — tests/10-install-paths.bats install roundtrip (8 BATS tests covering install.sh + uninstall.sh roundtrip)
 [New] M10 P9 — pkg.manifest + pkg/ scaffold (RPM/DEB build infra via pkg_gen.sh; single-binary layout)
+[New] M10 P10 — RPM build + install validation matrix (rocky9 + centos7)

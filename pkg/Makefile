@@ -13,6 +13,7 @@
 #   make rpm-el9          - Build el8/el9/el10 RPM in Docker (Rocky 9)
 #   make deb-debian12     - Build DEB in Docker (Debian 12)
 #   make test-rpm-rocky9  - Test RPM install in Docker (Rocky 9)
+#   make test-rpm-centos7 - Test RPM install in Docker (CentOS 7)
 #   make test-deb-debian12 - Test DEB install in Docker (Debian 12)
 #   make clean            - Remove build artifacts
 #
@@ -24,7 +25,7 @@ TARBALL := $(NAME)-$(VERSION).tar.gz
 BUILDDIR := $(CURDIR)/build
 
 .PHONY: source rpm deb clean rpm-el7 rpm-el9 deb-debian12 \
-        test-rpm-rocky9 test-deb-debian12
+        test-rpm-rocky9 test-rpm-centos7 test-deb-debian12
 
 # --- Source tarball ---
 
@@ -96,8 +97,17 @@ deb-debian12:
 test-rpm-rocky9: rpm-el9
 	cp $(CURDIR)/test/test-pkg-install.sh $(BUILDDIR)/rpms/
 	docker build -t $(NAME)-test-rpm-rocky9 \
-	    -f $(CURDIR)/test/Dockerfile.test-rpm-rocky9 $(BUILDDIR)/rpms
-	docker run --rm --privileged $(NAME)-test-rpm-rocky9
+	    --build-arg RPM_GLOB='*el9*.rpm' \
+	    -f $(CURDIR)/docker/Dockerfile.test-rpm $(BUILDDIR)/rpms
+	docker run --rm $(NAME)-test-rpm-rocky9
+
+test-rpm-centos7: rpm-el7
+	cp $(CURDIR)/test/test-pkg-install.sh $(BUILDDIR)/rpms/
+	docker build -t $(NAME)-test-rpm-centos7 \
+	    --build-arg BASE_IMAGE=centos:7 \
+	    --build-arg RPM_GLOB='*el7*.rpm' \
+	    -f $(CURDIR)/docker/Dockerfile.test-rpm $(BUILDDIR)/rpms
+	docker run --rm $(NAME)-test-rpm-centos7
 
 test-deb-debian12: deb-debian12
 	cp $(CURDIR)/test/test-pkg-install.sh $(BUILDDIR)/debs/
