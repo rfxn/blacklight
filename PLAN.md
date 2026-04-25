@@ -46,7 +46,7 @@ M0 Contracts (spec-only) ─┐
 | M8 | `bl setup` implementation | M1, M0, M5.5 | plan | M6, M7 |
 | M9 | Security hardening pass — **DONE** (`6595cda..eb6e4f3`) | M4, M5, M3 | spec-then-plan | (solo) |
 | M10 | Ship-ready (README, install, packaging) — **DONE** (`ad600fa..ca00967`) | M9 | plan | (solo) |
-| M11 | Posture lift (credibility close-out — model routing, stub→real, doc/code reconciliation, negative tests, live-trace evidence) | M10 | plan | (solo) |
+| M11 | Posture lift (credibility close-out — model routing, stub→real, doc/code reconciliation, negative tests, live-trace evidence) — **DONE** (`05a0f2a..f572fbb`+P10/P5/P14, 14 phases shipped; see PLAN-M11.md) | M10 | plan | (solo) |
 | M12 | Demo + narrative | M11 | deferred | — |
 
 **File-ownership contract for parallel `bl` work:**
@@ -363,7 +363,9 @@ Any test delta = refactor introduced a bug; bisect the drift by comparing pre/po
 
 ---
 
-### M11 — Posture lift (solo, post-M10)
+### M11 — Posture lift (solo, post-M10) — **COMPLETE**
+
+**Status:** shipped 2026-04-25 — commits `05a0f2a..6325f9a` (P1-P14 across 5 worktree batches, 14 phases). 250/250 BATS tests green on debian12 + rocky9; install validation captured in `docs/install-validation.md`; security model documented in `docs/security-model.md`; live-trace placeholder seeded at `docs/live-traces/CASE-2026-DEMO-trace.md` for operator-run capture before tag.
 
 **Scope:** Credibility close-out. Closes the gap between blacklight's documented claims and what its code actually executes — the kind of polish "ship-ready" did not catch because M10's bar was packaging, not narrative-vs-runtime parity.
 
