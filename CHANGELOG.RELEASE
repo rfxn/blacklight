@@ -4,6 +4,7 @@
 [Change] M11 P6 — bl_poll_pending real GET-poll loop (src/bl.d/20-api.sh): seen-set dedup, --timeout / --interval flags, end_turn proxy via 3-empty-cycles, BL_POLL_DRY_RUN=1 bypass; replaces single-cycle skeleton from M1
 [New] M11 P6 — tests/03-poll.bats: 7 tests covering timeout, emit, dedup, end-of-pending, auth-fail propagation, dry-run, missing-case-id
 [New] M11 P9 — five highest-leverage negative tests (preflight 401-auth-fail / consult schema-reject / defend yara fp_gate_trip / clean dry-run-receipt-expired + concurrent flock atomicity / setup partial-state recovery) — closes audit gap "228 tests, 70% smoke"; 234/234 green on debian12 + rocky9
+[New] M11 P11 — exhibits/fleet-01/host-2-polyshell/ APSB25-94 fixture beef-up (50K-line Apache CLF + ~3K-line ModSec A/B/F/H/Z + 500-record journalctl JSON; deterministic seed=42 via scripts/synthesize-fixture-logs.sh; public Adobe advisory IOC patterns + RFC 5737 IPs only; lifts host-2 fixture bundle to ~100K tokens, exercises 1M-context curator defense)
 
 ## 0.1.0 — 2026-04-26 — first public release
 

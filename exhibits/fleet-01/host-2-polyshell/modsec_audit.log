@@ -1,0 +1,2997 @@
+--txn-000000-4256-A--
+[2026-03-22T12:00:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000000-4256-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-0.jpg?c=31e63 HTTP/1.1
+--txn-000000-4256-F--
+HTTP/1.1 200 OK Content-Length: 3483
+--txn-000000-4256-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000000-4256-Z--
+--txn-000001-a987-A--
+[2026-03-22T12:04:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000001-a987-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-1.jpg?c=afb25 HTTP/1.1
+--txn-000001-a987-F--
+HTTP/1.1 200 OK Content-Length: 1180
+--txn-000001-a987-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000001-a987-Z--
+--txn-000002-b845-A--
+[2026-03-22T12:09:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000002-b845-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-2.jpg?c=f359d HTTP/1.1
+--txn-000002-b845-F--
+HTTP/1.1 200 OK Content-Length: 2716
+--txn-000002-b845-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000002-b845-Z--
+--txn-000003-9ac6-A--
+[2026-03-22T12:13:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000003-9ac6-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-3.jpg?c=8338 HTTP/1.1
+--txn-000003-9ac6-F--
+HTTP/1.1 200 OK Content-Length: 4093
+--txn-000003-9ac6-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000003-9ac6-Z--
+--txn-000004-2637-A--
+[2026-03-22T12:18:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000004-2637-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-4.jpg?c=e7c4a HTTP/1.1
+--txn-000004-2637-F--
+HTTP/1.1 200 OK Content-Length: 2188
+--txn-000004-2637-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000004-2637-Z--
+--txn-000005-b37d-A--
+[2026-03-22T12:22:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000005-b37d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-5.jpg?c=c2c4 HTTP/1.1
+--txn-000005-b37d-F--
+HTTP/1.1 200 OK Content-Length: 2473
+--txn-000005-b37d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000005-b37d-Z--
+--txn-000006-fcad-A--
+[2026-03-22T12:27:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000006-fcad-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-6.jpg?c=f8f64 HTTP/1.1
+--txn-000006-fcad-F--
+HTTP/1.1 200 OK Content-Length: 1365
+--txn-000006-fcad-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000006-fcad-Z--
+--txn-000007-634d-A--
+[2026-03-22T12:31:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000007-634d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-7.jpg?c=694b5 HTTP/1.1
+--txn-000007-634d-F--
+HTTP/1.1 200 OK Content-Length: 3076
+--txn-000007-634d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000007-634d-Z--
+--txn-000008-0ce0-A--
+[2026-03-22T12:36:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000008-0ce0-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-8.jpg?c=abb33 HTTP/1.1
+--txn-000008-0ce0-F--
+HTTP/1.1 200 OK Content-Length: 1813
+--txn-000008-0ce0-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000008-0ce0-Z--
+--txn-000009-6645-A--
+[2026-03-22T12:40:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000009-6645-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-9.jpg?c=3dbcc HTTP/1.1
+--txn-000009-6645-F--
+HTTP/1.1 200 OK Content-Length: 2831
+--txn-000009-6645-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000009-6645-Z--
+--txn-000010-62cc-A--
+[2026-03-22T12:45:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000010-62cc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-10.jpg?c=a3dc5 HTTP/1.1
+--txn-000010-62cc-F--
+HTTP/1.1 200 OK Content-Length: 576
+--txn-000010-62cc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000010-62cc-Z--
+--txn-000011-1021-A--
+[2026-03-22T12:49:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000011-1021-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-11.jpg?c=8bb33 HTTP/1.1
+--txn-000011-1021-F--
+HTTP/1.1 200 OK Content-Length: 3032
+--txn-000011-1021-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000011-1021-Z--
+--txn-000012-ccc7-A--
+[2026-03-22T12:54:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000012-ccc7-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-12.jpg?c=ff50f HTTP/1.1
+--txn-000012-ccc7-F--
+HTTP/1.1 200 OK Content-Length: 3596
+--txn-000012-ccc7-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000012-ccc7-Z--
+--txn-000013-b942-A--
+[2026-03-22T12:58:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000013-b942-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-13.jpg?c=fc079 HTTP/1.1
+--txn-000013-b942-F--
+HTTP/1.1 200 OK Content-Length: 2031
+--txn-000013-b942-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000013-b942-Z--
+--txn-000014-04d8-A--
+[2026-03-22T13:03:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000014-04d8-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-14.jpg?c=42886 HTTP/1.1
+--txn-000014-04d8-F--
+HTTP/1.1 200 OK Content-Length: 1604
+--txn-000014-04d8-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000014-04d8-Z--
+--txn-000015-d8a9-A--
+[2026-03-22T13:07:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000015-d8a9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-15.jpg?c=f94ae HTTP/1.1
+--txn-000015-d8a9-F--
+HTTP/1.1 200 OK Content-Length: 1252
+--txn-000015-d8a9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000015-d8a9-Z--
+--txn-000016-4953-A--
+[2026-03-22T13:12:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000016-4953-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-16.jpg?c=291bd HTTP/1.1
+--txn-000016-4953-F--
+HTTP/1.1 200 OK Content-Length: 3086
+--txn-000016-4953-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000016-4953-Z--
+--txn-000017-ef5c-A--
+[2026-03-22T13:16:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000017-ef5c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-17.jpg?c=7ebe0 HTTP/1.1
+--txn-000017-ef5c-F--
+HTTP/1.1 200 OK Content-Length: 1902
+--txn-000017-ef5c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000017-ef5c-Z--
+--txn-000018-29cd-A--
+[2026-03-22T13:21:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000018-29cd-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-18.jpg?c=fa823 HTTP/1.1
+--txn-000018-29cd-F--
+HTTP/1.1 200 OK Content-Length: 4132
+--txn-000018-29cd-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000018-29cd-Z--
+--txn-000019-3a61-A--
+[2026-03-22T13:25:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000019-3a61-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-19.jpg?c=501d1 HTTP/1.1
+--txn-000019-3a61-F--
+HTTP/1.1 200 OK Content-Length: 3265
+--txn-000019-3a61-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000019-3a61-Z--
+--txn-000020-fb5d-A--
+[2026-03-22T13:30:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000020-fb5d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-20.jpg?c=5d322 HTTP/1.1
+--txn-000020-fb5d-F--
+HTTP/1.1 200 OK Content-Length: 1206
+--txn-000020-fb5d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000020-fb5d-Z--
+--txn-000021-8275-A--
+[2026-03-22T13:34:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000021-8275-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-21.jpg?c=d86de HTTP/1.1
+--txn-000021-8275-F--
+HTTP/1.1 200 OK Content-Length: 1343
+--txn-000021-8275-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000021-8275-Z--
+--txn-000022-ee47-A--
+[2026-03-22T13:39:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000022-ee47-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-22.jpg?c=a58a4 HTTP/1.1
+--txn-000022-ee47-F--
+HTTP/1.1 200 OK Content-Length: 1608
+--txn-000022-ee47-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000022-ee47-Z--
+--txn-000023-5eb4-A--
+[2026-03-22T13:43:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000023-5eb4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-23.jpg?c=c4dd6 HTTP/1.1
+--txn-000023-5eb4-F--
+HTTP/1.1 200 OK Content-Length: 509
+--txn-000023-5eb4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000023-5eb4-Z--
+--txn-000024-9948-A--
+[2026-03-22T13:48:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000024-9948-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-24.jpg?c=596a2 HTTP/1.1
+--txn-000024-9948-F--
+HTTP/1.1 200 OK Content-Length: 3757
+--txn-000024-9948-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000024-9948-Z--
+--txn-000025-48a7-A--
+[2026-03-22T13:52:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000025-48a7-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-25.jpg?c=22831 HTTP/1.1
+--txn-000025-48a7-F--
+HTTP/1.1 200 OK Content-Length: 479
+--txn-000025-48a7-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000025-48a7-Z--
+--txn-000026-b62b-A--
+[2026-03-22T13:57:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000026-b62b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-26.jpg?c=90285 HTTP/1.1
+--txn-000026-b62b-F--
+HTTP/1.1 200 OK Content-Length: 3673
+--txn-000026-b62b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000026-b62b-Z--
+--txn-000027-6096-A--
+[2026-03-22T14:01:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000027-6096-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-27.jpg?c=de157 HTTP/1.1
+--txn-000027-6096-F--
+HTTP/1.1 200 OK Content-Length: 1191
+--txn-000027-6096-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000027-6096-Z--
+--txn-000028-6fae-A--
+[2026-03-22T14:06:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000028-6fae-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-28.jpg?c=5f087 HTTP/1.1
+--txn-000028-6fae-F--
+HTTP/1.1 200 OK Content-Length: 2045
+--txn-000028-6fae-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000028-6fae-Z--
+--txn-000029-d279-A--
+[2026-03-22T14:10:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000029-d279-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-29.jpg?c=96cde HTTP/1.1
+--txn-000029-d279-F--
+HTTP/1.1 200 OK Content-Length: 1948
+--txn-000029-d279-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000029-d279-Z--
+--txn-000030-0370-A--
+[2026-03-22T14:15:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000030-0370-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-30.jpg?c=34b15 HTTP/1.1
+--txn-000030-0370-F--
+HTTP/1.1 200 OK Content-Length: 3331
+--txn-000030-0370-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000030-0370-Z--
+--txn-000031-4e3f-A--
+[2026-03-22T14:19:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000031-4e3f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-31.jpg?c=eddba HTTP/1.1
+--txn-000031-4e3f-F--
+HTTP/1.1 200 OK Content-Length: 2880
+--txn-000031-4e3f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000031-4e3f-Z--
+--txn-000032-48cb-A--
+[2026-03-22T14:24:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000032-48cb-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-32.jpg?c=fc213 HTTP/1.1
+--txn-000032-48cb-F--
+HTTP/1.1 200 OK Content-Length: 3834
+--txn-000032-48cb-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000032-48cb-Z--
+--txn-000033-fb18-A--
+[2026-03-22T14:28:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000033-fb18-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-33.jpg?c=dfb76 HTTP/1.1
+--txn-000033-fb18-F--
+HTTP/1.1 200 OK Content-Length: 1426
+--txn-000033-fb18-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000033-fb18-Z--
+--txn-000034-3cca-A--
+[2026-03-22T14:33:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000034-3cca-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-34.jpg?c=8be85 HTTP/1.1
+--txn-000034-3cca-F--
+HTTP/1.1 200 OK Content-Length: 3682
+--txn-000034-3cca-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000034-3cca-Z--
+--txn-000035-849b-A--
+[2026-03-22T14:37:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000035-849b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-35.jpg?c=a6471 HTTP/1.1
+--txn-000035-849b-F--
+HTTP/1.1 200 OK Content-Length: 1430
+--txn-000035-849b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000035-849b-Z--
+--txn-000036-bf83-A--
+[2026-03-22T14:42:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000036-bf83-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-36.jpg?c=84d7b HTTP/1.1
+--txn-000036-bf83-F--
+HTTP/1.1 200 OK Content-Length: 1344
+--txn-000036-bf83-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000036-bf83-Z--
+--txn-000037-01d9-A--
+[2026-03-22T14:46:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000037-01d9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-37.jpg?c=7ac8c HTTP/1.1
+--txn-000037-01d9-F--
+HTTP/1.1 200 OK Content-Length: 2197
+--txn-000037-01d9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000037-01d9-Z--
+--txn-000038-9bb0-A--
+[2026-03-22T14:51:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000038-9bb0-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-38.jpg?c=8fc14 HTTP/1.1
+--txn-000038-9bb0-F--
+HTTP/1.1 200 OK Content-Length: 1917
+--txn-000038-9bb0-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000038-9bb0-Z--
+--txn-000039-ead1-A--
+[2026-03-22T14:55:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000039-ead1-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-39.jpg?c=27a8e HTTP/1.1
+--txn-000039-ead1-F--
+HTTP/1.1 200 OK Content-Length: 3451
+--txn-000039-ead1-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000039-ead1-Z--
+--txn-000040-2498-A--
+[2026-03-22T15:00:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000040-2498-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-40.jpg?c=a064c HTTP/1.1
+--txn-000040-2498-F--
+HTTP/1.1 200 OK Content-Length: 568
+--txn-000040-2498-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000040-2498-Z--
+--txn-000041-dc3d-A--
+[2026-03-22T15:04:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000041-dc3d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-41.jpg?c=63225 HTTP/1.1
+--txn-000041-dc3d-F--
+HTTP/1.1 200 OK Content-Length: 736
+--txn-000041-dc3d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000041-dc3d-Z--
+--txn-000042-a280-A--
+[2026-03-22T15:09:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000042-a280-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-42.jpg?c=3ac4e HTTP/1.1
+--txn-000042-a280-F--
+HTTP/1.1 200 OK Content-Length: 4012
+--txn-000042-a280-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000042-a280-Z--
+--txn-000043-009f-A--
+[2026-03-22T15:13:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000043-009f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-43.jpg?c=b0e99 HTTP/1.1
+--txn-000043-009f-F--
+HTTP/1.1 200 OK Content-Length: 1571
+--txn-000043-009f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000043-009f-Z--
+--txn-000044-55ae-A--
+[2026-03-22T15:18:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000044-55ae-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-44.jpg?c=10bd2 HTTP/1.1
+--txn-000044-55ae-F--
+HTTP/1.1 200 OK Content-Length: 3924
+--txn-000044-55ae-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000044-55ae-Z--
+--txn-000045-965e-A--
+[2026-03-22T15:22:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000045-965e-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-45.jpg?c=f9620 HTTP/1.1
+--txn-000045-965e-F--
+HTTP/1.1 200 OK Content-Length: 3490
+--txn-000045-965e-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000045-965e-Z--
+--txn-000046-2b8d-A--
+[2026-03-22T15:27:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000046-2b8d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-46.jpg?c=e2530 HTTP/1.1
+--txn-000046-2b8d-F--
+HTTP/1.1 200 OK Content-Length: 3996
+--txn-000046-2b8d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000046-2b8d-Z--
+--txn-000047-b328-A--
+[2026-03-22T15:31:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000047-b328-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-47.jpg?c=a60bd HTTP/1.1
+--txn-000047-b328-F--
+HTTP/1.1 200 OK Content-Length: 829
+--txn-000047-b328-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000047-b328-Z--
+--txn-000048-b418-A--
+[2026-03-22T15:36:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000048-b418-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-48.jpg?c=94bb5 HTTP/1.1
+--txn-000048-b418-F--
+HTTP/1.1 200 OK Content-Length: 776
+--txn-000048-b418-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000048-b418-Z--
+--txn-000049-46ac-A--
+[2026-03-22T15:40:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000049-46ac-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-49.jpg?c=47ac2 HTTP/1.1
+--txn-000049-46ac-F--
+HTTP/1.1 200 OK Content-Length: 870
+--txn-000049-46ac-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000049-46ac-Z--
+--txn-000050-0c56-A--
+[2026-03-22T15:45:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000050-0c56-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-50.jpg?c=72cad HTTP/1.1
+--txn-000050-0c56-F--
+HTTP/1.1 200 OK Content-Length: 1377
+--txn-000050-0c56-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000050-0c56-Z--
+--txn-000051-c5a9-A--
+[2026-03-22T15:49:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000051-c5a9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-51.jpg?c=520d8 HTTP/1.1
+--txn-000051-c5a9-F--
+HTTP/1.1 200 OK Content-Length: 3633
+--txn-000051-c5a9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000051-c5a9-Z--
+--txn-000052-95e4-A--
+[2026-03-22T15:54:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000052-95e4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-52.jpg?c=2ffa7 HTTP/1.1
+--txn-000052-95e4-F--
+HTTP/1.1 200 OK Content-Length: 2882
+--txn-000052-95e4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000052-95e4-Z--
+--txn-000053-9c50-A--
+[2026-03-22T15:58:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000053-9c50-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-53.jpg?c=3c8d5 HTTP/1.1
+--txn-000053-9c50-F--
+HTTP/1.1 200 OK Content-Length: 3466
+--txn-000053-9c50-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000053-9c50-Z--
+--txn-000054-29a0-A--
+[2026-03-22T16:03:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000054-29a0-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-54.jpg?c=59587 HTTP/1.1
+--txn-000054-29a0-F--
+HTTP/1.1 200 OK Content-Length: 719
+--txn-000054-29a0-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000054-29a0-Z--
+--txn-000055-7ef2-A--
+[2026-03-22T16:07:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000055-7ef2-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-55.jpg?c=83db2 HTTP/1.1
+--txn-000055-7ef2-F--
+HTTP/1.1 200 OK Content-Length: 3722
+--txn-000055-7ef2-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000055-7ef2-Z--
+--txn-000056-fb73-A--
+[2026-03-22T16:12:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000056-fb73-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-56.jpg?c=de945 HTTP/1.1
+--txn-000056-fb73-F--
+HTTP/1.1 200 OK Content-Length: 2518
+--txn-000056-fb73-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000056-fb73-Z--
+--txn-000057-2e51-A--
+[2026-03-22T16:16:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000057-2e51-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-57.jpg?c=d97d2 HTTP/1.1
+--txn-000057-2e51-F--
+HTTP/1.1 200 OK Content-Length: 4296
+--txn-000057-2e51-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000057-2e51-Z--
+--txn-000058-54ec-A--
+[2026-03-22T16:21:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000058-54ec-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-58.jpg?c=6b723 HTTP/1.1
+--txn-000058-54ec-F--
+HTTP/1.1 200 OK Content-Length: 2728
+--txn-000058-54ec-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000058-54ec-Z--
+--txn-000059-2b24-A--
+[2026-03-22T16:25:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000059-2b24-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-59.jpg?c=cd0e3 HTTP/1.1
+--txn-000059-2b24-F--
+HTTP/1.1 200 OK Content-Length: 2492
+--txn-000059-2b24-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000059-2b24-Z--
+--txn-000060-1465-A--
+[2026-03-22T16:30:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000060-1465-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-60.jpg?c=8205a HTTP/1.1
+--txn-000060-1465-F--
+HTTP/1.1 200 OK Content-Length: 4312
+--txn-000060-1465-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000060-1465-Z--
+--txn-000061-913a-A--
+[2026-03-22T16:34:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000061-913a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-61.jpg?c=37505 HTTP/1.1
+--txn-000061-913a-F--
+HTTP/1.1 200 OK Content-Length: 3545
+--txn-000061-913a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000061-913a-Z--
+--txn-000062-b976-A--
+[2026-03-22T16:39:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000062-b976-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-62.jpg?c=8574d HTTP/1.1
+--txn-000062-b976-F--
+HTTP/1.1 200 OK Content-Length: 3825
+--txn-000062-b976-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000062-b976-Z--
+--txn-000063-ae41-A--
+[2026-03-22T16:43:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000063-ae41-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-63.jpg?c=1fb5 HTTP/1.1
+--txn-000063-ae41-F--
+HTTP/1.1 200 OK Content-Length: 2324
+--txn-000063-ae41-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000063-ae41-Z--
+--txn-000064-7b55-A--
+[2026-03-22T16:48:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000064-7b55-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-64.jpg?c=a0e91 HTTP/1.1
+--txn-000064-7b55-F--
+HTTP/1.1 200 OK Content-Length: 2434
+--txn-000064-7b55-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000064-7b55-Z--
+--txn-000065-5bb8-A--
+[2026-03-22T16:52:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000065-5bb8-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-65.jpg?c=6554e HTTP/1.1
+--txn-000065-5bb8-F--
+HTTP/1.1 200 OK Content-Length: 3582
+--txn-000065-5bb8-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000065-5bb8-Z--
+--txn-000066-e6e5-A--
+[2026-03-22T16:57:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000066-e6e5-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-66.jpg?c=a62ef HTTP/1.1
+--txn-000066-e6e5-F--
+HTTP/1.1 200 OK Content-Length: 1910
+--txn-000066-e6e5-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000066-e6e5-Z--
+--txn-000067-7e9b-A--
+[2026-03-22T17:01:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000067-7e9b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-67.jpg?c=8d0bc HTTP/1.1
+--txn-000067-7e9b-F--
+HTTP/1.1 200 OK Content-Length: 3752
+--txn-000067-7e9b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000067-7e9b-Z--
+--txn-000068-b39d-A--
+[2026-03-22T17:06:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000068-b39d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-68.jpg?c=64fb8 HTTP/1.1
+--txn-000068-b39d-F--
+HTTP/1.1 200 OK Content-Length: 2335
+--txn-000068-b39d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000068-b39d-Z--
+--txn-000069-487a-A--
+[2026-03-22T17:10:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000069-487a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-69.jpg?c=63bc0 HTTP/1.1
+--txn-000069-487a-F--
+HTTP/1.1 200 OK Content-Length: 3485
+--txn-000069-487a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000069-487a-Z--
+--txn-000070-273d-A--
+[2026-03-22T17:15:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000070-273d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-70.jpg?c=41a5e HTTP/1.1
+--txn-000070-273d-F--
+HTTP/1.1 200 OK Content-Length: 290
+--txn-000070-273d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000070-273d-Z--
+--txn-000071-b620-A--
+[2026-03-22T17:19:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000071-b620-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-71.jpg?c=e0c2f HTTP/1.1
+--txn-000071-b620-F--
+HTTP/1.1 200 OK Content-Length: 1101
+--txn-000071-b620-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000071-b620-Z--
+--txn-000072-ec19-A--
+[2026-03-22T17:24:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000072-ec19-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-72.jpg?c=8bc7e HTTP/1.1
+--txn-000072-ec19-F--
+HTTP/1.1 200 OK Content-Length: 2220
+--txn-000072-ec19-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000072-ec19-Z--
+--txn-000073-e4e1-A--
+[2026-03-22T17:28:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000073-e4e1-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-73.jpg?c=5629f HTTP/1.1
+--txn-000073-e4e1-F--
+HTTP/1.1 200 OK Content-Length: 3835
+--txn-000073-e4e1-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000073-e4e1-Z--
+--txn-000074-c8ba-A--
+[2026-03-22T17:33:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000074-c8ba-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-74.jpg?c=2ad5d HTTP/1.1
+--txn-000074-c8ba-F--
+HTTP/1.1 200 OK Content-Length: 2061
+--txn-000074-c8ba-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000074-c8ba-Z--
+--txn-000075-84bd-A--
+[2026-03-22T17:37:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000075-84bd-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-75.jpg?c=3bede HTTP/1.1
+--txn-000075-84bd-F--
+HTTP/1.1 200 OK Content-Length: 3757
+--txn-000075-84bd-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000075-84bd-Z--
+--txn-000076-79b6-A--
+[2026-03-22T17:42:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000076-79b6-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-76.jpg?c=62a85 HTTP/1.1
+--txn-000076-79b6-F--
+HTTP/1.1 200 OK Content-Length: 1251
+--txn-000076-79b6-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000076-79b6-Z--
+--txn-000077-e141-A--
+[2026-03-22T17:46:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000077-e141-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-77.jpg?c=bd2bd HTTP/1.1
+--txn-000077-e141-F--
+HTTP/1.1 200 OK Content-Length: 2163
+--txn-000077-e141-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000077-e141-Z--
+--txn-000078-69e2-A--
+[2026-03-22T17:51:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000078-69e2-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-78.jpg?c=49e1b HTTP/1.1
+--txn-000078-69e2-F--
+HTTP/1.1 200 OK Content-Length: 687
+--txn-000078-69e2-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000078-69e2-Z--
+--txn-000079-d57b-A--
+[2026-03-22T17:55:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000079-d57b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-79.jpg?c=6ae72 HTTP/1.1
+--txn-000079-d57b-F--
+HTTP/1.1 200 OK Content-Length: 1911
+--txn-000079-d57b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000079-d57b-Z--
+--txn-000080-0294-A--
+[2026-03-22T18:00:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000080-0294-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-80.jpg?c=28b2e HTTP/1.1
+--txn-000080-0294-F--
+HTTP/1.1 200 OK Content-Length: 1393
+--txn-000080-0294-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000080-0294-Z--
+--txn-000081-176b-A--
+[2026-03-22T18:04:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000081-176b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-81.jpg?c=5712a HTTP/1.1
+--txn-000081-176b-F--
+HTTP/1.1 200 OK Content-Length: 3391
+--txn-000081-176b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000081-176b-Z--
+--txn-000082-3ebc-A--
+[2026-03-22T18:09:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000082-3ebc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-82.jpg?c=e795 HTTP/1.1
+--txn-000082-3ebc-F--
+HTTP/1.1 200 OK Content-Length: 381
+--txn-000082-3ebc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000082-3ebc-Z--
+--txn-000083-a759-A--
+[2026-03-22T18:13:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000083-a759-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-83.jpg?c=91953 HTTP/1.1
+--txn-000083-a759-F--
+HTTP/1.1 200 OK Content-Length: 1600
+--txn-000083-a759-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000083-a759-Z--
+--txn-000084-7b7d-A--
+[2026-03-22T18:18:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000084-7b7d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-84.jpg?c=d3e37 HTTP/1.1
+--txn-000084-7b7d-F--
+HTTP/1.1 200 OK Content-Length: 1731
+--txn-000084-7b7d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000084-7b7d-Z--
+--txn-000085-ca8c-A--
+[2026-03-22T18:22:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000085-ca8c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-85.jpg?c=47381 HTTP/1.1
+--txn-000085-ca8c-F--
+HTTP/1.1 200 OK Content-Length: 3397
+--txn-000085-ca8c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000085-ca8c-Z--
+--txn-000086-1814-A--
+[2026-03-22T18:27:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000086-1814-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-86.jpg?c=41249 HTTP/1.1
+--txn-000086-1814-F--
+HTTP/1.1 200 OK Content-Length: 3092
+--txn-000086-1814-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000086-1814-Z--
+--txn-000087-2ec8-A--
+[2026-03-22T18:31:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000087-2ec8-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-87.jpg?c=c03c8 HTTP/1.1
+--txn-000087-2ec8-F--
+HTTP/1.1 200 OK Content-Length: 756
+--txn-000087-2ec8-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000087-2ec8-Z--
+--txn-000088-9a31-A--
+[2026-03-22T18:36:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000088-9a31-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-88.jpg?c=fb41c HTTP/1.1
+--txn-000088-9a31-F--
+HTTP/1.1 200 OK Content-Length: 3486
+--txn-000088-9a31-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000088-9a31-Z--
+--txn-000089-ad85-A--
+[2026-03-22T18:40:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000089-ad85-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-89.jpg?c=83155 HTTP/1.1
+--txn-000089-ad85-F--
+HTTP/1.1 200 OK Content-Length: 774
+--txn-000089-ad85-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000089-ad85-Z--
+--txn-000090-9536-A--
+[2026-03-22T18:45:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000090-9536-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-90.jpg?c=83f77 HTTP/1.1
+--txn-000090-9536-F--
+HTTP/1.1 200 OK Content-Length: 1580
+--txn-000090-9536-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000090-9536-Z--
+--txn-000091-6693-A--
+[2026-03-22T18:49:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000091-6693-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-91.jpg?c=f2b91 HTTP/1.1
+--txn-000091-6693-F--
+HTTP/1.1 200 OK Content-Length: 2119
+--txn-000091-6693-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000091-6693-Z--
+--txn-000092-6360-A--
+[2026-03-22T18:54:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000092-6360-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-92.jpg?c=80cf7 HTTP/1.1
+--txn-000092-6360-F--
+HTTP/1.1 200 OK Content-Length: 571
+--txn-000092-6360-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000092-6360-Z--
+--txn-000093-afb5-A--
+[2026-03-22T18:58:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000093-afb5-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-93.jpg?c=5e7b6 HTTP/1.1
+--txn-000093-afb5-F--
+HTTP/1.1 200 OK Content-Length: 1689
+--txn-000093-afb5-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000093-afb5-Z--
+--txn-000094-53ec-A--
+[2026-03-22T19:03:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000094-53ec-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-94.jpg?c=d6907 HTTP/1.1
+--txn-000094-53ec-F--
+HTTP/1.1 200 OK Content-Length: 1670
+--txn-000094-53ec-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000094-53ec-Z--
+--txn-000095-2d56-A--
+[2026-03-22T19:07:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000095-2d56-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-95.jpg?c=910a7 HTTP/1.1
+--txn-000095-2d56-F--
+HTTP/1.1 200 OK Content-Length: 2555
+--txn-000095-2d56-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000095-2d56-Z--
+--txn-000096-0416-A--
+[2026-03-22T19:12:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000096-0416-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-96.jpg?c=53bb7 HTTP/1.1
+--txn-000096-0416-F--
+HTTP/1.1 200 OK Content-Length: 4051
+--txn-000096-0416-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000096-0416-Z--
+--txn-000097-a2ec-A--
+[2026-03-22T19:16:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000097-a2ec-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-97.jpg?c=917bf HTTP/1.1
+--txn-000097-a2ec-F--
+HTTP/1.1 200 OK Content-Length: 1435
+--txn-000097-a2ec-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000097-a2ec-Z--
+--txn-000098-5800-A--
+[2026-03-22T19:21:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000098-5800-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-98.jpg?c=fe0d2 HTTP/1.1
+--txn-000098-5800-F--
+HTTP/1.1 200 OK Content-Length: 1484
+--txn-000098-5800-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000098-5800-Z--
+--txn-000099-ae33-A--
+[2026-03-22T19:25:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000099-ae33-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-99.jpg?c=7eb52 HTTP/1.1
+--txn-000099-ae33-F--
+HTTP/1.1 200 OK Content-Length: 1028
+--txn-000099-ae33-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000099-ae33-Z--
+--txn-000100-c8bb-A--
+[2026-03-22T19:30:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000100-c8bb-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-100.jpg?c=c2644 HTTP/1.1
+--txn-000100-c8bb-F--
+HTTP/1.1 200 OK Content-Length: 284
+--txn-000100-c8bb-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000100-c8bb-Z--
+--txn-000101-6053-A--
+[2026-03-22T19:34:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000101-6053-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-101.jpg?c=9ec53 HTTP/1.1
+--txn-000101-6053-F--
+HTTP/1.1 200 OK Content-Length: 4298
+--txn-000101-6053-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000101-6053-Z--
+--txn-000102-dc4e-A--
+[2026-03-22T19:39:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000102-dc4e-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-102.jpg?c=86643 HTTP/1.1
+--txn-000102-dc4e-F--
+HTTP/1.1 200 OK Content-Length: 951
+--txn-000102-dc4e-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000102-dc4e-Z--
+--txn-000103-b2ca-A--
+[2026-03-22T19:43:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000103-b2ca-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-103.jpg?c=ca509 HTTP/1.1
+--txn-000103-b2ca-F--
+HTTP/1.1 200 OK Content-Length: 439
+--txn-000103-b2ca-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000103-b2ca-Z--
+--txn-000104-750d-A--
+[2026-03-22T19:48:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000104-750d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-104.jpg?c=3ecc4 HTTP/1.1
+--txn-000104-750d-F--
+HTTP/1.1 200 OK Content-Length: 2662
+--txn-000104-750d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000104-750d-Z--
+--txn-000105-3ac1-A--
+[2026-03-22T19:52:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000105-3ac1-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-105.jpg?c=e050d HTTP/1.1
+--txn-000105-3ac1-F--
+HTTP/1.1 200 OK Content-Length: 2373
+--txn-000105-3ac1-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000105-3ac1-Z--
+--txn-000106-2b29-A--
+[2026-03-22T19:57:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000106-2b29-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-106.jpg?c=b5daa HTTP/1.1
+--txn-000106-2b29-F--
+HTTP/1.1 200 OK Content-Length: 788
+--txn-000106-2b29-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000106-2b29-Z--
+--txn-000107-836b-A--
+[2026-03-22T20:01:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000107-836b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-107.jpg?c=4234b HTTP/1.1
+--txn-000107-836b-F--
+HTTP/1.1 200 OK Content-Length: 2231
+--txn-000107-836b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000107-836b-Z--
+--txn-000108-d159-A--
+[2026-03-22T20:06:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000108-d159-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-108.jpg?c=4706a HTTP/1.1
+--txn-000108-d159-F--
+HTTP/1.1 200 OK Content-Length: 261
+--txn-000108-d159-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000108-d159-Z--
+--txn-000109-45d1-A--
+[2026-03-22T20:10:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000109-45d1-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-109.jpg?c=4c34a HTTP/1.1
+--txn-000109-45d1-F--
+HTTP/1.1 200 OK Content-Length: 1561
+--txn-000109-45d1-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000109-45d1-Z--
+--txn-000110-84d7-A--
+[2026-03-22T20:15:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000110-84d7-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-110.jpg?c=ba21c HTTP/1.1
+--txn-000110-84d7-F--
+HTTP/1.1 200 OK Content-Length: 3193
+--txn-000110-84d7-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000110-84d7-Z--
+--txn-000111-a4d0-A--
+[2026-03-22T20:19:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000111-a4d0-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-111.jpg?c=8ff6c HTTP/1.1
+--txn-000111-a4d0-F--
+HTTP/1.1 200 OK Content-Length: 1077
+--txn-000111-a4d0-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000111-a4d0-Z--
+--txn-000112-ef9d-A--
+[2026-03-22T20:24:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000112-ef9d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-112.jpg?c=998ab HTTP/1.1
+--txn-000112-ef9d-F--
+HTTP/1.1 200 OK Content-Length: 2395
+--txn-000112-ef9d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000112-ef9d-Z--
+--txn-000113-0a08-A--
+[2026-03-22T20:28:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000113-0a08-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-113.jpg?c=8edc HTTP/1.1
+--txn-000113-0a08-F--
+HTTP/1.1 200 OK Content-Length: 4302
+--txn-000113-0a08-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000113-0a08-Z--
+--txn-000114-236c-A--
+[2026-03-22T20:33:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000114-236c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-114.jpg?c=6bc47 HTTP/1.1
+--txn-000114-236c-F--
+HTTP/1.1 200 OK Content-Length: 2949
+--txn-000114-236c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000114-236c-Z--
+--txn-000115-14f4-A--
+[2026-03-22T20:37:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000115-14f4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-115.jpg?c=8b41e HTTP/1.1
+--txn-000115-14f4-F--
+HTTP/1.1 200 OK Content-Length: 3108
+--txn-000115-14f4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000115-14f4-Z--
+--txn-000116-6005-A--
+[2026-03-22T20:42:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000116-6005-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-116.jpg?c=e591a HTTP/1.1
+--txn-000116-6005-F--
+HTTP/1.1 200 OK Content-Length: 2574
+--txn-000116-6005-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000116-6005-Z--
+--txn-000117-6a43-A--
+[2026-03-22T20:46:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000117-6a43-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-117.jpg?c=d9846 HTTP/1.1
+--txn-000117-6a43-F--
+HTTP/1.1 200 OK Content-Length: 1308
+--txn-000117-6a43-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000117-6a43-Z--
+--txn-000118-5769-A--
+[2026-03-22T20:51:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000118-5769-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-118.jpg?c=3990d HTTP/1.1
+--txn-000118-5769-F--
+HTTP/1.1 200 OK Content-Length: 3752
+--txn-000118-5769-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000118-5769-Z--
+--txn-000119-b178-A--
+[2026-03-22T20:55:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000119-b178-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-119.jpg?c=2e26b HTTP/1.1
+--txn-000119-b178-F--
+HTTP/1.1 200 OK Content-Length: 1625
+--txn-000119-b178-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000119-b178-Z--
+--txn-000120-6f8b-A--
+[2026-03-22T21:00:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000120-6f8b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-120.jpg?c=df96c HTTP/1.1
+--txn-000120-6f8b-F--
+HTTP/1.1 200 OK Content-Length: 2070
+--txn-000120-6f8b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000120-6f8b-Z--
+--txn-000121-909d-A--
+[2026-03-22T21:04:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000121-909d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-121.jpg?c=52641 HTTP/1.1
+--txn-000121-909d-F--
+HTTP/1.1 200 OK Content-Length: 2503
+--txn-000121-909d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000121-909d-Z--
+--txn-000122-9596-A--
+[2026-03-22T21:09:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000122-9596-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-122.jpg?c=a568c HTTP/1.1
+--txn-000122-9596-F--
+HTTP/1.1 200 OK Content-Length: 2706
+--txn-000122-9596-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000122-9596-Z--
+--txn-000123-e5f9-A--
+[2026-03-22T21:13:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000123-e5f9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-123.jpg?c=51d65 HTTP/1.1
+--txn-000123-e5f9-F--
+HTTP/1.1 200 OK Content-Length: 1343
+--txn-000123-e5f9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000123-e5f9-Z--
+--txn-000124-addd-A--
+[2026-03-22T21:18:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000124-addd-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-124.jpg?c=972bf HTTP/1.1
+--txn-000124-addd-F--
+HTTP/1.1 200 OK Content-Length: 3906
+--txn-000124-addd-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000124-addd-Z--
+--txn-000125-b5ca-A--
+[2026-03-22T21:22:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000125-b5ca-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-125.jpg?c=1f83f HTTP/1.1
+--txn-000125-b5ca-F--
+HTTP/1.1 200 OK Content-Length: 2907
+--txn-000125-b5ca-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000125-b5ca-Z--
+--txn-000126-ec62-A--
+[2026-03-22T21:27:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000126-ec62-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-126.jpg?c=96d74 HTTP/1.1
+--txn-000126-ec62-F--
+HTTP/1.1 200 OK Content-Length: 2221
+--txn-000126-ec62-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000126-ec62-Z--
+--txn-000127-1f7c-A--
+[2026-03-22T21:31:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000127-1f7c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-127.jpg?c=2653d HTTP/1.1
+--txn-000127-1f7c-F--
+HTTP/1.1 200 OK Content-Length: 3756
+--txn-000127-1f7c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000127-1f7c-Z--
+--txn-000128-8bf8-A--
+[2026-03-22T21:36:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000128-8bf8-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-128.jpg?c=e269c HTTP/1.1
+--txn-000128-8bf8-F--
+HTTP/1.1 200 OK Content-Length: 1522
+--txn-000128-8bf8-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000128-8bf8-Z--
+--txn-000129-1f4f-A--
+[2026-03-22T21:40:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000129-1f4f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-129.jpg?c=b32d2 HTTP/1.1
+--txn-000129-1f4f-F--
+HTTP/1.1 200 OK Content-Length: 1849
+--txn-000129-1f4f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000129-1f4f-Z--
+--txn-000130-2e65-A--
+[2026-03-22T21:45:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000130-2e65-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-130.jpg?c=95734 HTTP/1.1
+--txn-000130-2e65-F--
+HTTP/1.1 200 OK Content-Length: 1357
+--txn-000130-2e65-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000130-2e65-Z--
+--txn-000131-3e13-A--
+[2026-03-22T21:49:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000131-3e13-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-131.jpg?c=4430e HTTP/1.1
+--txn-000131-3e13-F--
+HTTP/1.1 200 OK Content-Length: 623
+--txn-000131-3e13-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000131-3e13-Z--
+--txn-000132-03a5-A--
+[2026-03-22T21:54:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000132-03a5-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-132.jpg?c=1c489 HTTP/1.1
+--txn-000132-03a5-F--
+HTTP/1.1 200 OK Content-Length: 2476
+--txn-000132-03a5-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000132-03a5-Z--
+--txn-000133-b926-A--
+[2026-03-22T21:58:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000133-b926-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-133.jpg?c=e1703 HTTP/1.1
+--txn-000133-b926-F--
+HTTP/1.1 200 OK Content-Length: 761
+--txn-000133-b926-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000133-b926-Z--
+--txn-000134-d4f6-A--
+[2026-03-22T22:03:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000134-d4f6-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-134.jpg?c=f7851 HTTP/1.1
+--txn-000134-d4f6-F--
+HTTP/1.1 200 OK Content-Length: 3433
+--txn-000134-d4f6-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000134-d4f6-Z--
+--txn-000135-47cf-A--
+[2026-03-22T22:07:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000135-47cf-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-135.jpg?c=ff084 HTTP/1.1
+--txn-000135-47cf-F--
+HTTP/1.1 200 OK Content-Length: 1851
+--txn-000135-47cf-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000135-47cf-Z--
+--txn-000136-3d2f-A--
+[2026-03-22T22:12:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000136-3d2f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-136.jpg?c=a7f64 HTTP/1.1
+--txn-000136-3d2f-F--
+HTTP/1.1 200 OK Content-Length: 2585
+--txn-000136-3d2f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000136-3d2f-Z--
+--txn-000137-c84f-A--
+[2026-03-22T22:16:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000137-c84f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-137.jpg?c=725df HTTP/1.1
+--txn-000137-c84f-F--
+HTTP/1.1 200 OK Content-Length: 2534
+--txn-000137-c84f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000137-c84f-Z--
+--txn-000138-d09e-A--
+[2026-03-22T22:21:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000138-d09e-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-138.jpg?c=1e171 HTTP/1.1
+--txn-000138-d09e-F--
+HTTP/1.1 200 OK Content-Length: 3241
+--txn-000138-d09e-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000138-d09e-Z--
+--txn-000139-e5c5-A--
+[2026-03-22T22:25:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000139-e5c5-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-139.jpg?c=a6d57 HTTP/1.1
+--txn-000139-e5c5-F--
+HTTP/1.1 200 OK Content-Length: 2429
+--txn-000139-e5c5-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000139-e5c5-Z--
+--txn-000140-1978-A--
+[2026-03-22T22:30:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000140-1978-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-140.jpg?c=8e55d HTTP/1.1
+--txn-000140-1978-F--
+HTTP/1.1 200 OK Content-Length: 586
+--txn-000140-1978-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000140-1978-Z--
+--txn-000141-3a5c-A--
+[2026-03-22T22:34:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000141-3a5c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-141.jpg?c=a1d8d HTTP/1.1
+--txn-000141-3a5c-F--
+HTTP/1.1 200 OK Content-Length: 2604
+--txn-000141-3a5c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000141-3a5c-Z--
+--txn-000142-06f9-A--
+[2026-03-22T22:39:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000142-06f9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-142.jpg?c=4ba1 HTTP/1.1
+--txn-000142-06f9-F--
+HTTP/1.1 200 OK Content-Length: 3376
+--txn-000142-06f9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000142-06f9-Z--
+--txn-000143-8cdf-A--
+[2026-03-22T22:43:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000143-8cdf-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-143.jpg?c=239db HTTP/1.1
+--txn-000143-8cdf-F--
+HTTP/1.1 200 OK Content-Length: 1926
+--txn-000143-8cdf-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000143-8cdf-Z--
+--txn-000144-05f1-A--
+[2026-03-22T22:48:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000144-05f1-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-144.jpg?c=74dd3 HTTP/1.1
+--txn-000144-05f1-F--
+HTTP/1.1 200 OK Content-Length: 3957
+--txn-000144-05f1-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000144-05f1-Z--
+--txn-000145-d209-A--
+[2026-03-22T22:52:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000145-d209-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-145.jpg?c=74735 HTTP/1.1
+--txn-000145-d209-F--
+HTTP/1.1 200 OK Content-Length: 798
+--txn-000145-d209-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000145-d209-Z--
+--txn-000146-096b-A--
+[2026-03-22T22:57:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000146-096b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-146.jpg?c=795f1 HTTP/1.1
+--txn-000146-096b-F--
+HTTP/1.1 200 OK Content-Length: 1080
+--txn-000146-096b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000146-096b-Z--
+--txn-000147-a8a0-A--
+[2026-03-22T23:01:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000147-a8a0-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-147.jpg?c=cac28 HTTP/1.1
+--txn-000147-a8a0-F--
+HTTP/1.1 200 OK Content-Length: 3823
+--txn-000147-a8a0-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000147-a8a0-Z--
+--txn-000148-3749-A--
+[2026-03-22T23:06:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000148-3749-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-148.jpg?c=19f68 HTTP/1.1
+--txn-000148-3749-F--
+HTTP/1.1 200 OK Content-Length: 1583
+--txn-000148-3749-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000148-3749-Z--
+--txn-000149-4d6c-A--
+[2026-03-22T23:10:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000149-4d6c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-149.jpg?c=fefc8 HTTP/1.1
+--txn-000149-4d6c-F--
+HTTP/1.1 200 OK Content-Length: 715
+--txn-000149-4d6c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000149-4d6c-Z--
+--txn-000150-5227-A--
+[2026-03-22T23:15:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000150-5227-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-150.jpg?c=49d56 HTTP/1.1
+--txn-000150-5227-F--
+HTTP/1.1 200 OK Content-Length: 3641
+--txn-000150-5227-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000150-5227-Z--
+--txn-000151-ed3d-A--
+[2026-03-22T23:19:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000151-ed3d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-151.jpg?c=fe10b HTTP/1.1
+--txn-000151-ed3d-F--
+HTTP/1.1 200 OK Content-Length: 2647
+--txn-000151-ed3d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000151-ed3d-Z--
+--txn-000152-7902-A--
+[2026-03-22T23:24:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000152-7902-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-152.jpg?c=12059 HTTP/1.1
+--txn-000152-7902-F--
+HTTP/1.1 200 OK Content-Length: 3901
+--txn-000152-7902-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000152-7902-Z--
+--txn-000153-c643-A--
+[2026-03-22T23:28:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000153-c643-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-153.jpg?c=50985 HTTP/1.1
+--txn-000153-c643-F--
+HTTP/1.1 200 OK Content-Length: 3463
+--txn-000153-c643-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000153-c643-Z--
+--txn-000154-fdfd-A--
+[2026-03-22T23:33:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000154-fdfd-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-154.jpg?c=56c6c HTTP/1.1
+--txn-000154-fdfd-F--
+HTTP/1.1 200 OK Content-Length: 1199
+--txn-000154-fdfd-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000154-fdfd-Z--
+--txn-000155-b93f-A--
+[2026-03-22T23:37:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000155-b93f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-155.jpg?c=d3772 HTTP/1.1
+--txn-000155-b93f-F--
+HTTP/1.1 200 OK Content-Length: 1893
+--txn-000155-b93f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000155-b93f-Z--
+--txn-000156-e8b2-A--
+[2026-03-22T23:42:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000156-e8b2-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-156.jpg?c=f83b3 HTTP/1.1
+--txn-000156-e8b2-F--
+HTTP/1.1 200 OK Content-Length: 3957
+--txn-000156-e8b2-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000156-e8b2-Z--
+--txn-000157-b6bb-A--
+[2026-03-22T23:46:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000157-b6bb-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-157.jpg?c=7220f HTTP/1.1
+--txn-000157-b6bb-F--
+HTTP/1.1 200 OK Content-Length: 2520
+--txn-000157-b6bb-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000157-b6bb-Z--
+--txn-000158-69ed-A--
+[2026-03-22T23:51:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000158-69ed-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-158.jpg?c=d6fa6 HTTP/1.1
+--txn-000158-69ed-F--
+HTTP/1.1 200 OK Content-Length: 2344
+--txn-000158-69ed-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000158-69ed-Z--
+--txn-000159-28e9-A--
+[2026-03-22T23:55:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000159-28e9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-159.jpg?c=85407 HTTP/1.1
+--txn-000159-28e9-F--
+HTTP/1.1 200 OK Content-Length: 821
+--txn-000159-28e9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000159-28e9-Z--
+--txn-000160-6e79-A--
+[2026-03-23T00:00:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000160-6e79-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-160.jpg?c=412cc HTTP/1.1
+--txn-000160-6e79-F--
+HTTP/1.1 200 OK Content-Length: 649
+--txn-000160-6e79-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000160-6e79-Z--
+--txn-000161-602b-A--
+[2026-03-23T00:04:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000161-602b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-161.jpg?c=5813f HTTP/1.1
+--txn-000161-602b-F--
+HTTP/1.1 200 OK Content-Length: 2741
+--txn-000161-602b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000161-602b-Z--
+--txn-000162-8d5f-A--
+[2026-03-23T00:09:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000162-8d5f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-162.jpg?c=9873d HTTP/1.1
+--txn-000162-8d5f-F--
+HTTP/1.1 200 OK Content-Length: 559
+--txn-000162-8d5f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000162-8d5f-Z--
+--txn-000163-a23c-A--
+[2026-03-23T00:13:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000163-a23c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-163.jpg?c=ae28f HTTP/1.1
+--txn-000163-a23c-F--
+HTTP/1.1 200 OK Content-Length: 2264
+--txn-000163-a23c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000163-a23c-Z--
+--txn-000164-519a-A--
+[2026-03-23T00:18:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000164-519a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-164.jpg?c=8af4e HTTP/1.1
+--txn-000164-519a-F--
+HTTP/1.1 200 OK Content-Length: 2342
+--txn-000164-519a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000164-519a-Z--
+--txn-000165-6ee6-A--
+[2026-03-23T00:22:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000165-6ee6-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-165.jpg?c=e057b HTTP/1.1
+--txn-000165-6ee6-F--
+HTTP/1.1 200 OK Content-Length: 3559
+--txn-000165-6ee6-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000165-6ee6-Z--
+--txn-000166-5f98-A--
+[2026-03-23T00:27:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000166-5f98-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-166.jpg?c=a773b HTTP/1.1
+--txn-000166-5f98-F--
+HTTP/1.1 200 OK Content-Length: 4278
+--txn-000166-5f98-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000166-5f98-Z--
+--txn-000167-5280-A--
+[2026-03-23T00:31:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000167-5280-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-167.jpg?c=16141 HTTP/1.1
+--txn-000167-5280-F--
+HTTP/1.1 200 OK Content-Length: 1953
+--txn-000167-5280-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000167-5280-Z--
+--txn-000168-88fb-A--
+[2026-03-23T00:36:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000168-88fb-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-168.jpg?c=9b370 HTTP/1.1
+--txn-000168-88fb-F--
+HTTP/1.1 200 OK Content-Length: 3846
+--txn-000168-88fb-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000168-88fb-Z--
+--txn-000169-42f3-A--
+[2026-03-23T00:40:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000169-42f3-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-169.jpg?c=b75bc HTTP/1.1
+--txn-000169-42f3-F--
+HTTP/1.1 200 OK Content-Length: 470
+--txn-000169-42f3-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000169-42f3-Z--
+--txn-000170-9632-A--
+[2026-03-23T00:45:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000170-9632-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-170.jpg?c=361da HTTP/1.1
+--txn-000170-9632-F--
+HTTP/1.1 200 OK Content-Length: 2062
+--txn-000170-9632-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000170-9632-Z--
+--txn-000171-da9e-A--
+[2026-03-23T00:49:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000171-da9e-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-171.jpg?c=813f0 HTTP/1.1
+--txn-000171-da9e-F--
+HTTP/1.1 200 OK Content-Length: 2111
+--txn-000171-da9e-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000171-da9e-Z--
+--txn-000172-16cd-A--
+[2026-03-23T00:54:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000172-16cd-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-172.jpg?c=42ad5 HTTP/1.1
+--txn-000172-16cd-F--
+HTTP/1.1 200 OK Content-Length: 1409
+--txn-000172-16cd-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000172-16cd-Z--
+--txn-000173-0ffc-A--
+[2026-03-23T00:58:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000173-0ffc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-173.jpg?c=dd212 HTTP/1.1
+--txn-000173-0ffc-F--
+HTTP/1.1 200 OK Content-Length: 4099
+--txn-000173-0ffc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000173-0ffc-Z--
+--txn-000174-7305-A--
+[2026-03-23T01:03:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000174-7305-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-174.jpg?c=fee77 HTTP/1.1
+--txn-000174-7305-F--
+HTTP/1.1 200 OK Content-Length: 3127
+--txn-000174-7305-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000174-7305-Z--
+--txn-000175-47cc-A--
+[2026-03-23T01:07:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000175-47cc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-175.jpg?c=f350c HTTP/1.1
+--txn-000175-47cc-F--
+HTTP/1.1 200 OK Content-Length: 3134
+--txn-000175-47cc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000175-47cc-Z--
+--txn-000176-2ae2-A--
+[2026-03-23T01:12:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000176-2ae2-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-176.jpg?c=6c870 HTTP/1.1
+--txn-000176-2ae2-F--
+HTTP/1.1 200 OK Content-Length: 1937
+--txn-000176-2ae2-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000176-2ae2-Z--
+--txn-000177-6a44-A--
+[2026-03-23T01:16:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000177-6a44-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-177.jpg?c=62c59 HTTP/1.1
+--txn-000177-6a44-F--
+HTTP/1.1 200 OK Content-Length: 925
+--txn-000177-6a44-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000177-6a44-Z--
+--txn-000178-61a0-A--
+[2026-03-23T01:21:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000178-61a0-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-178.jpg?c=cfed6 HTTP/1.1
+--txn-000178-61a0-F--
+HTTP/1.1 200 OK Content-Length: 4189
+--txn-000178-61a0-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000178-61a0-Z--
+--txn-000179-82d4-A--
+[2026-03-23T01:25:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000179-82d4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-179.jpg?c=b96c7 HTTP/1.1
+--txn-000179-82d4-F--
+HTTP/1.1 200 OK Content-Length: 2883
+--txn-000179-82d4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000179-82d4-Z--
+--txn-000180-650f-A--
+[2026-03-23T01:30:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000180-650f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-180.jpg?c=7085 HTTP/1.1
+--txn-000180-650f-F--
+HTTP/1.1 200 OK Content-Length: 2908
+--txn-000180-650f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000180-650f-Z--
+--txn-000181-f49f-A--
+[2026-03-23T01:34:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000181-f49f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-181.jpg?c=ef9f2 HTTP/1.1
+--txn-000181-f49f-F--
+HTTP/1.1 200 OK Content-Length: 2969
+--txn-000181-f49f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000181-f49f-Z--
+--txn-000182-deb4-A--
+[2026-03-23T01:39:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000182-deb4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-182.jpg?c=5b793 HTTP/1.1
+--txn-000182-deb4-F--
+HTTP/1.1 200 OK Content-Length: 2678
+--txn-000182-deb4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000182-deb4-Z--
+--txn-000183-a271-A--
+[2026-03-23T01:43:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000183-a271-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-183.jpg?c=5ca77 HTTP/1.1
+--txn-000183-a271-F--
+HTTP/1.1 200 OK Content-Length: 1763
+--txn-000183-a271-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000183-a271-Z--
+--txn-000184-f250-A--
+[2026-03-23T01:48:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000184-f250-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-184.jpg?c=63a3d HTTP/1.1
+--txn-000184-f250-F--
+HTTP/1.1 200 OK Content-Length: 426
+--txn-000184-f250-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000184-f250-Z--
+--txn-000185-fe46-A--
+[2026-03-23T01:52:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000185-fe46-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-185.jpg?c=88e97 HTTP/1.1
+--txn-000185-fe46-F--
+HTTP/1.1 200 OK Content-Length: 724
+--txn-000185-fe46-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000185-fe46-Z--
+--txn-000186-cfcc-A--
+[2026-03-23T01:57:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000186-cfcc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-186.jpg?c=a282b HTTP/1.1
+--txn-000186-cfcc-F--
+HTTP/1.1 200 OK Content-Length: 1555
+--txn-000186-cfcc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000186-cfcc-Z--
+--txn-000187-b093-A--
+[2026-03-23T02:01:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000187-b093-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-187.jpg?c=98668 HTTP/1.1
+--txn-000187-b093-F--
+HTTP/1.1 200 OK Content-Length: 2845
+--txn-000187-b093-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000187-b093-Z--
+--txn-000188-15c6-A--
+[2026-03-23T02:06:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000188-15c6-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-188.jpg?c=24edc HTTP/1.1
+--txn-000188-15c6-F--
+HTTP/1.1 200 OK Content-Length: 2367
+--txn-000188-15c6-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000188-15c6-Z--
+--txn-000189-7111-A--
+[2026-03-23T02:10:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000189-7111-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-189.jpg?c=11603 HTTP/1.1
+--txn-000189-7111-F--
+HTTP/1.1 200 OK Content-Length: 1865
+--txn-000189-7111-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000189-7111-Z--
+--txn-000190-cb1d-A--
+[2026-03-23T02:15:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000190-cb1d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-190.jpg?c=166be HTTP/1.1
+--txn-000190-cb1d-F--
+HTTP/1.1 200 OK Content-Length: 700
+--txn-000190-cb1d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000190-cb1d-Z--
+--txn-000191-ddba-A--
+[2026-03-23T02:19:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000191-ddba-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-191.jpg?c=6e61b HTTP/1.1
+--txn-000191-ddba-F--
+HTTP/1.1 200 OK Content-Length: 2571
+--txn-000191-ddba-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000191-ddba-Z--
+--txn-000192-8684-A--
+[2026-03-23T02:24:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000192-8684-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-192.jpg?c=47a34 HTTP/1.1
+--txn-000192-8684-F--
+HTTP/1.1 200 OK Content-Length: 3067
+--txn-000192-8684-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000192-8684-Z--
+--txn-000193-1fc5-A--
+[2026-03-23T02:28:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000193-1fc5-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-193.jpg?c=fd257 HTTP/1.1
+--txn-000193-1fc5-F--
+HTTP/1.1 200 OK Content-Length: 3105
+--txn-000193-1fc5-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000193-1fc5-Z--
+--txn-000194-78f8-A--
+[2026-03-23T02:33:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000194-78f8-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-194.jpg?c=d54bf HTTP/1.1
+--txn-000194-78f8-F--
+HTTP/1.1 200 OK Content-Length: 1971
+--txn-000194-78f8-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000194-78f8-Z--
+--txn-000195-43c2-A--
+[2026-03-23T02:37:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000195-43c2-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-195.jpg?c=5a2af HTTP/1.1
+--txn-000195-43c2-F--
+HTTP/1.1 200 OK Content-Length: 3447
+--txn-000195-43c2-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000195-43c2-Z--
+--txn-000196-2409-A--
+[2026-03-23T02:42:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000196-2409-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-196.jpg?c=d4253 HTTP/1.1
+--txn-000196-2409-F--
+HTTP/1.1 200 OK Content-Length: 614
+--txn-000196-2409-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000196-2409-Z--
+--txn-000197-dbb9-A--
+[2026-03-23T02:46:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000197-dbb9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-197.jpg?c=897d3 HTTP/1.1
+--txn-000197-dbb9-F--
+HTTP/1.1 200 OK Content-Length: 2842
+--txn-000197-dbb9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000197-dbb9-Z--
+--txn-000198-a244-A--
+[2026-03-23T02:51:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000198-a244-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-198.jpg?c=8804c HTTP/1.1
+--txn-000198-a244-F--
+HTTP/1.1 200 OK Content-Length: 709
+--txn-000198-a244-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000198-a244-Z--
+--txn-000199-c632-A--
+[2026-03-23T02:55:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000199-c632-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-199.jpg?c=a1a4a HTTP/1.1
+--txn-000199-c632-F--
+HTTP/1.1 200 OK Content-Length: 4161
+--txn-000199-c632-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000199-c632-Z--
+--txn-000200-8a7b-A--
+[2026-03-23T03:00:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000200-8a7b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-200.jpg?c=dc3f7 HTTP/1.1
+--txn-000200-8a7b-F--
+HTTP/1.1 200 OK Content-Length: 685
+--txn-000200-8a7b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000200-8a7b-Z--
+--txn-000201-8a92-A--
+[2026-03-23T03:04:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000201-8a92-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-201.jpg?c=419b5 HTTP/1.1
+--txn-000201-8a92-F--
+HTTP/1.1 200 OK Content-Length: 857
+--txn-000201-8a92-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000201-8a92-Z--
+--txn-000202-82f5-A--
+[2026-03-23T03:09:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000202-82f5-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-202.jpg?c=db985 HTTP/1.1
+--txn-000202-82f5-F--
+HTTP/1.1 200 OK Content-Length: 733
+--txn-000202-82f5-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000202-82f5-Z--
+--txn-000203-3d11-A--
+[2026-03-23T03:13:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000203-3d11-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-203.jpg?c=9893 HTTP/1.1
+--txn-000203-3d11-F--
+HTTP/1.1 200 OK Content-Length: 3063
+--txn-000203-3d11-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000203-3d11-Z--
+--txn-000204-150f-A--
+[2026-03-23T03:18:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000204-150f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-204.jpg?c=9c899 HTTP/1.1
+--txn-000204-150f-F--
+HTTP/1.1 200 OK Content-Length: 1147
+--txn-000204-150f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000204-150f-Z--
+--txn-000205-7e46-A--
+[2026-03-23T03:22:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000205-7e46-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-205.jpg?c=5b7a4 HTTP/1.1
+--txn-000205-7e46-F--
+HTTP/1.1 200 OK Content-Length: 1144
+--txn-000205-7e46-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000205-7e46-Z--
+--txn-000206-7e3a-A--
+[2026-03-23T03:27:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000206-7e3a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-206.jpg?c=e09ee HTTP/1.1
+--txn-000206-7e3a-F--
+HTTP/1.1 200 OK Content-Length: 955
+--txn-000206-7e3a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000206-7e3a-Z--
+--txn-000207-c5a4-A--
+[2026-03-23T03:31:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000207-c5a4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-207.jpg?c=ae32 HTTP/1.1
+--txn-000207-c5a4-F--
+HTTP/1.1 200 OK Content-Length: 3304
+--txn-000207-c5a4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000207-c5a4-Z--
+--txn-000208-e8c2-A--
+[2026-03-23T03:36:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000208-e8c2-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-208.jpg?c=3fbdc HTTP/1.1
+--txn-000208-e8c2-F--
+HTTP/1.1 200 OK Content-Length: 4224
+--txn-000208-e8c2-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000208-e8c2-Z--
+--txn-000209-a6c7-A--
+[2026-03-23T03:40:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000209-a6c7-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-209.jpg?c=c8bba HTTP/1.1
+--txn-000209-a6c7-F--
+HTTP/1.1 200 OK Content-Length: 1501
+--txn-000209-a6c7-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000209-a6c7-Z--
+--txn-000210-43fe-A--
+[2026-03-23T03:45:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000210-43fe-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-210.jpg?c=43672 HTTP/1.1
+--txn-000210-43fe-F--
+HTTP/1.1 200 OK Content-Length: 1115
+--txn-000210-43fe-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000210-43fe-Z--
+--txn-000211-e0a2-A--
+[2026-03-23T03:49:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000211-e0a2-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-211.jpg?c=1f106 HTTP/1.1
+--txn-000211-e0a2-F--
+HTTP/1.1 200 OK Content-Length: 4191
+--txn-000211-e0a2-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000211-e0a2-Z--
+--txn-000212-c3fd-A--
+[2026-03-23T03:54:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000212-c3fd-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-212.jpg?c=7bc65 HTTP/1.1
+--txn-000212-c3fd-F--
+HTTP/1.1 200 OK Content-Length: 1006
+--txn-000212-c3fd-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000212-c3fd-Z--
+--txn-000213-0192-A--
+[2026-03-23T03:58:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000213-0192-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-213.jpg?c=d281 HTTP/1.1
+--txn-000213-0192-F--
+HTTP/1.1 200 OK Content-Length: 463
+--txn-000213-0192-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000213-0192-Z--
+--txn-000214-7e38-A--
+[2026-03-23T04:03:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000214-7e38-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-214.jpg?c=1e84e HTTP/1.1
+--txn-000214-7e38-F--
+HTTP/1.1 200 OK Content-Length: 1181
+--txn-000214-7e38-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000214-7e38-Z--
+--txn-000215-4b1f-A--
+[2026-03-23T04:07:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000215-4b1f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-215.jpg?c=fde9c HTTP/1.1
+--txn-000215-4b1f-F--
+HTTP/1.1 200 OK Content-Length: 683
+--txn-000215-4b1f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000215-4b1f-Z--
+--txn-000216-e4e9-A--
+[2026-03-23T04:12:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000216-e4e9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-216.jpg?c=e7242 HTTP/1.1
+--txn-000216-e4e9-F--
+HTTP/1.1 200 OK Content-Length: 1781
+--txn-000216-e4e9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000216-e4e9-Z--
+--txn-000217-8d2e-A--
+[2026-03-23T04:16:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000217-8d2e-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-217.jpg?c=1932c HTTP/1.1
+--txn-000217-8d2e-F--
+HTTP/1.1 200 OK Content-Length: 1734
+--txn-000217-8d2e-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000217-8d2e-Z--
+--txn-000218-5bc0-A--
+[2026-03-23T04:21:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000218-5bc0-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-218.jpg?c=93467 HTTP/1.1
+--txn-000218-5bc0-F--
+HTTP/1.1 200 OK Content-Length: 2535
+--txn-000218-5bc0-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000218-5bc0-Z--
+--txn-000219-d98f-A--
+[2026-03-23T04:25:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000219-d98f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-219.jpg?c=7986e HTTP/1.1
+--txn-000219-d98f-F--
+HTTP/1.1 200 OK Content-Length: 1221
+--txn-000219-d98f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000219-d98f-Z--
+--txn-000220-6083-A--
+[2026-03-23T04:30:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000220-6083-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-220.jpg?c=87354 HTTP/1.1
+--txn-000220-6083-F--
+HTTP/1.1 200 OK Content-Length: 1311
+--txn-000220-6083-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000220-6083-Z--
+--txn-000221-2629-A--
+[2026-03-23T04:34:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000221-2629-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-221.jpg?c=37476 HTTP/1.1
+--txn-000221-2629-F--
+HTTP/1.1 200 OK Content-Length: 1142
+--txn-000221-2629-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000221-2629-Z--
+--txn-000222-478f-A--
+[2026-03-23T04:39:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000222-478f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-222.jpg?c=daac HTTP/1.1
+--txn-000222-478f-F--
+HTTP/1.1 200 OK Content-Length: 1097
+--txn-000222-478f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000222-478f-Z--
+--txn-000223-4d71-A--
+[2026-03-23T04:43:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000223-4d71-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-223.jpg?c=5461 HTTP/1.1
+--txn-000223-4d71-F--
+HTTP/1.1 200 OK Content-Length: 2718
+--txn-000223-4d71-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000223-4d71-Z--
+--txn-000224-de0d-A--
+[2026-03-23T04:48:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000224-de0d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-224.jpg?c=a6c31 HTTP/1.1
+--txn-000224-de0d-F--
+HTTP/1.1 200 OK Content-Length: 1513
+--txn-000224-de0d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000224-de0d-Z--
+--txn-000225-5cab-A--
+[2026-03-23T04:52:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000225-5cab-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-225.jpg?c=f4b92 HTTP/1.1
+--txn-000225-5cab-F--
+HTTP/1.1 200 OK Content-Length: 726
+--txn-000225-5cab-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000225-5cab-Z--
+--txn-000226-3369-A--
+[2026-03-23T04:57:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000226-3369-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-226.jpg?c=73680 HTTP/1.1
+--txn-000226-3369-F--
+HTTP/1.1 200 OK Content-Length: 648
+--txn-000226-3369-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000226-3369-Z--
+--txn-000227-60e3-A--
+[2026-03-23T05:01:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000227-60e3-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-227.jpg?c=74b8f HTTP/1.1
+--txn-000227-60e3-F--
+HTTP/1.1 200 OK Content-Length: 2293
+--txn-000227-60e3-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000227-60e3-Z--
+--txn-000228-78f4-A--
+[2026-03-23T05:06:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000228-78f4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-228.jpg?c=8bab4 HTTP/1.1
+--txn-000228-78f4-F--
+HTTP/1.1 200 OK Content-Length: 3661
+--txn-000228-78f4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000228-78f4-Z--
+--txn-000229-da44-A--
+[2026-03-23T05:10:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000229-da44-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-229.jpg?c=a728d HTTP/1.1
+--txn-000229-da44-F--
+HTTP/1.1 200 OK Content-Length: 384
+--txn-000229-da44-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000229-da44-Z--
+--txn-000230-9a62-A--
+[2026-03-23T05:15:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000230-9a62-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-230.jpg?c=d9c18 HTTP/1.1
+--txn-000230-9a62-F--
+HTTP/1.1 200 OK Content-Length: 2576
+--txn-000230-9a62-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000230-9a62-Z--
+--txn-000231-9ede-A--
+[2026-03-23T05:19:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000231-9ede-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-231.jpg?c=68b6c HTTP/1.1
+--txn-000231-9ede-F--
+HTTP/1.1 200 OK Content-Length: 272
+--txn-000231-9ede-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000231-9ede-Z--
+--txn-000232-af32-A--
+[2026-03-23T05:24:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000232-af32-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-232.jpg?c=cf396 HTTP/1.1
+--txn-000232-af32-F--
+HTTP/1.1 200 OK Content-Length: 3336
+--txn-000232-af32-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000232-af32-Z--
+--txn-000233-6feb-A--
+[2026-03-23T05:28:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000233-6feb-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-233.jpg?c=c6e0a HTTP/1.1
+--txn-000233-6feb-F--
+HTTP/1.1 200 OK Content-Length: 2878
+--txn-000233-6feb-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000233-6feb-Z--
+--txn-000234-5888-A--
+[2026-03-23T05:33:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000234-5888-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-234.jpg?c=eabdc HTTP/1.1
+--txn-000234-5888-F--
+HTTP/1.1 200 OK Content-Length: 910
+--txn-000234-5888-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000234-5888-Z--
+--txn-000235-b687-A--
+[2026-03-23T05:37:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000235-b687-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-235.jpg?c=832be HTTP/1.1
+--txn-000235-b687-F--
+HTTP/1.1 200 OK Content-Length: 1473
+--txn-000235-b687-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000235-b687-Z--
+--txn-000236-3486-A--
+[2026-03-23T05:42:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000236-3486-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-236.jpg?c=42d8e HTTP/1.1
+--txn-000236-3486-F--
+HTTP/1.1 200 OK Content-Length: 827
+--txn-000236-3486-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000236-3486-Z--
+--txn-000237-e5c6-A--
+[2026-03-23T05:46:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000237-e5c6-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-237.jpg?c=f2a0 HTTP/1.1
+--txn-000237-e5c6-F--
+HTTP/1.1 200 OK Content-Length: 1779
+--txn-000237-e5c6-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000237-e5c6-Z--
+--txn-000238-92e0-A--
+[2026-03-23T05:51:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000238-92e0-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-238.jpg?c=e857b HTTP/1.1
+--txn-000238-92e0-F--
+HTTP/1.1 200 OK Content-Length: 2729
+--txn-000238-92e0-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000238-92e0-Z--
+--txn-000239-c1ed-A--
+[2026-03-23T05:55:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000239-c1ed-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-239.jpg?c=b0230 HTTP/1.1
+--txn-000239-c1ed-F--
+HTTP/1.1 200 OK Content-Length: 3749
+--txn-000239-c1ed-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000239-c1ed-Z--
+--txn-000240-f549-A--
+[2026-03-23T06:00:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000240-f549-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-240.jpg?c=51706 HTTP/1.1
+--txn-000240-f549-F--
+HTTP/1.1 200 OK Content-Length: 3876
+--txn-000240-f549-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000240-f549-Z--
+--txn-000241-0aca-A--
+[2026-03-23T06:04:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000241-0aca-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-241.jpg?c=183fa HTTP/1.1
+--txn-000241-0aca-F--
+HTTP/1.1 200 OK Content-Length: 1681
+--txn-000241-0aca-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000241-0aca-Z--
+--txn-000242-ab1d-A--
+[2026-03-23T06:09:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000242-ab1d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-242.jpg?c=ba04a HTTP/1.1
+--txn-000242-ab1d-F--
+HTTP/1.1 200 OK Content-Length: 526
+--txn-000242-ab1d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000242-ab1d-Z--
+--txn-000243-ed9a-A--
+[2026-03-23T06:13:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000243-ed9a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-243.jpg?c=83a7e HTTP/1.1
+--txn-000243-ed9a-F--
+HTTP/1.1 200 OK Content-Length: 1770
+--txn-000243-ed9a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000243-ed9a-Z--
+--txn-000244-5141-A--
+[2026-03-23T06:18:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000244-5141-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-244.jpg?c=222cd HTTP/1.1
+--txn-000244-5141-F--
+HTTP/1.1 200 OK Content-Length: 2169
+--txn-000244-5141-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000244-5141-Z--
+--txn-000245-4e04-A--
+[2026-03-23T06:22:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000245-4e04-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-245.jpg?c=e902f HTTP/1.1
+--txn-000245-4e04-F--
+HTTP/1.1 200 OK Content-Length: 284
+--txn-000245-4e04-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000245-4e04-Z--
+--txn-000246-440f-A--
+[2026-03-23T06:27:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000246-440f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-246.jpg?c=52b89 HTTP/1.1
+--txn-000246-440f-F--
+HTTP/1.1 200 OK Content-Length: 1211
+--txn-000246-440f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000246-440f-Z--
+--txn-000247-a3c4-A--
+[2026-03-23T06:31:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000247-a3c4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-247.jpg?c=cb133 HTTP/1.1
+--txn-000247-a3c4-F--
+HTTP/1.1 200 OK Content-Length: 414
+--txn-000247-a3c4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000247-a3c4-Z--
+--txn-000248-519d-A--
+[2026-03-23T06:36:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000248-519d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-248.jpg?c=53171 HTTP/1.1
+--txn-000248-519d-F--
+HTTP/1.1 200 OK Content-Length: 3955
+--txn-000248-519d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000248-519d-Z--
+--txn-000249-9157-A--
+[2026-03-23T06:40:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000249-9157-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-249.jpg?c=3169b HTTP/1.1
+--txn-000249-9157-F--
+HTTP/1.1 200 OK Content-Length: 634
+--txn-000249-9157-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000249-9157-Z--
+--txn-000250-65fc-A--
+[2026-03-23T06:45:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000250-65fc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-250.jpg?c=16d20 HTTP/1.1
+--txn-000250-65fc-F--
+HTTP/1.1 200 OK Content-Length: 1808
+--txn-000250-65fc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000250-65fc-Z--
+--txn-000251-5542-A--
+[2026-03-23T06:49:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000251-5542-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-251.jpg?c=4f764 HTTP/1.1
+--txn-000251-5542-F--
+HTTP/1.1 200 OK Content-Length: 4283
+--txn-000251-5542-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000251-5542-Z--
+--txn-000252-5259-A--
+[2026-03-23T06:54:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000252-5259-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-252.jpg?c=ed819 HTTP/1.1
+--txn-000252-5259-F--
+HTTP/1.1 200 OK Content-Length: 3800
+--txn-000252-5259-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000252-5259-Z--
+--txn-000253-d4a5-A--
+[2026-03-23T06:58:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000253-d4a5-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-253.jpg?c=85161 HTTP/1.1
+--txn-000253-d4a5-F--
+HTTP/1.1 200 OK Content-Length: 3082
+--txn-000253-d4a5-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000253-d4a5-Z--
+--txn-000254-2369-A--
+[2026-03-23T07:03:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000254-2369-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-254.jpg?c=4366b HTTP/1.1
+--txn-000254-2369-F--
+HTTP/1.1 200 OK Content-Length: 973
+--txn-000254-2369-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000254-2369-Z--
+--txn-000255-6f28-A--
+[2026-03-23T07:07:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000255-6f28-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-255.jpg?c=8c248 HTTP/1.1
+--txn-000255-6f28-F--
+HTTP/1.1 200 OK Content-Length: 3812
+--txn-000255-6f28-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000255-6f28-Z--
+--txn-000256-f4c0-A--
+[2026-03-23T07:12:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000256-f4c0-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-256.jpg?c=83ad1 HTTP/1.1
+--txn-000256-f4c0-F--
+HTTP/1.1 200 OK Content-Length: 3609
+--txn-000256-f4c0-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000256-f4c0-Z--
+--txn-000257-ee59-A--
+[2026-03-23T07:16:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000257-ee59-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-257.jpg?c=49a6c HTTP/1.1
+--txn-000257-ee59-F--
+HTTP/1.1 200 OK Content-Length: 3913
+--txn-000257-ee59-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000257-ee59-Z--
+--txn-000258-5f51-A--
+[2026-03-23T07:21:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000258-5f51-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-258.jpg?c=1e8c3 HTTP/1.1
+--txn-000258-5f51-F--
+HTTP/1.1 200 OK Content-Length: 3975
+--txn-000258-5f51-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000258-5f51-Z--
+--txn-000259-afcc-A--
+[2026-03-23T07:25:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000259-afcc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-259.jpg?c=19d7a HTTP/1.1
+--txn-000259-afcc-F--
+HTTP/1.1 200 OK Content-Length: 1906
+--txn-000259-afcc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000259-afcc-Z--
+--txn-000260-8f19-A--
+[2026-03-23T07:30:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000260-8f19-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-260.jpg?c=17ea6 HTTP/1.1
+--txn-000260-8f19-F--
+HTTP/1.1 200 OK Content-Length: 4072
+--txn-000260-8f19-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000260-8f19-Z--
+--txn-000261-6bd8-A--
+[2026-03-23T07:34:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000261-6bd8-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-261.jpg?c=6855 HTTP/1.1
+--txn-000261-6bd8-F--
+HTTP/1.1 200 OK Content-Length: 4030
+--txn-000261-6bd8-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000261-6bd8-Z--
+--txn-000262-6b3a-A--
+[2026-03-23T07:39:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000262-6b3a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-262.jpg?c=35609 HTTP/1.1
+--txn-000262-6b3a-F--
+HTTP/1.1 200 OK Content-Length: 2229
+--txn-000262-6b3a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000262-6b3a-Z--
+--txn-000263-5a3c-A--
+[2026-03-23T07:43:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000263-5a3c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-263.jpg?c=f7fc5 HTTP/1.1
+--txn-000263-5a3c-F--
+HTTP/1.1 200 OK Content-Length: 1594
+--txn-000263-5a3c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000263-5a3c-Z--
+--txn-000264-6260-A--
+[2026-03-23T07:48:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000264-6260-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-264.jpg?c=3a1b8 HTTP/1.1
+--txn-000264-6260-F--
+HTTP/1.1 200 OK Content-Length: 653
+--txn-000264-6260-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000264-6260-Z--
+--txn-000265-70db-A--
+[2026-03-23T07:52:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000265-70db-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-265.jpg?c=d210 HTTP/1.1
+--txn-000265-70db-F--
+HTTP/1.1 200 OK Content-Length: 4203
+--txn-000265-70db-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000265-70db-Z--
+--txn-000266-e71b-A--
+[2026-03-23T07:57:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000266-e71b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-266.jpg?c=d9471 HTTP/1.1
+--txn-000266-e71b-F--
+HTTP/1.1 200 OK Content-Length: 2230
+--txn-000266-e71b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000266-e71b-Z--
+--txn-000267-2377-A--
+[2026-03-23T08:01:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000267-2377-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-267.jpg?c=370c8 HTTP/1.1
+--txn-000267-2377-F--
+HTTP/1.1 200 OK Content-Length: 2676
+--txn-000267-2377-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000267-2377-Z--
+--txn-000268-5ed4-A--
+[2026-03-23T08:06:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000268-5ed4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-268.jpg?c=18574 HTTP/1.1
+--txn-000268-5ed4-F--
+HTTP/1.1 200 OK Content-Length: 1807
+--txn-000268-5ed4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000268-5ed4-Z--
+--txn-000269-e6e7-A--
+[2026-03-23T08:10:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000269-e6e7-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-269.jpg?c=5d16f HTTP/1.1
+--txn-000269-e6e7-F--
+HTTP/1.1 200 OK Content-Length: 1629
+--txn-000269-e6e7-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000269-e6e7-Z--
+--txn-000270-d591-A--
+[2026-03-23T08:15:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000270-d591-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-270.jpg?c=8a1f6 HTTP/1.1
+--txn-000270-d591-F--
+HTTP/1.1 200 OK Content-Length: 957
+--txn-000270-d591-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000270-d591-Z--
+--txn-000271-3309-A--
+[2026-03-23T08:19:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000271-3309-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-271.jpg?c=875b6 HTTP/1.1
+--txn-000271-3309-F--
+HTTP/1.1 200 OK Content-Length: 2784
+--txn-000271-3309-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000271-3309-Z--
+--txn-000272-b9da-A--
+[2026-03-23T08:24:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000272-b9da-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-272.jpg?c=fa906 HTTP/1.1
+--txn-000272-b9da-F--
+HTTP/1.1 200 OK Content-Length: 3035
+--txn-000272-b9da-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000272-b9da-Z--
+--txn-000273-6a26-A--
+[2026-03-23T08:28:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000273-6a26-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-273.jpg?c=76b4d HTTP/1.1
+--txn-000273-6a26-F--
+HTTP/1.1 200 OK Content-Length: 283
+--txn-000273-6a26-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000273-6a26-Z--
+--txn-000274-913c-A--
+[2026-03-23T08:33:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000274-913c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-274.jpg?c=bd2a5 HTTP/1.1
+--txn-000274-913c-F--
+HTTP/1.1 200 OK Content-Length: 2739
+--txn-000274-913c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000274-913c-Z--
+--txn-000275-f189-A--
+[2026-03-23T08:37:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000275-f189-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-275.jpg?c=916bc HTTP/1.1
+--txn-000275-f189-F--
+HTTP/1.1 200 OK Content-Length: 4174
+--txn-000275-f189-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000275-f189-Z--
+--txn-000276-5bff-A--
+[2026-03-23T08:42:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000276-5bff-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-276.jpg?c=93ece HTTP/1.1
+--txn-000276-5bff-F--
+HTTP/1.1 200 OK Content-Length: 2808
+--txn-000276-5bff-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000276-5bff-Z--
+--txn-000277-2d17-A--
+[2026-03-23T08:46:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000277-2d17-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-277.jpg?c=6dc73 HTTP/1.1
+--txn-000277-2d17-F--
+HTTP/1.1 200 OK Content-Length: 3225
+--txn-000277-2d17-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000277-2d17-Z--
+--txn-000278-bb34-A--
+[2026-03-23T08:51:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000278-bb34-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-278.jpg?c=47dff HTTP/1.1
+--txn-000278-bb34-F--
+HTTP/1.1 200 OK Content-Length: 259
+--txn-000278-bb34-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000278-bb34-Z--
+--txn-000279-27eb-A--
+[2026-03-23T08:55:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000279-27eb-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-279.jpg?c=d3023 HTTP/1.1
+--txn-000279-27eb-F--
+HTTP/1.1 200 OK Content-Length: 4178
+--txn-000279-27eb-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000279-27eb-Z--
+--txn-000280-9ca9-A--
+[2026-03-23T09:00:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000280-9ca9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-280.jpg?c=85d77 HTTP/1.1
+--txn-000280-9ca9-F--
+HTTP/1.1 200 OK Content-Length: 3798
+--txn-000280-9ca9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000280-9ca9-Z--
+--txn-000281-5e7a-A--
+[2026-03-23T09:04:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000281-5e7a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-281.jpg?c=f7173 HTTP/1.1
+--txn-000281-5e7a-F--
+HTTP/1.1 200 OK Content-Length: 3562
+--txn-000281-5e7a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000281-5e7a-Z--
+--txn-000282-7a6a-A--
+[2026-03-23T09:09:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000282-7a6a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-282.jpg?c=f6a49 HTTP/1.1
+--txn-000282-7a6a-F--
+HTTP/1.1 200 OK Content-Length: 1230
+--txn-000282-7a6a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000282-7a6a-Z--
+--txn-000283-ebe4-A--
+[2026-03-23T09:13:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000283-ebe4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-283.jpg?c=8d659 HTTP/1.1
+--txn-000283-ebe4-F--
+HTTP/1.1 200 OK Content-Length: 3027
+--txn-000283-ebe4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000283-ebe4-Z--
+--txn-000284-6bfa-A--
+[2026-03-23T09:18:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000284-6bfa-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-284.jpg?c=90025 HTTP/1.1
+--txn-000284-6bfa-F--
+HTTP/1.1 200 OK Content-Length: 3643
+--txn-000284-6bfa-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000284-6bfa-Z--
+--txn-000285-efca-A--
+[2026-03-23T09:22:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000285-efca-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-285.jpg?c=23765 HTTP/1.1
+--txn-000285-efca-F--
+HTTP/1.1 200 OK Content-Length: 884
+--txn-000285-efca-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000285-efca-Z--
+--txn-000286-190c-A--
+[2026-03-23T09:27:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000286-190c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-286.jpg?c=a85b6 HTTP/1.1
+--txn-000286-190c-F--
+HTTP/1.1 200 OK Content-Length: 3490
+--txn-000286-190c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000286-190c-Z--
+--txn-000287-5471-A--
+[2026-03-23T09:31:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000287-5471-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-287.jpg?c=f1877 HTTP/1.1
+--txn-000287-5471-F--
+HTTP/1.1 200 OK Content-Length: 756
+--txn-000287-5471-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000287-5471-Z--
+--txn-000288-98da-A--
+[2026-03-23T09:36:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000288-98da-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-288.jpg?c=e15a HTTP/1.1
+--txn-000288-98da-F--
+HTTP/1.1 200 OK Content-Length: 3970
+--txn-000288-98da-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000288-98da-Z--
+--txn-000289-5f3f-A--
+[2026-03-23T09:40:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000289-5f3f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-289.jpg?c=e9fd5 HTTP/1.1
+--txn-000289-5f3f-F--
+HTTP/1.1 200 OK Content-Length: 1499
+--txn-000289-5f3f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000289-5f3f-Z--
+--txn-000290-fc90-A--
+[2026-03-23T09:45:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000290-fc90-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-290.jpg?c=62bab HTTP/1.1
+--txn-000290-fc90-F--
+HTTP/1.1 200 OK Content-Length: 3456
+--txn-000290-fc90-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000290-fc90-Z--
+--txn-000291-b027-A--
+[2026-03-23T09:49:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000291-b027-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-291.jpg?c=dc3fa HTTP/1.1
+--txn-000291-b027-F--
+HTTP/1.1 200 OK Content-Length: 314
+--txn-000291-b027-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000291-b027-Z--
+--txn-000292-010a-A--
+[2026-03-23T09:54:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000292-010a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-292.jpg?c=12f2e HTTP/1.1
+--txn-000292-010a-F--
+HTTP/1.1 200 OK Content-Length: 676
+--txn-000292-010a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000292-010a-Z--
+--txn-000293-744a-A--
+[2026-03-23T09:58:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000293-744a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-293.jpg?c=b9844 HTTP/1.1
+--txn-000293-744a-F--
+HTTP/1.1 200 OK Content-Length: 3573
+--txn-000293-744a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000293-744a-Z--
+--txn-000294-7eb9-A--
+[2026-03-23T10:03:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000294-7eb9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-294.jpg?c=2ad63 HTTP/1.1
+--txn-000294-7eb9-F--
+HTTP/1.1 200 OK Content-Length: 510
+--txn-000294-7eb9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000294-7eb9-Z--
+--txn-000295-a47f-A--
+[2026-03-23T10:07:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000295-a47f-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-295.jpg?c=8ce88 HTTP/1.1
+--txn-000295-a47f-F--
+HTTP/1.1 200 OK Content-Length: 2143
+--txn-000295-a47f-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000295-a47f-Z--
+--txn-000296-0583-A--
+[2026-03-23T10:12:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000296-0583-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-296.jpg?c=db09 HTTP/1.1
+--txn-000296-0583-F--
+HTTP/1.1 200 OK Content-Length: 1286
+--txn-000296-0583-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000296-0583-Z--
+--txn-000297-f4a7-A--
+[2026-03-23T10:16:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000297-f4a7-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-297.jpg?c=dddb HTTP/1.1
+--txn-000297-f4a7-F--
+HTTP/1.1 200 OK Content-Length: 970
+--txn-000297-f4a7-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000297-f4a7-Z--
+--txn-000298-a5f8-A--
+[2026-03-23T10:21:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000298-a5f8-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-298.jpg?c=f4537 HTTP/1.1
+--txn-000298-a5f8-F--
+HTTP/1.1 200 OK Content-Length: 3387
+--txn-000298-a5f8-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000298-a5f8-Z--
+--txn-000299-2db2-A--
+[2026-03-23T10:25:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000299-2db2-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-299.jpg?c=97638 HTTP/1.1
+--txn-000299-2db2-F--
+HTTP/1.1 200 OK Content-Length: 805
+--txn-000299-2db2-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000299-2db2-Z--
+--txn-000300-3a59-A--
+[2026-03-23T10:30:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000300-3a59-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-300.jpg?c=feafa HTTP/1.1
+--txn-000300-3a59-F--
+HTTP/1.1 200 OK Content-Length: 3658
+--txn-000300-3a59-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000300-3a59-Z--
+--txn-000301-7112-A--
+[2026-03-23T10:34:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000301-7112-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-301.jpg?c=7457 HTTP/1.1
+--txn-000301-7112-F--
+HTTP/1.1 200 OK Content-Length: 4010
+--txn-000301-7112-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000301-7112-Z--
+--txn-000302-282a-A--
+[2026-03-23T10:39:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000302-282a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-302.jpg?c=5485e HTTP/1.1
+--txn-000302-282a-F--
+HTTP/1.1 200 OK Content-Length: 2334
+--txn-000302-282a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000302-282a-Z--
+--txn-000303-bc70-A--
+[2026-03-23T10:43:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000303-bc70-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-303.jpg?c=92e0a HTTP/1.1
+--txn-000303-bc70-F--
+HTTP/1.1 200 OK Content-Length: 3995
+--txn-000303-bc70-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000303-bc70-Z--
+--txn-000304-20bc-A--
+[2026-03-23T10:48:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000304-20bc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-304.jpg?c=852a4 HTTP/1.1
+--txn-000304-20bc-F--
+HTTP/1.1 200 OK Content-Length: 610
+--txn-000304-20bc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000304-20bc-Z--
+--txn-000305-1357-A--
+[2026-03-23T10:52:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000305-1357-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-305.jpg?c=409e HTTP/1.1
+--txn-000305-1357-F--
+HTTP/1.1 200 OK Content-Length: 952
+--txn-000305-1357-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000305-1357-Z--
+--txn-000306-7ffc-A--
+[2026-03-23T10:57:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000306-7ffc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-306.jpg?c=f2bd5 HTTP/1.1
+--txn-000306-7ffc-F--
+HTTP/1.1 200 OK Content-Length: 1335
+--txn-000306-7ffc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000306-7ffc-Z--
+--txn-000307-fbfb-A--
+[2026-03-23T11:01:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000307-fbfb-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-307.jpg?c=d9a98 HTTP/1.1
+--txn-000307-fbfb-F--
+HTTP/1.1 200 OK Content-Length: 3876
+--txn-000307-fbfb-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000307-fbfb-Z--
+--txn-000308-b9d4-A--
+[2026-03-23T11:06:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000308-b9d4-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-308.jpg?c=97e18 HTTP/1.1
+--txn-000308-b9d4-F--
+HTTP/1.1 200 OK Content-Length: 2926
+--txn-000308-b9d4-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000308-b9d4-Z--
+--txn-000309-66f5-A--
+[2026-03-23T11:10:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000309-66f5-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-309.jpg?c=9e3bd HTTP/1.1
+--txn-000309-66f5-F--
+HTTP/1.1 200 OK Content-Length: 3142
+--txn-000309-66f5-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000309-66f5-Z--
+--txn-000310-e4a9-A--
+[2026-03-23T11:15:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000310-e4a9-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-310.jpg?c=34dca HTTP/1.1
+--txn-000310-e4a9-F--
+HTTP/1.1 200 OK Content-Length: 2323
+--txn-000310-e4a9-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000310-e4a9-Z--
+--txn-000311-7476-A--
+[2026-03-23T11:19:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000311-7476-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-311.jpg?c=f3655 HTTP/1.1
+--txn-000311-7476-F--
+HTTP/1.1 200 OK Content-Length: 2001
+--txn-000311-7476-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000311-7476-Z--
+--txn-000312-bb9a-A--
+[2026-03-23T11:24:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000312-bb9a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-312.jpg?c=bf2af HTTP/1.1
+--txn-000312-bb9a-F--
+HTTP/1.1 200 OK Content-Length: 717
+--txn-000312-bb9a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000312-bb9a-Z--
+--txn-000313-5f7d-A--
+[2026-03-23T11:28:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000313-5f7d-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-313.jpg?c=88f1c HTTP/1.1
+--txn-000313-5f7d-F--
+HTTP/1.1 200 OK Content-Length: 328
+--txn-000313-5f7d-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000313-5f7d-Z--
+--txn-000314-0c9c-A--
+[2026-03-23T11:33:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000314-0c9c-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-314.jpg?c=9a759 HTTP/1.1
+--txn-000314-0c9c-F--
+HTTP/1.1 200 OK Content-Length: 3219
+--txn-000314-0c9c-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000314-0c9c-Z--
+--txn-000315-fece-A--
+[2026-03-23T11:37:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000315-fece-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-315.jpg?c=5440c HTTP/1.1
+--txn-000315-fece-F--
+HTTP/1.1 200 OK Content-Length: 378
+--txn-000315-fece-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000315-fece-Z--
+--txn-000316-2710-A--
+[2026-03-23T11:42:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000316-2710-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-316.jpg?c=c5503 HTTP/1.1
+--txn-000316-2710-F--
+HTTP/1.1 200 OK Content-Length: 962
+--txn-000316-2710-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000316-2710-Z--
+--txn-000317-d271-A--
+[2026-03-23T11:46:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000317-d271-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-317.jpg?c=9226e HTTP/1.1
+--txn-000317-d271-F--
+HTTP/1.1 200 OK Content-Length: 3884
+--txn-000317-d271-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000317-d271-Z--
+--txn-000318-0c57-A--
+[2026-03-23T11:51:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000318-0c57-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-318.jpg?c=e675b HTTP/1.1
+--txn-000318-0c57-F--
+HTTP/1.1 200 OK Content-Length: 3970
+--txn-000318-0c57-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000318-0c57-Z--
+--txn-000319-0ccc-A--
+[2026-03-23T11:55:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000319-0ccc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-319.jpg?c=a24dd HTTP/1.1
+--txn-000319-0ccc-F--
+HTTP/1.1 200 OK Content-Length: 1674
+--txn-000319-0ccc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000319-0ccc-Z--
+--txn-000320-bddb-A--
+[2026-03-23T12:00:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000320-bddb-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-320.jpg?c=a7a9f HTTP/1.1
+--txn-000320-bddb-F--
+HTTP/1.1 200 OK Content-Length: 4224
+--txn-000320-bddb-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000320-bddb-Z--
+--txn-000321-b076-A--
+[2026-03-23T12:04:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000321-b076-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-321.jpg?c=320f8 HTTP/1.1
+--txn-000321-b076-F--
+HTTP/1.1 200 OK Content-Length: 1344
+--txn-000321-b076-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000321-b076-Z--
+--txn-000322-0d23-A--
+[2026-03-23T12:09:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000322-0d23-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-322.jpg?c=2a233 HTTP/1.1
+--txn-000322-0d23-F--
+HTTP/1.1 200 OK Content-Length: 1618
+--txn-000322-0d23-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000322-0d23-Z--
+--txn-000323-e3fc-A--
+[2026-03-23T12:13:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000323-e3fc-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-323.jpg?c=18cbe HTTP/1.1
+--txn-000323-e3fc-F--
+HTTP/1.1 200 OK Content-Length: 1057
+--txn-000323-e3fc-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000323-e3fc-Z--
+--txn-000324-a70b-A--
+[2026-03-23T12:18:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000324-a70b-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-324.jpg?c=33b31 HTTP/1.1
+--txn-000324-a70b-F--
+HTTP/1.1 200 OK Content-Length: 1653
+--txn-000324-a70b-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000324-a70b-Z--
+--txn-000325-71da-A--
+[2026-03-23T12:22:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000325-71da-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-325.jpg?c=3f421 HTTP/1.1
+--txn-000325-71da-F--
+HTTP/1.1 200 OK Content-Length: 3634
+--txn-000325-71da-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000325-71da-Z--
+--txn-000326-75eb-A--
+[2026-03-23T12:27:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000326-75eb-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-326.jpg?c=7d838 HTTP/1.1
+--txn-000326-75eb-F--
+HTTP/1.1 200 OK Content-Length: 2816
+--txn-000326-75eb-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000326-75eb-Z--
+--txn-000327-5b58-A--
+[2026-03-23T12:31:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000327-5b58-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-327.jpg?c=87eab HTTP/1.1
+--txn-000327-5b58-F--
+HTTP/1.1 200 OK Content-Length: 1044
+--txn-000327-5b58-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000327-5b58-Z--
+--txn-000328-c965-A--
+[2026-03-23T12:36:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000328-c965-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-328.jpg?c=cbe90 HTTP/1.1
+--txn-000328-c965-F--
+HTTP/1.1 200 OK Content-Length: 1737
+--txn-000328-c965-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000328-c965-Z--
+--txn-000329-b52a-A--
+[2026-03-23T12:40:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000329-b52a-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-329.jpg?c=faa42 HTTP/1.1
+--txn-000329-b52a-F--
+HTTP/1.1 200 OK Content-Length: 4133
+--txn-000329-b52a-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000329-b52a-Z--
+--txn-000330-0c49-A--
+[2026-03-23T12:45:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000330-0c49-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-330.jpg?c=2d948 HTTP/1.1
+--txn-000330-0c49-F--
+HTTP/1.1 200 OK Content-Length: 1264
+--txn-000330-0c49-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000330-0c49-Z--
+--txn-000331-a877-A--
+[2026-03-23T12:49:30Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000331-a877-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-331.jpg?c=8840e HTTP/1.1
+--txn-000331-a877-F--
+HTTP/1.1 200 OK Content-Length: 3879
+--txn-000331-a877-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000331-a877-Z--
+--txn-000332-4fcf-A--
+[2026-03-23T12:54:00Z] [client 203.0.113.42] magento-prod-01 ModSecurity-Audit
+--txn-000332-4fcf-B--
+GET /pub/media/catalog/product/.cache/a.php/banner-332.jpg?c=9b026 HTTP/1.1
+--txn-000332-4fcf-F--
+HTTP/1.1 200 OK Content-Length: 651
+--txn-000332-4fcf-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-000332-4fcf-Z--
