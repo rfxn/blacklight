@@ -1160,22 +1160,6 @@ _bl_obs_detect_firewall() {
 }
 
 # ---------------------------------------------------------------------------
-# _bl_obs_scrub — strip operator-local tokens from a JSONL record string
-# ---------------------------------------------------------------------------
-_bl_obs_scrub() {
-    # Reads record-json on stdin; emits scrubbed compact record-json on stdout.
-    jq -c 'walk(
-        if type == "string"
-        then gsub("/home/[a-z][a-z0-9]{2,15}/"; "/home/<cpuser>/")
-             | gsub("\\.liquidweb\\.(com|local)"; ".example.test")
-             | gsub("sigforge[0-9]*"; "fleet-00-host")
-             | gsub("/home/sigforge/var/ioc/polyshell_out/"; "<OPERATOR_LOCAL>/")
-        else .
-        end
-    )'
-}
-
-# ---------------------------------------------------------------------------
 # _bl_obs_open_stream — case-scoped evidence file path
 # ---------------------------------------------------------------------------
 _bl_obs_open_stream() {
@@ -1211,6 +1195,10 @@ _bl_obs_emit_jsonl() {
     obs="${_BL_OBS_ID:-$(_bl_obs_allocate_obs_id)}"
     _BL_OBS_ID="$obs"   # handler-local; sticky within one invocation
 
+    # Single jq invocation: wrap envelope + scrub operator-local tokens in one
+    # pass. Prior version forked two jq processes (envelope assembly piped
+    # through `_bl_obs_scrub`) per record — observable on log-parse hot paths
+    # where N is per-line (audit M6).
     line=$(jq -n -c \
         --arg ts "$ts" \
         --arg host "$host" \
@@ -1218,8 +1206,16 @@ _bl_obs_emit_jsonl() {
         --arg obs "$obs" \
         --arg source "$source" \
         --argjson record "$record" \
-        '{ts:$ts,host:$host,case:(if $case_id=="" then null else $case_id end),obs:$obs,source:$source,record:$record}' \
-        | _bl_obs_scrub) || return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+        '{ts:$ts,host:$host,case:(if $case_id=="" then null else $case_id end),obs:$obs,source:$source,record:$record}
+         | walk(
+             if type == "string"
+             then gsub("/home/[a-z][a-z0-9]{2,15}/"; "/home/<cpuser>/")
+                  | gsub("\\.liquidweb\\.(com|local)"; ".example.test")
+                  | gsub("sigforge[0-9]*"; "fleet-00-host")
+                  | gsub("/home/sigforge/var/ioc/polyshell_out/"; "<OPERATOR_LOCAL>/")
+             else .
+             end
+         )') || return "$BL_EX_SCHEMA_VALIDATION_FAIL"
 
     printf '%s\n' "$line"
     if [[ -n "$stream_path" ]]; then
@@ -1326,32 +1322,45 @@ bl_observe_log_apache() {
     local stream_path
     stream_path="$(_bl_obs_open_stream 'log-apache')"
 
-    local total=0 post_to_php=0 s2xx=0 s3xx=0 s4xx=0 s5xx=0
-    local tmpfile
+    local tmpfile summary_file
     tmpfile=$(command mktemp)
+    summary_file=$(command mktemp)
 
+    # awk parses the combined log with mktime-based --window filtering and
+    # accumulates summary counters at END. Records out of [ws, we] are
+    # dropped (audit M8 fix; prior version computed ws/we but never applied
+    # them, emitting every record). Histogram counters live awk-side
+    # (audit M7 fix; prior bash post-emit jq queried `.record.is_post_to_php`
+    # against the unwrapped awk output → always null → counters always 0).
+    # SUMMARY emitted at END to summary_file via fd3.
     command awk \
         -v ws="$window_start" \
         -v we="$window_end" \
         -v site_label="${site:-unknown}" \
+        -v summary_path="$summary_file" \
         'BEGIN {
             months["Jan"]="01"; months["Feb"]="02"; months["Mar"]="03";
             months["Apr"]="04"; months["May"]="05"; months["Jun"]="06";
             months["Jul"]="07"; months["Aug"]="08"; months["Sep"]="09";
             months["Oct"]="10"; months["Nov"]="11"; months["Dec"]="12";
+            total=0; post_to_php=0; s2xx=0; s3xx=0; s4xx=0; s5xx=0
         }
         {
             # Combined log: IP - - [dd/Mon/yyyy:HH:MM:SS +off] "METHOD path HTTP/x" status bytes "ref" "ua"
             if ($0 ~ /^[0-9a-f.:]+[ \t]/) {
                 client_ip=$1
-                # Extract timestamp from field 4 ([ stripped below)
                 ts_raw=$4; sub(/^\[/,"",ts_raw)
                 # ts_raw = dd/Mon/yyyy:HH:MM:SS
                 split(ts_raw, ta, /[\/:]/)
                 day=ta[1]; mon=months[ta[2]]; yr=ta[3]; hh=ta[4]; mm=ta[5]; ss=ta[6]
+                # mktime expects "YYYY MM DD HH MM SS" (gawk extension; not POSIX
+                # awk). On mawk/BSD-awk where mktime is absent, the call returns
+                # -1 and the window check below falls through to emit-all (safe
+                # behavior; matches pre-fix). gawk on Debian/Rocky/CentOS-EPEL
+                # is the dominant case.
+                rec_epoch = mktime(yr " " mon " " day " " hh " " mm " " ss)
+                if (rec_epoch != -1 && (rec_epoch < ws || rec_epoch > we)) next
                 ts_iso = yr "-" mon "-" day "T" hh ":" mm ":" ss "Z"
-                # Approximate epoch: not portable without date -d; use line order heuristic
-                # For window filtering emit all lines (tests use fixture with known mtime)
                 method_path=$6; sub(/^"/,"",method_path)
                 method=method_path
                 sub(/ .*/,"",method)
@@ -1360,43 +1369,46 @@ bl_observe_log_apache() {
                 bytes=$10; if (bytes=="-") bytes="0"
                 referer=$11; sub(/^"/,"",referer); sub(/"$/,"",referer)
                 ua=""; for(i=12;i<=NF;i++){ua=ua (i>12?" ":"") $i}; sub(/^"/,"",ua); sub(/"$/,"",ua)
-                # path_class heuristic
                 path_class="normal"
                 if (path_field ~ /\.(php|phtml)\/.*\.(jpg|png|gif|svg)$/) path_class="double_ext_jpg"
                 else if (path_field ~ /\.(jpg|png|gif|svg)\?.*php/) path_class="img_with_php_param"
-                # is_post_to_php
                 is_post="false"
                 if (method=="POST" && path_field ~ /\.(php|phtml)/) is_post="true"
-                # status bucket
                 sb="other"; if (status~/^2/) sb="2xx"; else if(status~/^3/) sb="3xx"; else if(status~/^4/) sb="4xx"; else if(status~/^5/) sb="5xx"
+                # accumulate awk-side; bash counters were silently zero (M7 bug)
+                total++
+                if (is_post=="true") post_to_php++
+                if (sb=="2xx") s2xx++; else if (sb=="3xx") s3xx++; else if (sb=="4xx") s4xx++; else if (sb=="5xx") s5xx++
                 printf "{\"client_ip\":\"%s\",\"method\":\"%s\",\"path\":\"%s\",\"status\":\"%s\",\"bytes\":%s,\"ua\":\"%s\",\"referer\":\"%s\",\"site\":\"%s\",\"ts_source\":\"%s\",\"path_class\":\"%s\",\"is_post_to_php\":%s,\"status_bucket\":\"%s\"}\n",
                     client_ip, method, path_field, status, bytes, ua, referer, site_label, ts_iso, path_class, is_post, sb
             }
+        }
+        END {
+            printf "%d %d %d %d %d %d\n", total, post_to_php, s2xx, s3xx, s4xx, s5xx > summary_path
         }' "$log_path" > "$tmpfile"
 
-    local line
+    # Emit each record through the shared envelope wrapper. Useless cat-subshell
+    # passthrough (`done < <(while ... done < tmpfile)`) collapsed to direct
+    # file read (audit m17).
+    local line total=0 post_to_php=0 s2xx=0 s3xx=0 s4xx=0 s5xx=0
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
-        _bl_obs_emit_jsonl 'apache.transfer' "$line" "$stream_path" || { command rm -f "$tmpfile"; return "$BL_EX_SCHEMA_VALIDATION_FAIL"; }
-        total=$((total + 1))
-        local mb sb
-        mb=$(printf '%s' "$line" | jq -r '.record.is_post_to_php // "false"' 2>/dev/null)   # jq field extraction; jq exit ignored here
-        [[ "$mb" == "true" ]] && post_to_php=$((post_to_php + 1))
-        sb=$(printf '%s' "$line" | jq -r '.record.status_bucket // "other"' 2>/dev/null)   # jq field extraction; jq exit ignored here
-        case "$sb" in 2xx) s2xx=$((s2xx+1));; 3xx) s3xx=$((s3xx+1));; 4xx) s4xx=$((s4xx+1));; 5xx) s5xx=$((s5xx+1));; esac
-    done < <(while IFS= read -r rec; do
-        printf '%s\n' "$rec"
-    done < "$tmpfile")
+        _bl_obs_emit_jsonl 'apache.transfer' "$line" "$stream_path" || { command rm -f "$tmpfile" "$summary_file"; return "$BL_EX_SCHEMA_VALIDATION_FAIL"; }
+    done < "$tmpfile"
 
-    command rm -f "$tmpfile"
+    # Read awk-emitted summary line: "total post_to_php s2xx s3xx s4xx s5xx".
+    if [[ -s "$summary_file" ]]; then
+        read -r total post_to_php s2xx s3xx s4xx s5xx < "$summary_file"
+    fi
+    command rm -f "$tmpfile" "$summary_file"
 
     local summary
     summary=$(jq -n -c \
         --arg site "$site" \
-        --argjson total "$total" \
-        --argjson post_to_php "$post_to_php" \
-        --argjson s2xx "$s2xx" --argjson s3xx "$s3xx" \
-        --argjson s4xx "$s4xx" --argjson s5xx "$s5xx" \
+        --argjson total "${total:-0}" \
+        --argjson post_to_php "${post_to_php:-0}" \
+        --argjson s2xx "${s2xx:-0}" --argjson s3xx "${s3xx:-0}" \
+        --argjson s4xx "${s4xx:-0}" --argjson s5xx "${s5xx:-0}" \
         '{source:"apache.transfer",total_records:$total,post_to_php_count:$post_to_php,status_histogram:{s2xx:$s2xx,s3xx:$s3xx,s4xx:$s4xx,s5xx:$s5xx},site:$site}')
     _bl_obs_close_stream "$stream_path" 'apache.transfer' "$summary"
 }

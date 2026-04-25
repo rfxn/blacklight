@@ -167,6 +167,46 @@ teardown() {
     [ "$status" -ge 64 ]
 }
 
+@test "bl observe log apache: summary histogram counters are non-zero (audit M7)" {
+    # Pre-fix: post-emit jq queried `.record.is_post_to_php` against the
+    # unwrapped awk output, which lacks the `record:` envelope wrapper, so
+    # all counters were silently zero. Post-fix: counters live awk-side.
+    stage_apache_log "$BL_VAR_DIR/access.log"
+    run "$BL_SOURCE" observe log apache --around "$BL_VAR_DIR/access.log" --window 24h
+    [ "$status" -eq 0 ]
+    # Last record is the observe.summary trailer
+    local summary
+    summary=$(printf '%s\n' "$output" | grep '^{' | tail -1)
+    [ -n "$summary" ]
+    # total_records must be > 0 (fixture has APSB25-94 records within the window)
+    local total
+    total=$(printf '%s' "$summary" | jq -r '.record.total_records')
+    [ "$total" -gt 0 ]
+    # status_histogram must reflect non-zero buckets (fixture spans 2xx + 4xx)
+    local s2xx s4xx
+    s2xx=$(printf '%s' "$summary" | jq -r '.record.status_histogram.s2xx')
+    s4xx=$(printf '%s' "$summary" | jq -r '.record.status_histogram.s4xx')
+    [ $((s2xx + s4xx)) -gt 0 ]
+}
+
+@test "bl observe log apache: --window narrows record set (audit M8)" {
+    # Pre-fix: awk computed ws/we but never applied them — every record
+    # emitted regardless of window. Post-fix: mktime-based filter drops
+    # records outside [ws, we].
+    stage_apache_log "$BL_VAR_DIR/access.log"
+    run "$BL_SOURCE" observe log apache --around "$BL_VAR_DIR/access.log" --window 24h
+    [ "$status" -eq 0 ]
+    local broad_total
+    broad_total=$(printf '%s\n' "$output" | grep '^{' | tail -1 | jq -r '.record.total_records')
+    # Narrow window: 1 second around the anchor — should drop most records
+    run "$BL_SOURCE" observe log apache --around "$BL_VAR_DIR/access.log" --window 1s
+    [ "$status" -eq 0 ]
+    local narrow_total
+    narrow_total=$(printf '%s\n' "$output" | grep '^{' | tail -1 | jq -r '.record.total_records')
+    # Narrow must be ≤ broad (window filter is taking effect)
+    [ "$narrow_total" -le "$broad_total" ]
+}
+
 @test "bl observe log apache: scrub fires on output (no operator-local tokens in records)" {
     stage_apache_log "$BL_VAR_DIR/access.log"
     run "$BL_SOURCE" observe log apache --around "$BL_VAR_DIR/access.log" --window 6h

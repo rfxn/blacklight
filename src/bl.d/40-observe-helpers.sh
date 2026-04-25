@@ -117,22 +117,6 @@ _bl_obs_detect_firewall() {
 }
 
 # ---------------------------------------------------------------------------
-# _bl_obs_scrub — strip operator-local tokens from a JSONL record string
-# ---------------------------------------------------------------------------
-_bl_obs_scrub() {
-    # Reads record-json on stdin; emits scrubbed compact record-json on stdout.
-    jq -c 'walk(
-        if type == "string"
-        then gsub("/home/[a-z][a-z0-9]{2,15}/"; "/home/<cpuser>/")
-             | gsub("\\.liquidweb\\.(com|local)"; ".example.test")
-             | gsub("sigforge[0-9]*"; "fleet-00-host")
-             | gsub("/home/sigforge/var/ioc/polyshell_out/"; "<OPERATOR_LOCAL>/")
-        else .
-        end
-    )'
-}
-
-# ---------------------------------------------------------------------------
 # _bl_obs_open_stream — case-scoped evidence file path
 # ---------------------------------------------------------------------------
 _bl_obs_open_stream() {
@@ -168,6 +152,10 @@ _bl_obs_emit_jsonl() {
     obs="${_BL_OBS_ID:-$(_bl_obs_allocate_obs_id)}"
     _BL_OBS_ID="$obs"   # handler-local; sticky within one invocation
 
+    # Single jq invocation: wrap envelope + scrub operator-local tokens in one
+    # pass. Prior version forked two jq processes (envelope assembly piped
+    # through `_bl_obs_scrub`) per record — observable on log-parse hot paths
+    # where N is per-line (audit M6).
     line=$(jq -n -c \
         --arg ts "$ts" \
         --arg host "$host" \
@@ -175,8 +163,16 @@ _bl_obs_emit_jsonl() {
         --arg obs "$obs" \
         --arg source "$source" \
         --argjson record "$record" \
-        '{ts:$ts,host:$host,case:(if $case_id=="" then null else $case_id end),obs:$obs,source:$source,record:$record}' \
-        | _bl_obs_scrub) || return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+        '{ts:$ts,host:$host,case:(if $case_id=="" then null else $case_id end),obs:$obs,source:$source,record:$record}
+         | walk(
+             if type == "string"
+             then gsub("/home/[a-z][a-z0-9]{2,15}/"; "/home/<cpuser>/")
+                  | gsub("\\.liquidweb\\.(com|local)"; ".example.test")
+                  | gsub("sigforge[0-9]*"; "fleet-00-host")
+                  | gsub("/home/sigforge/var/ioc/polyshell_out/"; "<OPERATOR_LOCAL>/")
+             else .
+             end
+         )') || return "$BL_EX_SCHEMA_VALIDATION_FAIL"
 
     printf '%s\n' "$line"
     if [[ -n "$stream_path" ]]; then

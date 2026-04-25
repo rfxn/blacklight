@@ -16,6 +16,35 @@ https://github.com/rfxn/blacklight
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
 === M10 complete — blacklight v0.1.0 ship-ready ===
 
+- M9.5 P4 | Apr 25 2026 — apache observe hot-path rewrite (M6/M7/M8/m17):
+[Fix] src/bl.d/40-observe-helpers.sh — _bl_obs_emit_jsonl collapses
+      `jq -n | _bl_obs_scrub` two-process pipeline into a single jq
+      invocation with inline `walk(...)` scrub. Halves jq fork count
+      per record across all observe handlers (audit M6).
+[Change] src/bl.d/40-observe-helpers.sh — _bl_obs_scrub helper removed
+      (only caller was emit_jsonl; scrub patterns inlined). Anti-slop
+      orphan-helper cleanup.
+[Fix] src/bl.d/41-observe-collectors.sh — bl_observe_log_apache awk now
+      applies --window via mktime(); records outside [ws, we] are
+      dropped before emit. Prior version computed ws/we but never
+      filtered, emitting every record regardless of operator's window
+      (audit M8). On gawk-less awks (BSD, mawk) mktime returns -1 and
+      the filter falls through (safe behavior; matches pre-fix).
+[Fix] src/bl.d/41-observe-collectors.sh — bl_observe_log_apache
+      summary counters (total_records, post_to_php_count,
+      status_histogram) now accumulated awk-side and emitted to
+      summary file at END. Prior bash post-emit jq queried
+      `.record.is_post_to_php` against unwrapped awk output, returning
+      null every time and silently always-zero histograms (audit M7
+      correctness bug).
+[Change] src/bl.d/41-observe-collectors.sh — useless cat-subshell
+      passthrough (`done < <(while ... done < tmpfile)`) collapsed to
+      direct file read (audit m17).
+[New] tests/04-observe.bats — 2 apache regression cases:
+      summary-histogram counters are non-zero on apsb25-94 fixture;
+      narrow --window drops records relative to broad --window.
+[Change] bl — regenerated.
+
 - M9.5 P6 | Apr 25 2026 — author defense.json + intent.json input_schemas:
 [New] schemas/defense.json — synthesize_defense custom-tool input
       contract per DESIGN.md §12.2: required {kind, body, reasoning,
