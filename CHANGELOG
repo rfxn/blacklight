@@ -5,6 +5,9 @@ https://github.com/rfxn/blacklight
 === M11 — Posture lift (v0.2.0) ===
 [Change] M11 P3 — Sonnet 4.6 bundle-summary render in bl_bundle_build (src/bl.d/42-observe-router.sh): wraps summary.md generation with bl_messages_call(claude-sonnet-4-6); --no-llm-summary flag + BL_DISABLE_LLM=1 env bypass; deterministic _bl_obs_render_summary_deterministic helper at file scope as fallback on Sonnet failure (auth/5xx/429), missing prompts/bundle-summary-system.md, or bypass triggers
 [New] M11 P3 — prompts/bundle-summary-system.md: Sonnet 4.6 system prompt for bundle summary render (≤2KB output budget; jump-points + attention-worthy sections; treats log content as untrusted)
+[Change] M11 P4 — Haiku 4.5 FP-gate adjudication in _bl_defend_sig_fp_gate (src/bl.d/82-defend.sh); ≤5 corpus samples spot-checked via bl_messages_call(claude-haiku-4-5) after binary scan; fail-closed on verdict:match / parse error; BL_DISABLE_LLM=1 bypass for tests + cost-control
+[New] M11 P4 — prompts/fp-gate-haiku-system.md: Haiku adjudicator system prompt (verdict:pass|match, conservative fail-closed)
+[Change] M11 P4 — tests/06-defend.bats: export BL_DISABLE_LLM=1 in setup() to keep Haiku bypassed (M11 P5 covers Haiku path explicitly)
 [Change] M11 P1 — doc reconciliation: README skills count 48/13 → 65/20; "Try it" walkthrough flag spelling; adaptive-thinking caveat; DESIGN.md §4 polling cadence two-mode clarification; DESIGN.md §11.6 brief-render MD-canonical note; PIVOT-v2.md §6.1 hunter-dispatch demote to P3 roadmap
 [New] M11 P1 — docs/specs/2026-04-25-M11-posture-lift.md: spec input file authoring 14-item posture-lift gap table, goals, non-goals, verification commands
 [Fix] M11 P1 — CHANGELOG.RELEASE M10 P11 skills count typo (46 → 64) corrected to 46 → 65 (64 content files + INDEX.md)

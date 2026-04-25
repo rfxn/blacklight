@@ -4951,7 +4951,59 @@ _bl_defend_sig_fp_gate() {
             fi
             ;;
     esac
-    return "$BL_EX_OK"
+
+    # Haiku 4.5 adjudication: binary scan passed → ask Haiku to spot-check
+    # the sig against ≤5 corpus samples. Fail-closed on parse error or
+    # verdict:match. Bypass under BL_DISABLE_LLM=1 (test-mode + cost-control).
+    if [[ "${BL_DISABLE_LLM:-}" == "1" ]]; then
+        return "$BL_EX_OK"
+    fi
+    local repo_root="${BL_REPO_ROOT:-$(command dirname "$(command readlink -f "$0" 2>/dev/null || printf '.')")}"
+    local sys_prompt="$repo_root/prompts/fp-gate-haiku-system.md"
+    if [[ ! -r "$sys_prompt" ]]; then
+        bl_debug "FP-gate: prompts/fp-gate-haiku-system.md missing — binary-scan verdict only"
+        return "$BL_EX_OK"
+    fi
+    local user_msg
+    user_msg=$(command mktemp)
+    {
+        printf 'Scanner: %s\nSignature body:\n---\n' "$scanner"
+        command head -c 2048 "$sig_file"
+        printf '\n---\nCorpus samples (≤5, ≤512B each):\n'
+        local n=0 cf
+        for cf in "$corpus"/*; do
+            [[ -f "$cf" ]] || continue
+            (( n >= 5 )) && break
+            printf -- '--- sample %d: %s ---\n' "$((n+1))" "$(command basename "$cf")"
+            command head -c 512 "$cf"
+            printf '\n'
+            n=$((n + 1))
+        done
+    } > "$user_msg"
+    local haiku_out haiku_rc
+    haiku_out=$(bl_messages_call claude-haiku-4-5 "$sys_prompt" "$user_msg" 200)
+    haiku_rc=$?
+    command rm -f "$user_msg"
+    if (( haiku_rc != 0 )); then
+        bl_debug "FP-gate Haiku adjudication unreachable (rc=$haiku_rc) — binary-scan verdict only"
+        return "$BL_EX_OK"
+    fi
+    local verdict
+    verdict=$(printf '%s' "$haiku_out" | command grep -E '^verdict:' | command head -1 | command awk '{print $2}')
+    case "$verdict" in
+        pass)
+            bl_debug "FP-gate Haiku adjudication: pass"
+            return "$BL_EX_OK"
+            ;;
+        match)
+            bl_warn "FP-gate Haiku adjudication: match — fail-closed"
+            return "$BL_EX_TIER_GATE_DENIED"
+            ;;
+        *)
+            bl_warn "FP-gate Haiku adjudication: malformed verdict '$verdict' — fail-closed"
+            return "$BL_EX_TIER_GATE_DENIED"
+            ;;
+    esac
 }
 
 _bl_defend_sig_reload() {

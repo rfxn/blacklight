@@ -14,6 +14,7 @@ setup() {
     export BL_VAR_DIR
     export BL_REPO_ROOT="$BATS_TEST_DIRNAME/.."
     export ANTHROPIC_API_KEY="sk-ant-test"
+    export BL_DISABLE_LLM=1   # M11 P4: bypass Haiku adjudication in M6 defend tests; M11 P5 covers Haiku path explicitly
     # Netfilter actually-applies assertions gate on capability probe.
     BL_DEFEND_PRIVILEGED="no"
     [[ -w /proc/sys/net/ipv4/ip_forward ]] 2>/dev/null && BL_DEFEND_PRIVILEGED="yes"   # unprivileged container returns EPERM on write test; default "no" is correct
