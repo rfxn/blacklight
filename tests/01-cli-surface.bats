@@ -17,7 +17,7 @@ teardown() {
     [ -z "$output" ]
 }
 
-@test "bl --help exits 0 and lists all 7 namespaces" {
+@test "bl --help exits 0 and lists all command verbs" {
     run "$BL_SOURCE" --help
     [ "$status" -eq 0 ]
     [[ "$output" == *"observe"* ]]
@@ -27,6 +27,7 @@ teardown() {
     [[ "$output" == *"defend"* ]]
     [[ "$output" == *"clean"* ]]
     [[ "$output" == *"setup"* ]]
+    [[ "$output" == *"flush"* ]]
 }
 
 @test "bl help exits 0 (positional form)" {
@@ -89,6 +90,23 @@ teardown() {
         run "$BL_SOURCE" "$ns"
         [ "$status" -eq 64 ] || { echo "FAIL: $ns returned $status (expected 64)"; return 1; }
     done
+}
+
+@test "bl flush --outbox routes to outbox drain" {
+    # Pre-seed agent-id so preflight passes; flush is a non-bypass verb
+    mkdir -p "$BL_VAR_DIR/state"
+    printf '%s' "agent_test_stub" > "$BL_VAR_DIR/state/agent-id"
+    export ANTHROPIC_API_KEY="sk-ant-test"
+    run "$BL_SOURCE" flush --outbox
+    [ "$status" -eq 0 ]
+}
+
+@test "bl flush without --outbox exits 64" {
+    mkdir -p "$BL_VAR_DIR/state"
+    printf '%s' "agent_test_stub" > "$BL_VAR_DIR/state/agent-id"
+    export ANTHROPIC_API_KEY="sk-ant-test"
+    run "$BL_SOURCE" flush
+    [ "$status" -eq 64 ]
 }
 
 @test "bl <unknown-verb> exits 64 with usage hint" {

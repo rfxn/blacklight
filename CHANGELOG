@@ -15,6 +15,21 @@ https://github.com/rfxn/blacklight
 [Change] tests/09-hardening.bats — G2 consult-wake test unskipped (asserts
       wake outbox file presence + trigger_fingerprint_fenced field shape).
 
+- M9 P8 | Apr 24 2026 — bl flush --outbox CLI verb:
+[New] bl flush --outbox — on-demand outbox drain verb (M9 P8); complements
+      cron + opportunistic-preflight drain paths. Empty outbox exits 0;
+      missing --outbox flag exits 64; unknown flag exits 64.
+[Change] src/bl.d/90-main.sh — flush dispatcher branch (post-preflight; routes
+      to bl_outbox_drain). Spec §11b: when no active case, drain ledger event
+      lands under case="global".
+[Change] src/bl.d/30-preflight.sh — bl_usage Commands list now includes flush.
+[Change] tests/09-hardening.bats — G4 flush @test unskipped (drain + ledger
+      event assertion).
+[Change] tests/01-cli-surface.bats — extended --help assertion to cover flush
+      verb; added 2 routing @tests (--outbox routes to drain; bare flush 64).
+[Change] tests/00-smoke.bats — added smoke-tier --help assertion that all
+      command verbs (incl. flush) are listed.
+
 - M9 P4 | Apr 24 2026 — dual-write mirror + drain hook:
 [Change] src/bl.d/25-ledger.sh — bl_ledger_mirror_remote (best-effort remote
       replication to bl-case/actions/applied/<event-id>.json; outbox fallback

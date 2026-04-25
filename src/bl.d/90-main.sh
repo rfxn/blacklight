@@ -32,6 +32,22 @@ main() {
         defend)   shift; bl_defend   "$@"; return $? ;;
         clean)    shift; bl_clean    "$@"; return $? ;;
         case)     shift; bl_case     "$@"; return $? ;;
+        flush)
+            shift
+            local flush_target=""
+            while (( $# > 0 )); do
+                case "$1" in
+                    --outbox) flush_target="outbox"; shift ;;
+                    *) bl_error_envelope flush "unknown flag: $1"; return "$BL_EX_USAGE" ;;
+                esac
+            done
+            if [[ "$flush_target" == "outbox" ]]; then
+                bl_outbox_drain
+                return $?
+            fi
+            bl_error_envelope flush "missing --outbox (nothing else to flush in M9)"
+            return "$BL_EX_USAGE"
+            ;;
         *)
             bl_error_envelope usage "unknown command: $1" "(use \`bl --help\` for a list of commands)"
             return "$BL_EX_USAGE"

@@ -286,7 +286,11 @@ _source_bl() { source "$BL_SOURCE" >/dev/null 2>&1 || true; }
 # ─── G4: Flush CLI (Phase 8) ────────────────────────────────────────────────
 
 @test "bl flush --outbox drains and exits 0" {
-    skip "handler not landed until Phase 8"
+    # Empty outbox — drain is a no-op; exit 0.
+    run "$BL_SOURCE" flush --outbox
+    [ "$status" -eq 0 ]
+    # Ledger should have recorded an outbox_drain event with drained=0
+    grep -q '"kind":"outbox_drain"' "$BL_VAR_DIR/ledger/global.jsonl"
 }
 
 # ─── P7: case close/reopen schema conformance ──────────────────────────────

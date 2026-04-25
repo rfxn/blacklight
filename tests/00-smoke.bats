@@ -19,3 +19,18 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ ^bl\ [0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
+
+@test "bl --help lists all command verbs (smoke)" {
+    export BL_VAR_DIR="$(mktemp -d)"
+    run "$BL_SOURCE" --help
+    rm -rf "$BL_VAR_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"observe"* ]]
+    [[ "$output" == *"consult"* ]]
+    [[ "$output" == *"run"* ]]
+    [[ "$output" == *"case"* ]]
+    [[ "$output" == *"defend"* ]]
+    [[ "$output" == *"clean"* ]]
+    [[ "$output" == *"setup"* ]]
+    [[ "$output" == *"flush"* ]]
+}

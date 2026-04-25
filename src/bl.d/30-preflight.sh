@@ -85,6 +85,7 @@ Commands:
   defend    Apply agent-authored defensive payload (ModSec, FW, sig)    [M6]
   clean     Apply agent-prescribed remediation (diff-confirmed)         [M7]
   setup     Provision or sync the Anthropic workspace                   [M8]
+  flush     Drain outbox (cron-driven or on-demand)                     [M9]
 
 Options:
   -h, --help       show this message
