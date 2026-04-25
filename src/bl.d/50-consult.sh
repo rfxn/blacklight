@@ -150,6 +150,12 @@ bl_consult_register_curator() {
     fi
     local body_file
     body_file=$(mktemp)
+    # Direct-session wake path sends fingerprint UNFENCED in the prose. Design asymmetry
+    # vs P5 outbox path — the outbox path fences trigger via bl_fence_wrap kind=wake_trigger
+    # because it carries the full trigger payload; here only the trigger_fingerprint
+    # (sha256[:16] of the operator artifact) is conveyed. Operator-derived input has lower
+    # injection surface than raw payload bytes — an attacker would need to control the
+    # operator's local artifact to influence it. Hardening tracked for M11+.
     jq -n --arg c "$case_id" --arg f "$fp" \
         '{type:"user.message", content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f+"; read first per system-prompt §3")}]}' \
         > "$body_file"

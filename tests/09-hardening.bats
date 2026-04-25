@@ -139,8 +139,11 @@ _source_bl() { source "$BL_SOURCE" >/dev/null 2>&1 || true; }
 }
 
 @test "bl_ledger_mirror_remote falls back to outbox on API error" {
-    # Mock memstore POST to 5xx → mirror should enqueue to outbox
-    bl_curator_mock_set_response 'memstore-case-not-found.json' 503
+    # Mock memstore POST to 4xx → mirror should enqueue to outbox.
+    # 404 (vs 503) avoids bl_api_call's 4-attempt retry with backoffs [2,5,10,30] = 47s
+    # of real sleep before exit 69; 404 exits 65 immediately, semantically equivalent
+    # for the mirror-fallback assertion (any non-2xx triggers outbox enqueue).
+    bl_curator_mock_set_response 'memstore-case-not-found.json' 404
     local valid_record='{"ts":"2026-04-24T20:00:00Z","case":"CASE-2026-0001","kind":"step_run","payload":{"step_id":"s-001"}}'
     run bash -c "source '$BL_SOURCE' >/dev/null 2>&1 || true; bl_ledger_append CASE-2026-0001 '$valid_record'"
     [ "$status" -eq 0 ]

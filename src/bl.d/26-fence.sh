@@ -16,7 +16,7 @@ bl_fence_derive() {
         # bash 4.1+ floor: never use $EPOCHREALTIME/$EPOCHSECONDS (bash 5.0+, prohibited)
         nonce="$(date +%s%N)-$RANDOM$RANDOM"
     fi
-    printf '%s%s%s' "$case_id" "$payload" "$nonce" | sha256sum | cut -c1-"$BL_FENCE_TOKEN_LEN"
+    printf '%s%s%s' "$case_id" "$payload" "$nonce" | command sha256sum | command cut -c1-"$BL_FENCE_TOKEN_LEN"
 }
 
 bl_fence_wrap() {
@@ -28,8 +28,8 @@ bl_fence_wrap() {
     while (( attempts < BL_FENCE_MAX_REDERIVE )); do
         token=$(bl_fence_derive "$case_id" "$payload")
         # Collision scan: token-literal AND close-tag-literal
-        if ! printf '%s' "$payload" | grep -qF "$token" && \
-           ! printf '%s' "$payload" | grep -qF "</untrusted-$token>"; then
+        if ! printf '%s' "$payload" | command grep -qF "$token" && \
+           ! printf '%s' "$payload" | command grep -qF "</untrusted-$token>"; then
             printf '<untrusted fence="%s" kind="%s" case="%s">%s</untrusted-%s>\n' \
                 "$token" "$kind" "$case_id" "$payload" "$token"
             return "$BL_EX_OK"
@@ -48,17 +48,17 @@ bl_fence_unwrap() {
     local envelope="$1"
     # Extract TOKEN from opening tag (first line match is fine — open tag is single-line)
     local token
-    token=$(printf '%s' "$envelope" | awk 'match($0, /<untrusted fence="[a-f0-9]{16}"/) { s=substr($0,RSTART+18,16); print s; exit }')   # +18: length("<untrusted fence=\"")
+    token=$(printf '%s' "$envelope" | command awk 'match($0, /<untrusted fence="[a-f0-9]{16}"/) { s=substr($0,RSTART+18,16); print s; exit }')   # +18: length("<untrusted fence=\"")
     [[ -z "$token" || ! "$token" =~ ^[a-f0-9]{16}$ ]] && { bl_error_envelope fence "malformed envelope: no fence attr"; return "$BL_EX_SCHEMA_VALIDATION_FAIL"; }
     # Validate matching close tag </untrusted-TOKEN> appears anywhere in envelope
-    printf '%s' "$envelope" | grep -qF "</untrusted-$token>" || {
+    printf '%s' "$envelope" | command grep -qF "</untrusted-$token>" || {
         bl_error_envelope fence "open-fence != close-fence suffix (token=$token)"
         return "$BL_EX_SCHEMA_VALIDATION_FAIL"
     }
     # Extract payload between open tag's closing `>` and close tag's opening `<` — awk multi-line extraction.
     # Algorithm: strip from start through the first `>` that closes the <untrusted ...> open tag;
     #            then strip from the start of </untrusted-TOKEN> to end.
-    printf '%s' "$envelope" | awk -v tok="$token" '
+    printf '%s' "$envelope" | command awk -v tok="$token" '
         BEGIN { opened=0 }
         {
             if (!opened) {
@@ -80,7 +80,7 @@ bl_fence_unwrap() {
 bl_fence_kind() {
     # bl_fence_kind <envelope> — stdout kind / 0/67
     local envelope="$1" kind
-    kind=$(printf '%s' "$envelope" | sed -n 's/.*<untrusted [^>]*kind="\([^"]*\)".*/\1/p' | head -n1)
+    kind=$(printf '%s' "$envelope" | command sed -n 's/.*<untrusted [^>]*kind="\([^"]*\)".*/\1/p' | command head -n1)
     [[ -z "$kind" ]] && { bl_error_envelope fence "malformed envelope: no kind attr"; return "$BL_EX_SCHEMA_VALIDATION_FAIL"; }
     printf '%s' "$kind"
     return "$BL_EX_OK"

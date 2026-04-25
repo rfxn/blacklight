@@ -24,7 +24,7 @@ bl_outbox_depth() {
         return "$BL_EX_OK"
     fi
     local n
-    n=$(find "$outbox_dir" -maxdepth 1 -name '*.json' 2>/dev/null | command wc -l)
+    n=$(command find "$outbox_dir" -maxdepth 1 -name '*.json' 2>/dev/null | command wc -l)   # 2>/dev/null: EACCES on outbox dir → depth 0 fallback
     printf '%d' "$n"
     return "$BL_EX_OK"
 }
@@ -37,7 +37,7 @@ bl_outbox_oldest_age_secs() {
         return "$BL_EX_OK"
     fi
     local oldest
-    oldest=$(find "$outbox_dir" -maxdepth 1 -name '*.json' -printf '%T@\n' 2>/dev/null | sort -n | head -n1)
+    oldest=$(command find "$outbox_dir" -maxdepth 1 -name '*.json' -printf '%T@\n' 2>/dev/null | command sort -n | command head -n1)   # 2>/dev/null: BSD find lacks -printf → empty oldest, age=0
     if [[ -z "$oldest" ]]; then
         printf '0'
         return "$BL_EX_OK"
@@ -54,7 +54,7 @@ bl_outbox_enqueue() {
     local outbox_dir="$BL_VAR_DIR/outbox"
     local counter_file="$outbox_dir/.counter"
     local schema_file
-    schema_file="${BL_REPO_ROOT:-$(command dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "$0")" 2>/dev/null || printf '.')}/schemas/outbox-$kind.json"
+    schema_file="${BL_REPO_ROOT:-$(command dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "$0")" 2>/dev/null || printf '.')}/schemas/outbox-$kind.json"   # 2>/dev/null × 2: readlink fails when BASH_SOURCE empty under bash -c; falls through to literal "schemas/" path on next line
     [[ -r "$schema_file" ]] || schema_file="schemas/outbox-$kind.json"
 
     if ! command mkdir -p "$outbox_dir" 2>/dev/null; then   # RO fs / perms
@@ -90,7 +90,7 @@ bl_outbox_enqueue() {
     (( depth >= BL_OUTBOX_WATERMARK_WARN )) && bl_warn "outbox depth=$depth (warn threshold=$BL_OUTBOX_WATERMARK_WARN)"
 
     # Validate payload is well-formed JSON before structural / schema checks.
-    if ! printf '%s' "$payload" | jq empty 2>/dev/null; then
+    if ! printf '%s' "$payload" | jq empty 2>/dev/null; then   # 2>/dev/null: jq parse-error stderr is noise here — explicit error envelope below
         bl_error_envelope outbox "payload is not valid JSON"
         return "$BL_EX_SCHEMA_VALIDATION_FAIL"
     fi
@@ -137,8 +137,8 @@ bl_outbox_enqueue() {
     local raw cur_ts cur_n new_n ts_now
     ts_now=$(date -u +%Y%m%dT%H%M%SZ)
     raw=$(command cat "$counter_file" 2>/dev/null || printf '')   # empty counter on first invocation
-    cur_ts=$(printf '%s' "$raw" | jq -r '.ts // empty' 2>/dev/null || printf '')
-    cur_n=$(printf '%s' "$raw" | jq -r '.n // empty' 2>/dev/null || printf '')
+    cur_ts=$(printf '%s' "$raw" | jq -r '.ts // empty' 2>/dev/null || printf '')   # 2>/dev/null: counter file may be empty/non-JSON on first invocation → empty cur_ts → reset path
+    cur_n=$(printf '%s' "$raw" | jq -r '.n // empty' 2>/dev/null || printf '')   # 2>/dev/null: same as cur_ts above — empty raw produces empty cur_n → first-of-second branch
     if [[ -z "$cur_ts" || "$cur_ts" != "$ts_now" ]]; then
         new_n=1
     else
@@ -150,8 +150,7 @@ bl_outbox_enqueue() {
 
     # Resolve case-id from payload — best-effort; falls back to "global".
     local case_id
-    case_id=$(printf '%s' "$payload" | jq -r '.case // .target_key // empty' 2>/dev/null \
-        | command sed -n 's|.*\(CASE-[0-9]\{4\}-[0-9]\{4\}\).*|\1|p' | head -n1)
+    case_id=$(printf '%s' "$payload" | jq -r '.case // .target_key // empty' 2>/dev/null | command sed -n 's|.*\(CASE-[0-9]\{4\}-[0-9]\{4\}\).*|\1|p' | command head -n1)   # 2>/dev/null: malformed payload → jq stderr noise; case_id falls through to "global"
     [[ -z "$case_id" ]] && case_id="global"
 
     local outbox_file
@@ -182,9 +181,9 @@ bl_outbox_drain() {
     # not replayed mid-run; they wait for the next drain.
     local files
     if [[ -n "$kind_filter" ]]; then
-        files=$(find "$outbox_dir" -maxdepth 1 -name "*-$kind_filter-*.json" 2>/dev/null | sort)
+        files=$(command find "$outbox_dir" -maxdepth 1 -name "*-$kind_filter-*.json" 2>/dev/null | command sort)   # 2>/dev/null: EACCES on entries → drain skips them
     else
-        files=$(find "$outbox_dir" -maxdepth 1 -name '*.json' 2>/dev/null | sort)
+        files=$(command find "$outbox_dir" -maxdepth 1 -name '*.json' 2>/dev/null | command sort)   # 2>/dev/null: EACCES on entries → drain skips them
     fi
 
     local drained=0 failed=0 remaining=0 halt_reason="" start_secs="$SECONDS"
@@ -201,14 +200,14 @@ bl_outbox_drain() {
             halt_reason="deadline"
             continue
         fi
-        basename_part=$(basename "$f")
+        basename_part=$(command basename "$f")
         kind=$(printf '%s' "$basename_part" | command sed -n 's/^[0-9TZ-]*-[0-9]*-\([a-z_]*\)-.*\.json$/\1/p')
-        payload=$(command cat "$f" 2>/dev/null || printf '{}')
+        payload=$(command cat "$f" 2>/dev/null || printf '{}')   # 2>/dev/null: file may have been removed by concurrent drain or EACCES — empty payload routes to default kind branch
 
         rc=0
         case "$kind" in
             wake)
-                sid_file="$BL_STATE_DIR/session-$(printf '%s' "$payload" | jq -r '.case // empty' 2>/dev/null || printf '')"
+                sid_file="$BL_STATE_DIR/session-$(printf '%s' "$payload" | jq -r '.case // empty' 2>/dev/null || printf '')"   # 2>/dev/null: malformed wake payload → empty .case → sid_file path becomes session- (unreadable) → rc=69 defer
                 sid=""
                 [[ -r "$sid_file" ]] && sid=$(command cat "$sid_file")
                 if [[ -n "$sid" ]]; then

@@ -3,6 +3,36 @@ Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
 
+- M9 P9 | Apr 24 2026 — sentinel fixup (post-impl review cleanup):
+[Fix] src/bl.d/60-run.sh — bl_run_step now preserves /tmp/bl-step-<id>.out
+      when writeback_result fails; previously the unconditional rm at cleanup
+      contradicted the "preserved" warning (sentinel SHOULD-FIX 1).
+[Fix] schemas/outbox-wake.json — trigger_fingerprint_fenced added to required
+      array; future callers cannot omit the fenced trigger field and slip
+      past schema validation (sentinel SHOULD-FIX 2).
+[Fix] src/bl.d/26-fence.sh + src/bl.d/27-outbox.sh — bare sort/head/basename/
+      sha256sum/cut/grep/awk/sed/find replaced with `command <util>` prefix
+      for CentOS 6 PATH portability per CLAUDE.md §Shell Standards (sentinel
+      SHOULD-FIX 3); regression guard for new M9 parts vs pre-existing M4
+      observe convention.
+[Fix] tests/09-hardening.bats — mirror-fallback test mock changed 503 → 404;
+      503 triggers bl_api_call's 4-attempt retry with 17s of real sleep,
+      404 exits 65 immediately (sentinel SHOULD-FIX 4). Semantically
+      equivalent for the outbox-fallback assertion.
+[Fix] src/bl.d/27-outbox.sh — added inline same-line comments to remaining
+      2>/dev/null suppressions per CLAUDE.md §Shell Standards (sentinel
+      SHOULD-FIX 5).
+[Change] CHANGELOG — M9 entries reordered to chronological commit order
+      (P6, P8, P5, P4, P7, P3, P2, P1) — sentinel SHOULD-FIX 6.
+[Change] src/bl.d/50-consult.sh — inline comment documenting the design
+      asymmetry between session-present (unfenced fingerprint prose) and
+      no-session (fenced trigger payload) wake paths; operator-derived
+      fingerprint has lower injection surface than raw evidence bytes
+      (sentinel INFO 1; M11+ hardening tracked).
+[Defer] step_id pattern guard in bl_run_step (sentinel INFO 2) — limited
+      blast radius since traversal sequences fail GET (404) before dispatch;
+      M11+ defensive-hardening ticket.
+
 - M9 P6 | Apr 24 2026 — writeback fence wrap + result schema + injection corpus:
 [New] schemas/result.json — bl run result envelope schema; required keys
       (step_id, verb, action_tier, result), result.required (rc, stdout,
@@ -27,18 +57,6 @@ https://github.com/rfxn/blacklight
       plan acknowledgment (requires fence-output stub instrumentation, deferred
       to M11+ mock-request-log fidelity upgrade).
 
-- M9 P5 | Apr 24 2026 — consult wake migration to bl_outbox_enqueue + fenced trigger:
-[Change] src/bl.d/50-consult.sh — bl_consult_register_curator wake-enqueue path
-      now routes through bl_outbox_enqueue wake instead of writing
-      $BL_VAR_DIR/outbox/*.json inline. Wake payload gains a
-      trigger_fingerprint_fenced field built via bl_fence_wrap kind=wake_trigger
-      so the trigger payload is sealed against prompt-injection before it ever
-      reaches the curator session on next drain. Filename now follows the
-      P3-introduced YYYYMMDDTHHMMSSZ-NNNN-wake-<case>.json convention with
-      validated payload via schemas/outbox-wake.json (P3).
-[Change] tests/09-hardening.bats — G2 consult-wake test unskipped (asserts
-      wake outbox file presence + trigger_fingerprint_fenced field shape).
-
 - M9 P8 | Apr 24 2026 — bl flush --outbox CLI verb:
 [New] bl flush --outbox — on-demand outbox drain verb (M9 P8); complements
       cron + opportunistic-preflight drain paths. Empty outbox exits 0;
@@ -54,6 +72,18 @@ https://github.com/rfxn/blacklight
 [Change] tests/00-smoke.bats — added smoke-tier --help assertion that all
       command verbs (incl. flush) are listed.
 
+- M9 P5 | Apr 24 2026 — consult wake migration to bl_outbox_enqueue + fenced trigger:
+[Change] src/bl.d/50-consult.sh — bl_consult_register_curator wake-enqueue path
+      now routes through bl_outbox_enqueue wake instead of writing
+      $BL_VAR_DIR/outbox/*.json inline. Wake payload gains a
+      trigger_fingerprint_fenced field built via bl_fence_wrap kind=wake_trigger
+      so the trigger payload is sealed against prompt-injection before it ever
+      reaches the curator session on next drain. Filename now follows the
+      P3-introduced YYYYMMDDTHHMMSSZ-NNNN-wake-<case>.json convention with
+      validated payload via schemas/outbox-wake.json (P3).
+[Change] tests/09-hardening.bats — G2 consult-wake test unskipped (asserts
+      wake outbox file presence + trigger_fingerprint_fenced field shape).
+
 - M9 P4 | Apr 24 2026 — dual-write mirror + drain hook:
 [Change] src/bl.d/25-ledger.sh — bl_ledger_mirror_remote (best-effort remote
       replication to bl-case/actions/applied/<event-id>.json; outbox fallback
@@ -65,6 +95,14 @@ https://github.com/rfxn/blacklight
       preflight (max=16, deadline=5s; best-effort, never fails preflight).
 [Change] tests/09-hardening.bats — 2 G3 mirror @tests unskipped (mirror_remote
       success path + outbox fallback on 5xx). All G1+G3+G4+G5+G6-outbox green.
+
+- M9 P7 | Apr 24 2026 — ledger construction normalization:
+[Change] src/bl.d/70-case.sh — _bl_ledger_event_json shared helper; bl_case_close
+      and bl_case_reopen ledger events now use consistent construction (behavior
+      unchanged; both conform to schemas/ledger-event.json via Phase 2's
+      validation gate).
+[Change] tests/09-hardening.bats — P7 @test asserts case_closed + case_reopened
+      events pass ledger-event.json (29th @test; appended at EOF).
 
 - M9 P3 | Apr 24 2026 — outbox + backpressure + per-kind schemas:
 [New] src/bl.d/27-outbox.sh — bl_outbox_enqueue / bl_outbox_drain /
@@ -83,14 +121,6 @@ https://github.com/rfxn/blacklight
 [Change] tests/09-hardening.bats — 6 G4/G5/G6 @tests unskipped + 1
       retained skip (429-mock requires multi-response curator-mock per
       plan §Phase-3 acknowledgment). All G1+G3+G4+G5+G6-outbox green.
-
-- M9 P7 | Apr 24 2026 — ledger construction normalization:
-[Change] src/bl.d/70-case.sh — _bl_ledger_event_json shared helper; bl_case_close
-      and bl_case_reopen ledger events now use consistent construction (behavior
-      unchanged; both conform to schemas/ledger-event.json via Phase 2's
-      validation gate).
-[Change] tests/09-hardening.bats — P7 @test asserts case_closed + case_reopened
-      events pass ledger-event.json (29th @test; appended at EOF).
 
 - M9 P2 | Apr 24 2026 — ledger schema + validated append:
 [New] schemas/ledger-event.json — canonical JSONL record per DESIGN.md §13.3;

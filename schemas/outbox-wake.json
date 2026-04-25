@@ -3,7 +3,7 @@
   "$id": "https://rfxn.github.io/blacklight/schemas/outbox-wake.json",
   "title": "blacklight outbox kind=wake payload",
   "type": "object",
-  "required": ["type", "content"],
+  "required": ["type", "content", "trigger_fingerprint_fenced"],
   "properties": {
     "type": {"const": "user.message"},
     "content": {"type": "array"},

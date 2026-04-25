@@ -28,7 +28,7 @@ bl_run_step() {
     local dry_run="$3"
     local unsafe="$4"
     local explain="$5"
-    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state file absent on first invocation → fallback to canonical default literal
     [[ -z "$step_id" ]] && { bl_error_envelope run "missing <step-id>"; return "$BL_EX_USAGE"; }
     local case_id
     case_id=$(bl_case_current)
@@ -51,7 +51,7 @@ bl_run_step() {
         return "$rc"
     fi
     printf '%s' "$resp" | jq -r '.content' > "$pending_tmp"
-    local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"
+    local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"   # 2>/dev/null: readlink may fail under bash -c with empty $0 → cwd fallback (then schema_path retried as relative below)
     local schema_path="$repo_root/schemas/step.json"
     [[ -r "$schema_path" ]] || schema_path="schemas/step.json"
     if ! bl_jq_schema_check "$schema_path" "$pending_tmp" --strict; then
@@ -110,7 +110,11 @@ bl_run_step() {
     local stdout_file="/tmp/bl-step-$step_id.out"
     local exec_rc=0
     bl_run_dispatch_verb "$verb" "$args_json" > "$stdout_file" || exec_rc=$?
-    bl_run_writeback_result "$step_id" "$exec_rc" "$stdout_file" "$case_id" || bl_warn "writeback failed; local file at $stdout_file preserved"
+    local writeback_ok=1
+    bl_run_writeback_result "$step_id" "$exec_rc" "$stdout_file" "$case_id" || {
+        writeback_ok=0
+        bl_warn "writeback failed; local file at $stdout_file preserved"
+    }
     bl_ledger_append "$case_id" \
         "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg s "$step_id" --arg t "$tier" --arg v "$verb" --argjson rc "$exec_rc" \
             '{ts:$ts, case:$c, kind:"step_run", payload:{step_id:$s, tier:$t, verb:$v, rc:$rc}}')"
@@ -125,7 +129,10 @@ bl_run_step() {
         bl_api_call POST "/v1/sessions/$session_id/events" "$body_file" >/dev/null || true   # non-fatal; ledger has the event
         command rm -f "$body_file"
     fi
-    command rm -f "$pending_tmp" "$stdout_file"
+    command rm -f "$pending_tmp"
+    # Preserve $stdout_file when writeback failed so the operator can recover it
+    # — the bl_warn above promises "preserved", and unconditional rm broke that contract.
+    (( writeback_ok )) && command rm -f "$stdout_file"
     return "$exec_rc"
 }
 
@@ -262,7 +269,7 @@ bl_run_writeback_result() {
         '$pending[0] + {result: {rc:$rc, stdout:$stdout, applied_at:$now}}')
 
     # M9 P6: validate composed result envelope against schemas/result.json before POST.
-    local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"
+    local repo_root="${BL_REPO_ROOT:-$(dirname "$(readlink -f "$0")" 2>/dev/null || printf '.')}"   # 2>/dev/null: readlink may fail under bash -c with empty $0 → cwd fallback (then schema_path retried as relative below)
     local schema_file="$repo_root/schemas/result.json"
     [[ -r "$schema_file" ]] || schema_file="schemas/result.json"
     if [[ -r "$schema_file" ]]; then
@@ -295,7 +302,7 @@ bl_run_writeback_result() {
 bl_run_batch() {
     # bl_run_batch <max> — 0/64/68/72
     local max="$1"
-    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state file absent on first invocation → fallback to canonical default literal
     local case_id
     case_id=$(bl_case_current)
     [[ -z "$case_id" ]] && { bl_error_envelope run "no active case"; return "$BL_EX_NOT_FOUND"; }
@@ -319,7 +326,7 @@ bl_run_batch() {
 
 bl_run_list() {
     # bl_run_list — 0/64/69/72; enumerates pending without execution
-    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state file absent on first invocation → fallback to canonical default literal
     local case_id
     case_id=$(bl_case_current)
     [[ -z "$case_id" ]] && { bl_error_envelope run "no active case"; return "$BL_EX_NOT_FOUND"; }
