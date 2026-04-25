@@ -1,0 +1,62 @@
+# tests/Dockerfile.centos6 — blacklight test image (CentOS 6, EOL vault)
+# Layers blacklight runtime deps on the batsman centos6 base image.
+# Base already provides: bash coreutils findutils diffutils procps gawk sed
+#                        grep gzip tar wget curl ca-certificates util-linux-ng
+#                        hostname perl bzip2 bats-core parallel.
+# Missing and load-bearing for blacklight tests:
+#   jq            — required for every JSONL emit / parse path
+#   httpd         — required by tests/06-defend.bats modsec subgroup
+#   iptables      — required by tests/06-defend.bats firewall subgroup
+#   patch         — required by tests/07-clean.bats htaccess/cron patch path
+#   cronie        — required for crontab presence in observe substrate detection
+# Knowingly unavailable on CentOS 6 vault — tests/suites that depend on them
+# must be skip-guarded:
+#   nftables      — too new for kernel 2.6 / 3.10 (skip in defend firewall lane)
+#   ShellCheck    — vault has nothing usable; lint runs on debian12 / rocky9
+#   yara          — no EPEL6 build that imports cleanly; sig fixtures don't
+#                   require yara on centos6 (lmd shim covers signature path)
+#   mod_security  — EPEL6 dropped years ago; modsec subgroup skips when absent
+#   zstd          — not in vault; bl_observe_codec_detect degrades to gz
+#                   automatically (40-observe-helpers.sh:74-98)
+ARG BASE_IMAGE=blacklight-base-centos6
+FROM ${BASE_IMAGE}
+
+# jq: static linux64 binary direct from upstream releases. CentOS 6's curl
+# is old-enough that --tlsv1.2 may flap on github.com cert chains; the -fk
+# fallback (insecure cert chain) is acceptable here because the binary is
+# pinned by URL and we're inside an EOL test image, not a production host.
+RUN curl -fsSL --tlsv1.2 -o /usr/local/bin/jq \
+        https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 \
+    || curl -fk -o /usr/local/bin/jq \
+        https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 \
+    && chmod +x /usr/local/bin/jq
+
+# Vault deps. Allow failure on optional packages (mod_security may not be
+# installable; modsec subgroup skips if so).
+RUN yum install -y httpd iptables patch cronie || true \
+    && yum install -y mod_security || echo "centos6: mod_security unavailable on vault — modsec subgroup will skip" \
+    && yum clean all
+
+# M6 mock LMD/ClamAV shims (rationale: tests/Dockerfile)
+RUN mkdir -p /usr/local/maldetect && \
+    printf '#!/bin/bash\necho "maldet shim: ${*}"; exit 0\n' \
+        > /usr/local/maldetect/maldet && \
+    chmod +x /usr/local/maldetect/maldet && \
+    printf '#!/bin/bash\necho "clamscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamscan && \
+    printf '#!/bin/bash\necho "clamdscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamdscan && \
+    chmod +x /usr/local/bin/clamscan /usr/local/bin/clamdscan
+
+COPY tests/fixtures/defend-fp-corpus/ /var/lib/bl/fp-corpus/
+
+COPY . /opt/blacklight-src
+COPY tests/ /opt/tests/
+COPY bl /opt/bl
+COPY schemas/ /opt/schemas/
+COPY prompts/ /opt/prompts/
+COPY case-templates/ /opt/case-templates/
+COPY skills/ /opt/skills/
+RUN chmod +x /opt/bl
+
+WORKDIR /opt/tests

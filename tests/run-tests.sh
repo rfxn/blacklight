@@ -14,7 +14,7 @@ BATSMAN_INFRA_DIR="$SCRIPT_DIR/infra"
 BATSMAN_DOCKER_FLAGS=""                  # blacklight is unprivileged — no --privileged
 BATSMAN_DEFAULT_OS="debian12"
 BATSMAN_CONTAINER_TEST_PATH="/opt/tests"
-BATSMAN_SUPPORTED_OS="debian12 rocky9 ubuntu2404 centos7 rocky8 ubuntu2004 rocky10"
+BATSMAN_SUPPORTED_OS="debian12 rocky9 ubuntu2404 centos7 rocky8 ubuntu2004 rocky10 centos6"
 BATSMAN_TEST_TIMEOUT="${BATSMAN_TEST_TIMEOUT:-120}"
 
 source "$BATSMAN_INFRA_DIR/lib/run-tests-core.sh"
