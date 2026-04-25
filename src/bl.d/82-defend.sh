@@ -403,6 +403,15 @@ bl_defend_firewall() {
     done
     [[ -z "$ip" ]] && { bl_error_envelope defend "missing <ip>"; return "$BL_EX_USAGE"; }
     _bl_defend_firewall_validate_ip "$ip" || return "$BL_EX_USAGE"
+    # Reason format guard — value lands in nft `comment "<tag>"` and iptables
+    # `--comment "<tag>"`. Quoted shell-side, but firewall tokenizers see the
+    # raw string. Embedded `"` or newlines break nft parse; comment parsers
+    # downstream extract case-tag via regex (bl_observe_firewall) and lose
+    # correlation on metacharacter-rich reasons.
+    if ! [[ "$reason" =~ ^[A-Za-z0-9._:[:space:]-]{0,128}$ ]]; then
+        bl_error_envelope defend "--reason invalid (allowed: [A-Za-z0-9._:-] + space, max 128): $reason"
+        return "$BL_EX_USAGE"
+    fi
 
     local case_id="$case_override"
     [[ -z "$case_id" ]] && case_id=$(bl_case_current)

@@ -369,6 +369,64 @@ EOF
     [[ "$output" == *"refusing to overwrite"* ]]
 }
 
+@test "bl clean --unquarantine refuses TOCTOU symlink at original_path" {
+    # Quarantine a file, then race a symlink at the original path location
+    # before unquarantine. The symlink guard must abort with BL_EX_CONFLICT
+    # rather than allow restore content to follow the symlink to a sniped target.
+    local path="$BL_VAR_DIR/site/sym-malware.php"
+    local sniped="$BL_VAR_DIR/sniped-target"
+    mkdir -p "$(dirname "$path")"
+    printf 'evil\n' > "$path"
+    run "$BL_SOURCE" clean file "$path" --reason "x" --dry-run
+    run "$BL_SOURCE" clean file "$path" --reason "x" --yes
+    [ "$status" -eq 0 ]
+    local entry_id
+    entry_id=$(find "$BL_VAR_DIR/quarantine/CASE-2026-7001" -maxdepth 1 -type f ! -name '*.meta.json' -printf '%f\n' | head -1)
+
+    # Race: pre-create a symlink at the original_path location pointing at a sniped target.
+    rm -f "$path"
+    ln -s "$sniped" "$path"
+    [ -L "$path" ]
+    [ ! -e "$sniped" ]   # target itself does not exist yet
+
+    run "$BL_SOURCE" clean --unquarantine "$entry_id" --yes
+    [ "$status" -eq 71 ]   # BL_EX_CONFLICT
+    [[ "$output" == *"symlink"* ]]
+    # Symlink unchanged; sniped target NOT created
+    [ -L "$path" ]
+    [ ! -e "$sniped" ]
+    # Quarantine entry preserved (refused restore must not lose data)
+    [ -e "$BL_VAR_DIR/quarantine/CASE-2026-7001/$entry_id" ]
+}
+
+@test "bl clean --unquarantine refuses traversal segment in original_path" {
+    # Quarantine a file, then forge meta.json with `..` traversal segment.
+    local path="$BL_VAR_DIR/site/trav-malware.php"
+    mkdir -p "$(dirname "$path")"
+    printf 'evil\n' > "$path"
+    run "$BL_SOURCE" clean file "$path" --reason "x" --dry-run
+    run "$BL_SOURCE" clean file "$path" --reason "x" --yes
+    [ "$status" -eq 0 ]
+    local entry_id meta_path
+    entry_id=$(find "$BL_VAR_DIR/quarantine/CASE-2026-7001" -maxdepth 1 -type f ! -name '*.meta.json' -printf '%f\n' | head -1)
+    meta_path="$BL_VAR_DIR/quarantine/CASE-2026-7001/$entry_id.meta.json"
+
+    # Tamper meta to claim original_path traverses out of intended dir
+    local tampered
+    tampered=$(jq --arg p "/var/lib/bl/quarantine/../../etc/cron.d/blacklight-priv" '.original_path = $p' "$meta_path")
+    printf '%s' "$tampered" > "$meta_path"
+
+    run "$BL_SOURCE" clean --unquarantine "$entry_id" --yes
+    [ "$status" -eq 67 ]   # BL_EX_SCHEMA_VALIDATION_FAIL
+    [[ "$output" == *"traversal"* ]]
+}
+
+@test "bl defend firewall rejects --reason with embedded double-quote" {
+    run "$BL_SOURCE" defend firewall "203.0.113.99" --backend iptables --reason 'evil"; rm -rf /; #'
+    [ "$status" -eq 64 ]
+    [[ "$output" == *"--reason invalid"* ]]
+}
+
 @test "bl clean file: basename with spaces sanitised in entry_id" {
     local path="$BL_VAR_DIR/site/weird file name.php"
     mkdir -p "$(dirname "$path")"

@@ -16,6 +16,26 @@ https://github.com/rfxn/blacklight
 [New] M10 P12 — .gitattributes pkg/ export-ignore + release-tarball audit
 === M10 complete — blacklight v0.1.0 ship-ready ===
 
+- M9.5 P2 | Apr 25 2026 — TOCTOU + nft-comment hardening:
+[Fix] src/bl.d/83-clean.sh — bl_clean_unquarantine restore path
+      hardened against TOCTOU symlink race: pre-rename `[[ -L ]]`
+      symlink guard, runtime traversal-segment check on original_path
+      (schema pattern can't express negative segments cleanly),
+      same-parent staging via temp file so the final move is rename(2)
+      not cp+unlink, post-stage re-check + post-mv symlink-paranoia
+      warning. Restored content can no longer be redirected to a
+      sniped target if an attacker races a symlink between existence
+      check and mv (audit C1).
+[Fix] src/bl.d/82-defend.sh — bl_defend_firewall constrains --reason
+      to ^[A-Za-z0-9._:[:space:]-]{0,128}$ at parse; embedded `"` or
+      newlines no longer break nft `comment "<tag>"` parser or
+      downstream bl_observe_firewall case-tag regex correlation
+      (audit m9).
+[New] tests/07-clean.bats — 2 unquarantine TOCTOU regression cases
+      (symlink-race rejection, traversal-segment rejection); 1
+      firewall reason-injection rejection case.
+[Change] bl — regenerated from src/bl.d/.
+
 - M9.5 P1 | Apr 25 2026 — security input-validation guards (audit-driven hardening):
 [Fix] schemas/step.json — step_id property now carries pattern
       ^[A-Za-z0-9_-]{1,64}$; rejects curator-poisoned traversal segments

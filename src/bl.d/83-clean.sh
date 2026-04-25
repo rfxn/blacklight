@@ -708,12 +708,34 @@ bl_clean_unquarantine() {
     perms=$(jq -r '.perms_octal' "$found_meta")
     mtime=$(jq -r '.mtime_epoch' "$found_meta")
     sha=$(jq -r '.sha256' "$found_meta")
+    # Path-shape guard: schema enforces absolute + non-NUL but path-traversal
+    # segments slip through pure-pattern matching. Reject `..` segments at
+    # the consumer to prevent restore landing outside the manifest's intent.
+    if [[ "$original_path" != /* ]]; then
+        bl_error_envelope clean "original_path must be absolute: $original_path"
+        return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+    fi
+    case "$original_path" in
+        */../*|*/..|../*|..|*/.|.)
+            bl_error_envelope clean "original_path contains traversal segment: $original_path"
+            return "$BL_EX_SCHEMA_VALIDATION_FAIL"
+            ;;
+    esac
     # Content integrity: sha256 of quarantined file must equal meta.sha256
     local sha_on_disk
     sha_on_disk=$(_bl_clean_sha256_content "$found_entry") || return $?
     if [[ "$sha_on_disk" != "$sha" ]]; then
         bl_error_envelope clean "quarantine integrity fail: on-disk $sha_on_disk != manifest $sha"
         return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    # Pre-rename TOCTOU guards: reject if destination is a symlink OR exists
+    # as any kind of file. A local attacker with parent-dir write perms could
+    # race a symlink between the existence check and rename — same-parent
+    # staging below shrinks the window to one rename(2) syscall, and the
+    # post-stage re-check catches a symlink raced in DURING the staging mv.
+    if [[ -L "$original_path" ]]; then
+        bl_error_envelope clean "original_path is a symlink (refusing restore to TOCTOU target): $original_path"
+        return "$BL_EX_CONFLICT"
     fi
     if [[ -e "$original_path" ]]; then
         bl_error_envelope clean "original path already exists: $original_path" "(refusing to overwrite)"
@@ -730,10 +752,31 @@ bl_clean_unquarantine() {
     local parent
     parent=$(command dirname "$original_path")
     command mkdir -p "$parent"
-    command mv "$found_entry" "$original_path" || {   # cross-fs mv falls back to cp+rm internally in coreutils
-        bl_error_envelope clean "unquarantine mv failed: $found_entry → $original_path"
+    # Stage into the same parent so the final move is rename(2), not cp+unlink.
+    # Cross-filesystem failure modes are confined to the staging mv; the final
+    # mv is atomic on a single filesystem (parent of original_path).
+    local stage_path="$parent/.bl-restore.$entry_id.$$"
+    command mv "$found_entry" "$stage_path" || {
+        bl_error_envelope clean "unquarantine stage mv failed: $found_entry → $stage_path"
         return "$BL_EX_PREFLIGHT_FAIL"
     }
+    # Re-check after staging: an attacker may have raced a symlink into place
+    # during the staging mv. rename(2) replaces atomically, but if a symlink
+    # is at $original_path now the operator's intent is suspect — abort + leave
+    # the staged file for forensics rather than commit to a sniped target.
+    if [[ -L "$original_path" || -e "$original_path" ]]; then
+        bl_error_envelope clean "post-stage TOCTOU detected at $original_path; staged file preserved at $stage_path"
+        return "$BL_EX_CONFLICT"
+    fi
+    command mv -T "$stage_path" "$original_path" || {
+        command rm -f "$stage_path"
+        bl_error_envelope clean "unquarantine final mv failed: $stage_path → $original_path"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    # Final paranoia: confirm post-rename target is not a symlink.
+    if [[ -L "$original_path" ]]; then
+        bl_warn "post-rename symlink at $original_path; restored file may be elsewhere — operator should audit"
+    fi
     command chown "$uid:$gid" "$original_path" || bl_warn "chown failed (non-root invocation?)"
     command chmod "$perms" "$original_path" || bl_warn "chmod failed on $original_path"
     command touch -d "@$mtime" "$original_path" 2>/dev/null || bl_warn "mtime restore failed on $original_path"   # BSD touch lacks -d; non-fatal
