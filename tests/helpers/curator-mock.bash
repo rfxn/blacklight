@@ -92,7 +92,7 @@ _mock_wrap_for_list() {
         || printf '{"data":[{"id":"%s","path":"%s"}]}' "$mem_id" "$path_value"
 }
 for i in "${!patterns[@]}"; do
-    if [[ -n "${patterns[i]}" && "$url" =~ ${patterns[i]} ]]; then
+    if [[ -n "${patterns[i]}" && "${method} ${url}" =~ ${patterns[i]} ]]; then
         fixture_path="$BL_CURATOR_MOCK_FIXTURES_DIR/${fixtures[i]}"
         if [[ -r "$fixture_path" ]]; then
             body=$(< "$fixture_path")

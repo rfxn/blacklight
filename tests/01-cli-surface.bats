@@ -57,11 +57,12 @@ teardown() {
 }
 
 @test "bl setup dispatches to handler and bypasses bl_preflight (exits 65 on missing API key, not 66)" {
-    # M8: setup is in the pre-case bypass list. Real handler now lands; the
+    # M8/M13 P6: setup is in the pre-case bypass list. Real handler now lands; the
     # bypass invariant is preserved (no preflight 66 on unseeded state) but
     # bl_setup_local_preflight surfaces missing ANTHROPIC_API_KEY as 65.
+    # Verb required: bare 'bl setup' shows help (exit 0); --check invokes preflight.
     unset ANTHROPIC_API_KEY
-    run "$BL_SOURCE" setup
+    run "$BL_SOURCE" setup --check
     [ "$status" -eq 65 ]
     [[ "$output" == *"ANTHROPIC_API_KEY not set"* ]]
 }

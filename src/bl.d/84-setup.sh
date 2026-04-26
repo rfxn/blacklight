@@ -1,31 +1,79 @@
 # shellcheck shell=bash
 # ----------------------------------------------------------------------------
-# bl_setup — workspace bootstrap (DESIGN.md §8.2-§8.5; docs/setup-flow.md authoritative).
-# Replaces stub from 80-stubs.sh. Implements:
-#   bl setup            — full provisioning (idempotent per setup-flow.md §5)
-#   bl setup --check    — partial-state matrix (operator visibility)
-#   bl setup --sync     — skills-delta MANIFEST.json sync (POST/PATCH/DELETE)
-# Bypasses bl_preflight (90-main.sh:18-22 routes setup pre-preflight). Carries
-# its own ANTHROPIC_API_KEY + curl + jq + state-dir checks.
+# bl_setup — workspace bootstrap (DESIGN.md §8.2-§8.5; spec §4.2, §5.4).
+# Replaces old provision/memstore-manifest approach with Skills+Files API
+# variant (Path C). Verb dispatcher per spec §5.4:
+#   bl setup --sync [--dry-run]   — provision + Skills + Files (idempotent)
+#   bl setup --reset [--force]    — delete agent + Skills + workspace Files
+#   bl setup --gc                 — delete files_pending_deletion
+#   bl setup --eval [--promote]   — live promotion eval (stub until P11)
+#   bl setup --check              — print state.json snapshot
+#   bl setup --help               — usage text
+# Bypasses bl_preflight (90-main.sh routes setup pre-preflight). Carries its
+# own ANTHROPIC_API_KEY + curl + jq + state-dir checks.
+# FD 203 = $BL_STATE_DIR/state.json.lock (concurrent --sync serialization)
 # ----------------------------------------------------------------------------
 
 bl_setup() {
-    local mode="provision" prune=""
-    while (( $# > 0 )); do
-        case "$1" in
-            --check)  mode="check";  shift ;;
-            --sync)   mode="sync";   shift ;;
-            --prune)  prune="yes"; shift ;;
-            -*)       bl_error_envelope setup "unknown flag: $1"; return "$BL_EX_USAGE" ;;
-            *)        bl_error_envelope setup "unexpected argument: $1"; return "$BL_EX_USAGE" ;;
-        esac
-    done
-    bl_setup_local_preflight || return $?
-    case "$mode" in
-        provision)  bl_setup_provision; return $? ;;
-        check)      bl_setup_check; return $? ;;
-        sync)       bl_setup_sync "$prune"; return $? ;;
+    local subcmd="${1:-}"
+    [[ $# -gt 0 ]] && shift
+    case "$subcmd" in
+        --sync)
+            local dry_run=0
+            [[ "${1:-}" == "--dry-run" ]] && dry_run=1
+            bl_setup_local_preflight || return $?
+            bl_setup_sync "$dry_run"
+            return $?
+            ;;
+        --reset)
+            local force=0
+            [[ "${1:-}" == "--force" ]] && force=1
+            bl_setup_local_preflight || return $?
+            bl_setup_reset "$force"
+            return $?
+            ;;
+        --gc)
+            bl_setup_local_preflight || return $?
+            bl_setup_gc
+            return $?
+            ;;
+        --eval)
+            local promote=0
+            [[ "${1:-}" == "--promote" ]] && promote=1
+            bl_setup_local_preflight || return $?
+            bl_setup_eval "$promote"
+            return $?
+            ;;
+        --check)
+            bl_setup_local_preflight || return $?
+            bl_setup_check
+            return $?
+            ;;
+        ""|--help)
+            bl_setup_help
+            return "$BL_EX_OK"
+            ;;
+        *)
+            bl_error_envelope setup "unknown subcommand: $subcmd; see 'bl setup --help'"
+            return "$BL_EX_USAGE"
+            ;;
     esac
+}
+
+bl_setup_help() {
+    command cat <<'HELP'
+Usage: bl setup [SUBCOMMAND] [OPTIONS]
+
+Subcommands:
+  --sync [--dry-run]   Provision agent + Skills + Files (idempotent default)
+                       --dry-run prints diff without API mutation
+  --reset [--force]    Delete agent + Skills + workspace Files (destructive)
+                       --force skips confirmation prompt
+  --gc                 Delete files_pending_deletion when no live sessions reference
+  --eval [--promote]   Run 50-case live promotion eval; gated --promote bumps versions
+  --check              Print state.json snapshot + per-resource health
+  --help               This message
+HELP
 }
 
 bl_setup_local_preflight() {
@@ -54,7 +102,7 @@ bl_setup_local_preflight() {
 # First-run migration: if state.json absent AND any per-key files exist,
 # read each, populate state.json, atomically delete old files. One-time per workspace.
 # Returns 0 on success, 65 on malformed state.json.
-# shellcheck disable=SC2034  # BL_STATE_LAST_SYNC consumed by Phase 6 callers
+# shellcheck disable=SC2034  # BL_STATE_LAST_SYNC consumed by bl_setup_sync callers
 bl_setup_load_state() {
     local state_file="$BL_STATE_DIR/state.json"
     command mkdir -p "$BL_STATE_DIR" 2>/dev/null || {   # RO fs / perms
@@ -176,126 +224,385 @@ bl_setup_save_state() {
     return "$BL_EX_OK"
 }
 
-bl_setup_provision() {
-    # Per setup-flow.md §3 happy path, idempotent per §5.
-    # Snapshot state-completeness BEFORE any ensure_* writes id files. Without
-    # this snapshot, first-run ensure_* calls would write all four ids to disk
-    # and a post-ensure check would mis-classify first-run as an idempotent
-    # re-run, diverting full-seed to sync (404 on empty MANIFEST → first-run
-    # hard-fail).
-    local was_complete=""
-    bl_setup_state_is_complete && was_complete="yes"
-    # agent_id/env_id/case_id are populated via printf -v indirection inside the
-    # ensure_* helpers; shellcheck cannot trace name-ref writes through $_out.
-    # shellcheck disable=SC2034  # set indirectly via printf -v "$_out"
-    local agent_id env_id skills_id case_id
-    bl_setup_ensure_agent agent_id        || return $?
-    bl_setup_ensure_env env_id            || return $?
-    bl_setup_ensure_memstore skills_id "bl-skills"  'setup-memstore-create-skills.json' || return $?
-    bl_setup_ensure_memstore case_id   "bl-case"    'setup-memstore-create-case.json'   || return $?
-    if [[ "$was_complete" == "yes" ]]; then
-        # All four ids existed on entry → re-run path.
-        bl_info "bl setup: workspace already provisioned — skills sync only"
-        bl_setup_sync "" || return $?
-        printf '\n'
-        printf 'bl setup: no-op (workspace already provisioned)\n'
-        printf '  agent           %s\n' "$agent_id"
-        printf '  env             %s\n' "$env_id"
-        printf '  memstore-skills %s\n' "$skills_id"
-        printf '  memstore-case   %s\n' "$case_id"
-        bl_setup_print_exports
-        return "$BL_EX_OK"
+# bl_setup_seed_corpus <mode> — mode: dry-run | apply
+# Hashes each skills-corpus/*.md, diffs vs state.json `.files`, uploads changed via bl_files_create.
+# Marks superseded file_ids into files_pending_deletion[]. Returns 0 on success.
+bl_setup_seed_corpus() {
+    local mode="${1:-apply}"
+    local repo_root
+    repo_root=$(bl_setup_resolve_source) || return $?
+    local corpus_dir="$repo_root/skills-corpus"
+    [[ -d "$corpus_dir" ]] || {
+        bl_error_envelope setup "skills-corpus/ not found at $corpus_dir; run 'make skills-corpus' first"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    local state_file="$BL_STATE_DIR/state.json"
+    local existing_state="{}"
+    [[ -f "$state_file" ]] && existing_state=$(command cat "$state_file")
+    local upload_count=0 skip_count=0 supersede_count=0
+    local f mount_path content_sha existing_fid existing_sha new_fid
+    for f in "$corpus_dir"/*.md; do
+        [[ -r "$f" ]] || continue
+        mount_path="/skills/$(basename "$f")"
+        content_sha=$(command sha256sum "$f" | command awk '{print $1}')
+        existing_fid=$(printf '%s' "$existing_state" | jq -r --arg p "$mount_path" '.files[$p].file_id // empty')
+        existing_sha=$(printf '%s' "$existing_state" | jq -r --arg p "$mount_path" '.files[$p].content_sha256 // empty')
+        if [[ "$content_sha" == "$existing_sha" && -n "$existing_fid" ]]; then
+            skip_count=$((skip_count + 1))
+            bl_debug "bl_setup_seed_corpus: skip $mount_path (sha matches $existing_fid)"
+            continue
+        fi
+        if [[ "$mode" == "dry-run" ]]; then
+            printf 'would upload %s (sha %s)\n' "$mount_path" "${content_sha:0:8}"
+            upload_count=$((upload_count + 1))
+            continue
+        fi
+        new_fid=$(bl_files_create "text/markdown" "$f") || return $?
+        bl_info "bl setup: uploaded $mount_path → $new_fid"
+        # Update state.json in-memory representation
+        existing_state=$(printf '%s' "$existing_state" | jq \
+            --arg p "$mount_path" \
+            --arg fid "$new_fid" \
+            --arg sha "$content_sha" \
+            --arg ts "$(command date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '.files[$p] = {file_id: $fid, content_sha256: $sha, uploaded_at: $ts}')
+        # Mark old file_id for GC if present
+        if [[ -n "$existing_fid" ]]; then
+            existing_state=$(printf '%s' "$existing_state" | jq \
+                --arg fid "$existing_fid" \
+                --arg p "$mount_path" \
+                --arg ts "$(command date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                --arg new "$new_fid" \
+                '.files_pending_deletion += [{file_id: $fid, marked_at: $ts, reason: ("superseded by " + $new), previous_mount_path: $p}]')
+            supersede_count=$((supersede_count + 1))
+        fi
+        upload_count=$((upload_count + 1))
+    done
+    # Persist updated state.json (preserves agent/skills/case_files via existing keys)
+    if [[ "$mode" != "dry-run" ]]; then
+        local tmp_state="$state_file.tmp.$$"
+        printf '%s' "$existing_state" > "$tmp_state"
+        command mv "$tmp_state" "$state_file"
     fi
-    # First-run or partial-resume → full seed via POST per skill.
-    bl_setup_seed_skills "$skills_id"     || return $?
-    bl_setup_print_exports
+    bl_info "bl setup: corpus seed — $upload_count uploaded, $skip_count skipped, $supersede_count superseded"
     return "$BL_EX_OK"
 }
 
-# bl_setup_state_is_complete — 0 if all four id files exist + non-empty.
-bl_setup_state_is_complete() {
-    local f
-    for f in agent-id env-id memstore-skills-id memstore-case-id; do
-        [[ -r "$BL_STATE_DIR/$f" ]] && [[ -s "$BL_STATE_DIR/$f" ]] || return 1
+# bl_setup_seed_skills <mode> — mode: dry-run | apply
+# For each routing-skills/<name>/, hash description+body, diff vs state.json `.skills`.
+# If skill_id absent: bl_skills_create. If sha changed: bl_skills_versions_create.
+bl_setup_seed_skills() {
+    local mode="${1:-apply}"
+    local repo_root
+    repo_root=$(bl_setup_resolve_source) || return $?
+    local rs_dir="$repo_root/routing-skills"
+    [[ -d "$rs_dir" ]] || {
+        bl_error_envelope setup "routing-skills/ not found at $rs_dir"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    local count
+    count=$(find "$rs_dir" -mindepth 1 -maxdepth 1 -type d | wc -l)
+    if (( count == 0 )); then
+        bl_error_envelope setup "no routing Skills found at $rs_dir; expected 6"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    local state_file="$BL_STATE_DIR/state.json"
+    local existing_state="{}"
+    [[ -f "$state_file" ]] && existing_state=$(command cat "$state_file")
+    local d name desc_file body_file desc_sha body_sha existing_id existing_desc_sha existing_body_sha new_id new_version
+    for d in "$rs_dir"/*/; do
+        name=$(basename "$d")
+        desc_file="$d/description.txt"
+        body_file="$d/SKILL.md"
+        [[ -r "$desc_file" && -r "$body_file" ]] || {
+            bl_warn "bl setup: skipping $name — missing description.txt or SKILL.md"
+            continue
+        }
+        desc_sha=$(command sha256sum "$desc_file" | command awk '{print $1}')
+        body_sha=$(command sha256sum "$body_file" | command awk '{print $1}')
+        existing_id=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].id // empty')
+        existing_desc_sha=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].description_sha256 // empty')
+        existing_body_sha=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].body_sha256 // empty')
+        if [[ "$desc_sha" == "$existing_desc_sha" && "$body_sha" == "$existing_body_sha" && -n "$existing_id" ]]; then
+            bl_debug "bl_setup_seed_skills: skip $name (no change)"
+            continue
+        fi
+        if [[ "$mode" == "dry-run" ]]; then
+            if [[ -z "$existing_id" ]]; then
+                printf 'would skills.create %s\n' "$name"
+            else
+                printf 'would skills.versions.create %s (desc/body sha changed)\n' "$name"
+            fi
+            continue
+        fi
+        if [[ -z "$existing_id" ]]; then
+            new_id=$(bl_skills_create "$name" "$desc_file" "$body_file") || return $?
+            new_version=$(bl_skills_get "$new_id" | jq -r '.version // empty')
+            bl_info "bl setup: created Skill $name → $new_id (version $new_version)"
+            existing_state=$(printf '%s' "$existing_state" | jq \
+                --arg n "$name" --arg id "$new_id" --arg v "$new_version" \
+                --arg ds "$desc_sha" --arg bs "$body_sha" \
+                '.skills[$n] = {id: $id, version: $v, description_sha256: $ds, body_sha256: $bs} | .agent.skill_versions[$n] = $v')
+        else
+            new_version=$(bl_skills_versions_create "$existing_id" "$desc_file" "$body_file") || return $?
+            bl_info "bl setup: bumped Skill $name → version $new_version"
+            existing_state=$(printf '%s' "$existing_state" | jq \
+                --arg n "$name" --arg v "$new_version" \
+                --arg ds "$desc_sha" --arg bs "$body_sha" \
+                '.skills[$n].version = $v | .skills[$n].description_sha256 = $ds | .skills[$n].body_sha256 = $bs | .agent.skill_versions[$n] = $v')
+        fi
     done
-    return 0
+    if [[ "$mode" != "dry-run" ]]; then
+        local tmp_state="$state_file.tmp.$$"
+        printf '%s' "$existing_state" > "$tmp_state"
+        command mv "$tmp_state" "$state_file"
+    fi
+    return "$BL_EX_OK"
 }
 
-# bl_setup_ensure_agent <out-var> — populates out-var with id; returns 0/65/69/70/71.
-bl_setup_ensure_agent() {
-    local _out="$1"
-    local id_file="$BL_STATE_DIR/agent-id"
-    if [[ -r "$id_file" ]]; then
-        local cached
-        cached=$(command cat "$id_file")
-        if [[ -n "$cached" ]]; then
-            bl_debug "bl_setup: agent-id cached: $cached"
-            printf -v "$_out" '%s' "$cached"
-            return "$BL_EX_OK"
+# bl_setup_attach_session_resources <case-id> <session-id>
+# Attach 8 workspace corpora (foundations + 6 routing-skill corpora + substrate-context)
+# + per-case raw + summary Files to a fresh session via /v1/sessions/<id>/resources POST.
+bl_setup_attach_session_resources() {
+    local case_id="$1" session_id="$2"
+    [[ -z "$case_id" || -z "$session_id" ]] && {
+        bl_error_envelope setup "bl_setup_attach_session_resources: case-id + session-id required"
+        return "$BL_EX_USAGE"
+    }
+    local state_file="$BL_STATE_DIR/state.json"
+    [[ -f "$state_file" ]] || { bl_error_envelope setup "state.json missing; run 'bl setup --sync' first"; return "$BL_EX_PREFLIGHT_FAIL"; }
+    # Workspace Files (8 entries from .files{})
+    local mount_path file_id rc
+    rc=0
+    while IFS=$'\t' read -r mount_path file_id; do
+        [[ -z "$mount_path" || -z "$file_id" ]] && continue
+        bl_files_attach_to_session "$session_id" "$file_id" "$mount_path" >/dev/null || {
+            rc=$?
+            bl_warn "bl setup: failed to attach $mount_path → $session_id ($rc)"
+            continue
+        }
+        bl_debug "bl setup: attached $mount_path"
+    done < <(jq -r '.files | to_entries[] | "\(.key)\t\(.value.file_id)"' "$state_file")
+    # Per-case Files (case_files[case_id])
+    while IFS=$'\t' read -r mount_path file_id; do
+        [[ -z "$mount_path" || -z "$file_id" ]] && continue
+        bl_files_attach_to_session "$session_id" "$file_id" "$mount_path" >/dev/null || {
+            rc=$?
+            bl_warn "bl setup: failed to attach $mount_path → $session_id ($rc)"
+            continue
+        }
+    done < <(jq -r --arg c "$case_id" '.case_files[$c] // {} | to_entries[] | "\(.key)\t\(.value.workspace_file_id)"' "$state_file")
+    return "$BL_EX_OK"
+}
+
+bl_setup_dry_run() {
+    bl_setup_load_state || return $?
+    printf 'bl setup --dry-run: loaded state from %s\n' "$BL_STATE_DIR/state.json"
+    bl_setup_seed_corpus dry-run
+    bl_setup_seed_skills dry-run
+    bl_setup_ensure_agent dry-run
+    printf 'bl setup --dry-run: 0 mutations would be applied (preview mode)\n'
+    return "$BL_EX_OK"
+}
+
+bl_setup_reset() {
+    local force="${1:-0}"
+    bl_setup_load_state || return $?
+    local agent_id env_id
+    agent_id="${BL_STATE_AGENT_ID:-}"
+    env_id="${BL_STATE_ENV_ID:-}"
+    local skills_count files_count case_memstores_count case_files_count
+    skills_count=$(jq -r '.skills | length' "$BL_STATE_DIR/state.json")
+    files_count=$(jq -r '.files | length' "$BL_STATE_DIR/state.json")
+    case_memstores_count=$(jq -r '.case_memstores | length' "$BL_STATE_DIR/state.json")
+    case_files_count=$(jq -r '[.case_files[] | length] | add // 0' "$BL_STATE_DIR/state.json")
+    if [[ "$force" != "1" ]]; then
+        printf 'bl setup --reset: this will DELETE %s + %d Skills + %d workspace Files.\n' \
+            "${agent_id:-(none)}" "$skills_count" "$files_count"
+        printf 'bl setup --reset: per-case Files (%d) and case memstores (%d) are PRESERVED.\n' "$case_files_count" "$case_memstores_count"
+        printf 'bl setup --reset: continue? [y/N]: '
+        read -r response
+        [[ "$response" != "y" && "$response" != "Y" ]] && { printf 'bl setup --reset: aborted\n'; return "$BL_EX_OK"; }
+    fi
+    [[ -n "$agent_id" ]] && { bl_api_call DELETE "/v1/agents/$agent_id" >/dev/null || bl_warn "agent delete failed"; bl_info "deleted agent $agent_id"; }
+    local skill_id
+    while IFS= read -r skill_id; do
+        [[ -z "$skill_id" ]] && continue
+        bl_skills_delete "$skill_id" || bl_warn "skill delete failed: $skill_id"
+    done < <(jq -r '.skills[].id // empty' "$BL_STATE_DIR/state.json")
+    local file_id
+    while IFS= read -r file_id; do
+        [[ -z "$file_id" ]] && continue
+        bl_files_delete "$file_id" || bl_warn "file delete failed: $file_id"
+    done < <(jq -r '.files[].file_id // empty' "$BL_STATE_DIR/state.json")
+    # Wipe state.json: preserve case_memstores + case_files only
+    local tmp_state="$BL_STATE_DIR/state.json.tmp.$$"
+    jq '{
+        schema_version: 1,
+        agent: {id: "", version: 0, skill_versions: {}},
+        env_id: .env_id,
+        skills: {},
+        files: {},
+        files_pending_deletion: [],
+        case_memstores: .case_memstores,
+        case_files: .case_files,
+        case_id_counter: .case_id_counter,
+        case_current: .case_current,
+        session_ids: {},
+        last_sync: ""
+    }' "$BL_STATE_DIR/state.json" > "$tmp_state"
+    command mv "$tmp_state" "$BL_STATE_DIR/state.json"
+    bl_info "bl setup --reset: state.json reset (preserved case_memstores + case_files)"
+    return "$BL_EX_OK"
+}
+
+bl_setup_gc() {
+    bl_setup_load_state || return $?
+    local pending_count
+    pending_count=$(jq -r '.files_pending_deletion | length' "$BL_STATE_DIR/state.json")
+    (( pending_count == 0 )) && { printf 'bl setup --gc: no files pending deletion\n'; return "$BL_EX_OK"; }
+    printf 'bl setup --gc: %d file(s) pending deletion\n' "$pending_count"
+    local file_id
+    local deleted=0 skipped=0
+    while IFS= read -r file_id; do
+        [[ -z "$file_id" ]] && continue
+        # NOTE: Anthropic does not currently expose sessions.resources.list per-session enumeration
+        # of file_id usage. Conservative posture: delete only if state.json shows no live session
+        # holds the file. Future: when API exposes per-file usage, query it here.
+        local in_use
+        in_use=$(jq -r --arg f "$file_id" '[.session_ids | to_entries[] | .value] | map(select(. != "")) | length' "$BL_STATE_DIR/state.json")
+        if (( in_use > 0 )); then
+            bl_info "bl setup --gc: skip $file_id (live sessions present — conservative)"
+            skipped=$((skipped + 1))
+            continue
         fi
+        bl_files_delete "$file_id" || { bl_warn "delete failed: $file_id"; continue; }
+        deleted=$((deleted + 1))
+        # Remove from files_pending_deletion[]
+        local tmp_state="$BL_STATE_DIR/state.json.tmp.$$"
+        jq --arg f "$file_id" '.files_pending_deletion |= map(select(.file_id != $f))' "$BL_STATE_DIR/state.json" > "$tmp_state"
+        command mv "$tmp_state" "$BL_STATE_DIR/state.json"
+    done < <(jq -r '.files_pending_deletion[].file_id // empty' "$BL_STATE_DIR/state.json")
+    printf 'bl setup --gc: deleted %d, skipped %d\n' "$deleted" "$skipped"
+    return "$BL_EX_OK"
+}
+
+bl_setup_eval() {
+    local promote="${1:-0}"
+    # Wired up in M13 P11. For P6 this is a stub that emits the expected JSON shape
+    # so the verb dispatcher contract is testable without the live runner present.
+    bl_warn "bl setup --eval: live runner stubbed in P6; full implementation lands in M13 P11 — set BL_EVAL_LIVE=1 with M13 P11 deployed"
+    printf '%s\n' '{"per_skill_precision":{},"cross_skill_recall":0,"distractor_specificity":0,"promotion_pass":false,"below_bar":["P11 not yet implemented"]}'
+    if (( promote == 1 )); then
+        bl_error_envelope setup "promotion bar not met (eval not implemented)"
+        return "$BL_EX_PREFLIGHT_FAIL"
     fi
-    local list_resp probed_id
-    list_resp=$(bl_api_call GET "/v1/agents") || return $?   # API rejects ?name= filter — list all, filter client-side
-    probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name == "bl-curator") | .id' | head -1)
-    if [[ -z "$probed_id" ]]; then
-        # Also match the smoketest agent name that was provisioned in initial workspace
-        probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name | startswith("blacklight-curator")) | .id' | head -1)
-    fi
-    if [[ -n "$probed_id" ]]; then
-        bl_info "bl setup: curator agent already exists ($probed_id) — caching"
-        printf '%s' "$probed_id" > "$id_file"
-        printf -v "$_out" '%s' "$probed_id"
+    return "$BL_EX_OK"
+}
+
+# bl_setup_ensure_agent <mode> — mode: apply | dry-run
+# Creates or updates the bl-curator Managed Agent. On first-run: POST /v1/agents.
+# On subsequent: PATCH /v1/agents/<id> with updated skill_versions from state.json.
+bl_setup_ensure_agent() {
+    local mode="${1:-apply}"
+    local state_file="$BL_STATE_DIR/state.json"
+    local cached_id
+    cached_id=$(jq -r '.agent.id // empty' "$state_file" 2>/dev/null || printf '')   # missing state → empty → first-run path
+    if [[ -n "$cached_id" ]] && [[ "$mode" == "apply" ]]; then
+        # Update existing agent — bump version with skill_versions from state
+        local body_file
+        body_file=$(command mktemp)
+        local skill_versions_json
+        skill_versions_json=$(jq -c '.agent.skill_versions // {}' "$state_file")
+        jq -n \
+            --argjson sv "$skill_versions_json" \
+            '{skill_versions: $sv}' > "$body_file"
+        local resp rc
+        rc=0
+        resp=$(bl_api_call PATCH "/v1/agents/$cached_id" "$body_file") || rc=$?
+        command rm -f "$body_file"
+        (( rc != 0 )) && return $rc
+        local new_version
+        new_version=$(printf '%s' "$resp" | jq -r '.version // 0')
+        # Persist new version to state.json
+        local existing_state tmp_state
+        existing_state=$(command cat "$state_file")
+        tmp_state="$state_file.tmp.$$"
+        printf '%s' "$existing_state" | jq --argjson v "$new_version" '.agent.version = $v' > "$tmp_state"
+        command mv "$tmp_state" "$state_file"
+        BL_STATE_AGENT_ID="$cached_id"
+        BL_STATE_AGENT_VERSION="$new_version"
         return "$BL_EX_OK"
     fi
-    local body_file create_resp created_id
-    body_file=$(mktemp)
+    if [[ "$mode" == "dry-run" ]]; then
+        if [[ -z "$cached_id" ]]; then
+            printf 'would agents.create bl-curator\n'
+        else
+            printf 'would agents.update %s (skill_versions diff)\n' "$cached_id"
+        fi
+        return "$BL_EX_OK"
+    fi
+    # First-run agent creation — attempt POST directly; on 409 re-probe via GET.
+    # Avoids a GET+POST TOCTOU race while keeping 409 recovery deterministic.
+    # Pattern: capture rc separately to survive set -e (command-substitution exit aborts on non-zero).
+    local body_file create_resp created_id created_version rc
+    body_file=$(command mktemp)
     bl_setup_compose_agent_body > "$body_file" || { command rm -f "$body_file"; return "$BL_EX_PREFLIGHT_FAIL"; }
-    create_resp=$(bl_api_call POST "/v1/agents" "$body_file")
-    local rc=$?
+    rc=0
+    create_resp=$(bl_api_call POST "/v1/agents" "$body_file") || rc=$?
     command rm -f "$body_file"
     if (( rc == 71 )); then
+        # 409: agent already exists (race or untracked prior run) — probe and cache
         bl_info "bl setup: agent already exists (409) — re-probing"
+        local list_resp probed_id
         list_resp=$(bl_api_call GET "/v1/agents") || return $?   # API rejects ?name= filter — list all, filter client-side
         probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name == "bl-curator") | .id' | head -1)
-        [[ -z "$probed_id" ]] && probed_id=$(printf '%s' "$list_resp" | jq -r '.data[] | select(.name | startswith("blacklight-curator")) | .id' | head -1)
         [[ -z "$probed_id" ]] && { bl_error_envelope setup "agent created elsewhere but probe still empty"; return "$BL_EX_NOT_FOUND"; }
-        printf '%s' "$probed_id" > "$id_file"
-        printf -v "$_out" '%s' "$probed_id"
+        BL_STATE_AGENT_ID="$probed_id"
+        BL_STATE_AGENT_VERSION=$(printf '%s' "$list_resp" | jq -r --arg id "$probed_id" '.data[] | select(.id == $id) | .version // 1')
+        bl_setup_save_state || return $?
         return "$BL_EX_OK"
     fi
     (( rc != 0 )) && return $rc
     created_id=$(printf '%s' "$create_resp" | jq -r '.id // empty')
+    created_version=$(printf '%s' "$create_resp" | jq -r '.version // 1')
     [[ -z "$created_id" ]] && { bl_error_envelope setup "agent create returned no id"; return "$BL_EX_UPSTREAM_ERROR"; }
-    printf '%s' "$created_id" > "$id_file"
-    printf -v "$_out" '%s' "$created_id"
-    bl_info "bl setup: agent created ($created_id)"
+    bl_info "bl setup: agent created ($created_id, version $created_version)"
+    BL_STATE_AGENT_ID="$created_id"
+    BL_STATE_AGENT_VERSION="$created_version"
+    bl_setup_save_state || return $?
     return "$BL_EX_OK"
 }
 
-# bl_setup_ensure_env <out-var> — same shape as ensure_agent; targets /v1/environments.
+# bl_setup_ensure_env <out-var> — same shape as old ensure_env; targets /v1/environments.
+# Reads env_id from state.json if present; otherwise creates it.
 bl_setup_ensure_env() {
     local _out="$1"
-    local id_file="$BL_STATE_DIR/env-id"
-    if [[ -r "$id_file" ]]; then
-        local cached
-        cached=$(command cat "$id_file")
-        if [[ -n "$cached" ]]; then
-            printf -v "$_out" '%s' "$cached"
-            return "$BL_EX_OK"
-        fi
+    # Check state.json first; fall back to legacy env-id file during migration window
+    local state_file="$BL_STATE_DIR/state.json"
+    local cached_env=""
+    [[ -f "$state_file" ]] && cached_env=$(jq -r '.env_id // empty' "$state_file")
+    if [[ -z "$cached_env" ]]; then
+        local id_file="$BL_STATE_DIR/env-id"
+        [[ -r "$id_file" ]] && cached_env=$(command cat "$id_file")
     fi
-    local body_file create_resp created_id
-    body_file=$(mktemp)
+    if [[ -n "$cached_env" ]]; then
+        BL_STATE_ENV_ID="$cached_env"
+        [[ -n "$_out" ]] && printf -v "$_out" '%s' "$cached_env"
+        return "$BL_EX_OK"
+    fi
+    local body_file create_resp created_id rc
+    body_file=$(command mktemp)
     bl_setup_compose_env_body > "$body_file" || { command rm -f "$body_file"; return "$BL_EX_PREFLIGHT_FAIL"; }
-    create_resp=$(bl_api_call POST "/v1/environments" "$body_file")
-    local rc=$?
+    rc=0
+    create_resp=$(bl_api_call POST "/v1/environments" "$body_file") || rc=$?
     command rm -f "$body_file"
     (( rc != 0 )) && return $rc
     created_id=$(printf '%s' "$create_resp" | jq -r '.id // empty')
     [[ -z "$created_id" ]] && { bl_error_envelope setup "env create returned no id"; return "$BL_EX_UPSTREAM_ERROR"; }
-    printf '%s' "$created_id" > "$id_file"
     bl_info "bl setup: env created ($created_id)"
-    printf -v "$_out" '%s' "$created_id"
+    BL_STATE_ENV_ID="$created_id"
+    [[ -n "$_out" ]] && printf -v "$_out" '%s' "$created_id"
     return "$BL_EX_OK"
 }
 
@@ -306,18 +613,26 @@ bl_setup_ensure_memstore() {
     # third arg unused at runtime — fixture filename is for test docs only
     local id_file_basename
     case "$name" in
-        bl-skills) id_file_basename="memstore-skills-id" ;;
         bl-case)   id_file_basename="memstore-case-id"   ;;
         *)         bl_error_envelope setup "unknown memstore name: $name"; return "$BL_EX_USAGE" ;;
     esac
-    local id_file="$BL_STATE_DIR/$id_file_basename"
-    if [[ -r "$id_file" ]]; then
-        local cached
-        cached=$(command cat "$id_file")
-        if [[ -n "$cached" ]]; then
-            printf -v "$_out" '%s' "$cached"
-            return "$BL_EX_OK"
+    # Check state.json first
+    local state_file="$BL_STATE_DIR/state.json"
+    local cached_id=""
+    if [[ -f "$state_file" ]]; then
+        cached_id=$(jq -r '.case_memstores["_default"] // empty' "$state_file")
+    fi
+    if [[ -z "$cached_id" ]]; then
+        local id_file="$BL_STATE_DIR/$id_file_basename"
+        if [[ -r "$id_file" ]]; then
+            local from_file
+            from_file=$(command cat "$id_file")
+            [[ -n "$from_file" ]] && cached_id="$from_file"
         fi
+    fi
+    if [[ -n "$cached_id" ]]; then
+        [[ -n "$_out" ]] && printf -v "$_out" '%s' "$cached_id"
+        return "$BL_EX_OK"
     fi
     local list_resp probed_id
     list_resp=$(bl_api_call GET "/v1/memory_stores?name=$name") || return $?
@@ -325,26 +640,25 @@ bl_setup_ensure_memstore() {
     probed_id=$(printf '%s' "$list_resp" | jq -r --arg n "$name" '.data[] | select(.name == $n) | .id' | head -1)
     if [[ -n "$probed_id" ]]; then
         bl_info "bl setup: memstore $name already exists ($probed_id) — caching"
-        printf '%s' "$probed_id" > "$id_file"
-        printf -v "$_out" '%s' "$probed_id"
+        [[ -n "$_out" ]] && printf -v "$_out" '%s' "$probed_id"
         return "$BL_EX_OK"
     fi
-    local body_file create_resp created_id
-    body_file=$(mktemp)
+    local body_file create_resp created_id rc
+    body_file=$(command mktemp)
     jq -n --arg n "$name" '{name:$n}' > "$body_file"
-    create_resp=$(bl_api_call POST "/v1/memory_stores" "$body_file")
-    local rc=$?
+    rc=0
+    create_resp=$(bl_api_call POST "/v1/memory_stores" "$body_file") || rc=$?
     command rm -f "$body_file"
     (( rc != 0 )) && return $rc
     created_id=$(printf '%s' "$create_resp" | jq -r '.id // empty')
     [[ -z "$created_id" ]] && { bl_error_envelope setup "memstore $name create returned no id"; return "$BL_EX_UPSTREAM_ERROR"; }
-    printf '%s' "$created_id" > "$id_file"
     bl_info "bl setup: memstore $name created ($created_id)"
-    printf -v "$_out" '%s' "$created_id"
+    [[ -n "$_out" ]] && printf -v "$_out" '%s' "$created_id"
     return "$BL_EX_OK"
 }
 
 # bl_setup_compose_agent_body — emits agent-create JSON to stdout per setup-flow.md §4.2.
+# Includes skill_versions field populated from state.json (Path C addition).
 bl_setup_compose_agent_body() {
     local repo_root resolved
     resolved=$(readlink -f "$0" 2>/dev/null || printf '.')   # readlink -f may fail when $0 is relative / sourced — fallback to cwd
@@ -356,15 +670,20 @@ bl_setup_compose_agent_body() {
     for f in "$prompt_file" "$step_schema" "$def_schema" "$int_schema"; do
         [[ -r "$f" ]] || { bl_error_envelope setup "input file missing: $f"; return "$BL_EX_PREFLIGHT_FAIL"; }
     done
+    local sv_json='{}'
+    local state_file="$BL_STATE_DIR/state.json"
+    [[ -f "$state_file" ]] && sv_json=$(jq -c '.agent.skill_versions // {}' "$state_file" 2>/dev/null || printf '{}')
     jq -n \
         --rawfile prompt "$prompt_file" \
         --slurpfile stepRaw "$step_schema" \
         --slurpfile defRaw  "$def_schema" \
         --slurpfile intRaw  "$int_schema" \
+        --argjson sv "$sv_json" \
         '{
             name: "bl-curator",
             model: "claude-opus-4-7",
             system: $prompt,
+            skill_versions: $sv,
             tools: [
                 {type: "agent_toolset_20260401"},
                 {
@@ -401,61 +720,117 @@ bl_setup_compose_env_body() {
     }'
 }
 
-# bl_setup_seed_skills <skills-memstore-id> — POST every skills/**/*.md (excluding
-# INDEX.md) plus a MANIFEST.json memory recording sha256 per file. Per setup-flow.md
-# §4.5. Returns 0/65/69/70. Single-skill 4xx (e.g. 413 oversize) is warn-and-continue;
-# >0 failures collapses into BL_EX_UPSTREAM_ERROR after the loop.
-bl_setup_seed_skills() {
-    local skills_id="$1"
-    local repo_root
-    repo_root=$(bl_setup_resolve_source) || return $?
-    local skills_dir="$repo_root/skills"
-    [[ -d "$skills_dir" ]] || { bl_error_envelope setup "skills/ not found at $skills_dir"; return "$BL_EX_PREFLIGHT_FAIL"; }
-    local manifest_entries=""
-    local count=0 fail=0
-    local path rel sha
-    while IFS= read -r path; do
-        rel="${path#"$skills_dir"/}"
-        [[ "$rel" == "INDEX.md" ]] && continue
-        sha=$(command sha256sum "$path" | command awk '{print $1}')
-        [[ -n "$manifest_entries" ]] && manifest_entries="$manifest_entries,"
-        manifest_entries="$manifest_entries$(jq -n --arg p "$rel" --arg s "$sha" '{path:$p, sha256:$s}')"
-        if ! bl_setup_post_memory "$skills_id" "$rel" "$path" "$sha"; then
-            bl_warn "bl setup: failed to POST skill $rel"
-            fail=$((fail + 1))
-            continue
+# bl_setup_check — emit state.json snapshot + per-resource health; exit 0 if agent+env present.
+bl_setup_check() {
+    bl_setup_load_state || return $?
+    local rr rr_label rr_canon pwd_canon
+    rr=$(bl_setup_resolve_source 2>/dev/null) || rr="<unresolved>"   # check is operator-facing; never block on resolution
+    # Label the discovery mechanism for operator clarity. Canonicalize both sides
+    # so BL_REPO_ROOT="tests/.." resolves to the same path as pwd after cd.
+    if [[ "$rr" == "<unresolved>" ]]; then
+        rr_label="$rr"
+    else
+        rr_canon=$(cd "$rr" 2>/dev/null && pwd) || true   # cd may fail on bad path — fallback to raw label
+        pwd_canon=$(pwd)
+        if [[ -n "$rr_canon" && "$rr_canon" == "$pwd_canon" ]]; then
+            rr_label="cwd ($rr)"
+        else
+            rr_label="$rr"
         fi
-        count=$((count + 1))
-    done < <(find "$skills_dir" -name '*.md' | sort)
-    bl_info "bl setup: seeded $count skill(s); $fail failure(s)"
-    (( fail > 0 )) && return "$BL_EX_UPSTREAM_ERROR"
-    bl_setup_post_manifest "$skills_id" "$manifest_entries" || return $?
+    fi
+    printf 'bl setup --check (state=%s, source=%s):\n' "$BL_STATE_DIR" "$rr_label"
+    local state_file="$BL_STATE_DIR/state.json"
+    local missing=0
+    if [[ -f "$state_file" ]]; then
+        local agent_id env_id skills_count files_count
+        agent_id=$(jq -r '.agent.id // empty' "$state_file")
+        env_id=$(jq -r '.env_id // empty' "$state_file")
+        skills_count=$(jq -r '.skills | length' "$state_file")
+        files_count=$(jq -r '.files | length' "$state_file")
+        if [[ -n "$agent_id" ]]; then
+            printf '  agent: ok (%s v%s)\n' "$agent_id" "$(jq -r '.agent.version // 0' "$state_file")"
+        else
+            printf '  agent: missing\n'
+            missing=$((missing + 1))
+        fi
+        if [[ -n "$env_id" ]]; then
+            printf '  env: ok (%s)\n' "$env_id"
+        else
+            printf '  env: missing\n'
+            missing=$((missing + 1))
+        fi
+        printf '  skills: %d provisioned\n' "$skills_count"
+        printf '  files: %d workspace files\n' "$files_count"
+        local pending_count
+        pending_count=$(jq -r '.files_pending_deletion | length' "$state_file")
+        (( pending_count > 0 )) && printf '  files_pending_deletion: %d (run bl setup --gc)\n' "$pending_count"
+        printf '  last_sync: %s\n' "$(jq -r '.last_sync // "(never)"' "$state_file")"
+    else
+        printf '  agent: missing\n'
+        printf '  env: missing\n'
+        printf '  skills: 0 provisioned\n'
+        printf '  files: 0 workspace files\n'
+        missing=$((missing + 2))
+    fi
+    if (( missing > 0 )); then
+        printf '\n%d resource(s) missing — run "bl setup --sync" to provision.\n' "$missing"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+    printf '\nworkspace provisioned.\n'
     return "$BL_EX_OK"
 }
 
-# bl_setup_post_memory <store-id> <key> <content-path> <sha256> — POST one memory
-# (full body via mktemp body-file; cleaned on every exit path).
-bl_setup_post_memory() {
-    local store_id="$1"
-    local key="$2"
-    local content_path="$3"
-    # sha arg ($4) ignored — API no longer accepts metadata field
-    bl_mem_post "$store_id" "$key" "$content_path"
-    return $?
-}
-
-# bl_setup_post_manifest <store-id> <comma-joined-entries> — POST MANIFEST.json memory.
-bl_setup_post_manifest() {
-    local store_id="$1"
-    local entries="$2"
-    local content_file
-    content_file=$(mktemp)
-    printf '[%s]' "$entries" > "$content_file"
-    # Use bl_mem_patch so re-seeding re-run overwrites the existing MANIFEST
-    bl_mem_patch "$store_id" "MANIFEST.json" "$content_file"
-    local rc=$?
-    command rm -f "$content_file"
-    return $rc
+bl_setup_sync() {
+    local dry_run="${1:-0}"
+    # Acquire flock on state.json to serialize concurrent --sync invocations (spec §11b row 4)
+    local lock_file="$BL_STATE_DIR/state.json.lock"
+    command touch "$lock_file" 2>/dev/null || {   # RO fs / perms — fail-fast diagnostic
+        bl_error_envelope setup "$lock_file not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    exec 203<>"$lock_file"
+    if ! flock -x -w 30 203; then
+        exec 203<&-
+        bl_error_envelope setup "flock timeout on $lock_file (concurrent sync?)"
+        return "$BL_EX_CONFLICT"
+    fi
+    # Pattern: save $? before exec 203<&- — exec resets $? to 0 so we must capture
+    # the failed command's exit code first, then close FD, then propagate.
+    local _rc=0
+    bl_setup_load_state; _rc=$?
+    if (( _rc != 0 )); then exec 203<&-; return "$_rc"; fi
+    if (( dry_run == 1 )); then
+        bl_setup_dry_run; _rc=$?
+        exec 203<&-
+        return "$_rc"
+    fi
+    bl_setup_ensure_env BL_STATE_ENV_ID; _rc=$?
+    if (( _rc != 0 )); then exec 203<&-; return "$_rc"; fi
+    bl_setup_save_state; _rc=$?
+    if (( _rc != 0 )); then exec 203<&-; return "$_rc"; fi
+    # bl-case memstore — needed for case working memory (bl-skills memstore retired in Path C)
+    local case_memstore_id=""
+    bl_setup_ensure_memstore case_memstore_id "bl-case" 'setup-memstore-create-case.json'; _rc=$?
+    if (( _rc != 0 )); then exec 203<&-; return "$_rc"; fi
+    BL_STATE_MEMSTORE_CASE_ID="$case_memstore_id"
+    # Update case_memstores in state.json (singleton "_default" key for v1; multi-case future)
+    local tmp_state="$BL_STATE_DIR/state.json.tmp.$$"
+    jq --arg id "$case_memstore_id" '.case_memstores["_default"] = $id' "$BL_STATE_DIR/state.json" > "$tmp_state"
+    command mv "$tmp_state" "$BL_STATE_DIR/state.json"
+    bl_setup_seed_corpus apply; _rc=$?
+    if (( _rc != 0 )); then exec 203<&-; return "$_rc"; fi
+    bl_setup_seed_skills apply; _rc=$?
+    if (( _rc != 0 )); then exec 203<&-; return "$_rc"; fi
+    bl_setup_ensure_agent apply; _rc=$?
+    if (( _rc != 0 )); then exec 203<&-; return "$_rc"; fi
+    bl_setup_save_state; _rc=$?
+    if (( _rc != 0 )); then exec 203<&-; return "$_rc"; fi
+    printf 'bl setup --sync complete\n'
+    printf '  agent           %s (version %s)\n' "${BL_STATE_AGENT_ID:-?}" "${BL_STATE_AGENT_VERSION:-0}"
+    printf '  env             %s\n' "${BL_STATE_ENV_ID:-?}"
+    printf '  case memstore   %s\n' "${BL_STATE_MEMSTORE_CASE_ID:-?}"
+    exec 203<&-
+    return "$BL_EX_OK"
 }
 
 # bl_setup_resolve_source — DESIGN.md §8.3 ordering:
@@ -498,153 +873,5 @@ bl_setup_resolve_source() {
         return "$BL_EX_PREFLIGHT_FAIL"
     fi
     printf '%s' "$cache_dir"
-    return "$BL_EX_OK"
-}
-
-# bl_setup_check — emit per-resource status; exit 0 if all 4 ids cached, else 65.
-bl_setup_check() {
-    local missing=0
-    local rr rr_label rr_canon pwd_canon
-    rr=$(bl_setup_resolve_source 2>/dev/null) || rr="<unresolved>"   # check is operator-facing; never block on resolution
-    # Label the discovery mechanism for operator clarity. Canonicalize both sides
-    # so BL_REPO_ROOT="tests/.." resolves to the same path as pwd after cd.
-    if [[ "$rr" == "<unresolved>" ]]; then
-        rr_label="$rr"
-    else
-        rr_canon=$( cd "$rr" 2>/dev/null && pwd )   # cd may fail on bad path — fallback to raw label
-        pwd_canon=$(pwd)
-        if [[ -n "$rr_canon" && "$rr_canon" == "$pwd_canon" ]]; then
-            rr_label="cwd ($rr)"
-        else
-            rr_label="$rr"
-        fi
-    fi
-    printf 'bl setup --check (state=%s, source=%s):\n' "$BL_STATE_DIR" "$rr_label"
-    local slot id_file
-    for slot in agent env memstore-skills memstore-case; do
-        # Map slot label → id-file basename. Dedicated case (no dead pre-assignment).
-        case "$slot" in
-            agent)             id_file="$BL_STATE_DIR/agent-id" ;;
-            env)               id_file="$BL_STATE_DIR/env-id" ;;
-            memstore-skills)   id_file="$BL_STATE_DIR/memstore-skills-id" ;;
-            memstore-case)     id_file="$BL_STATE_DIR/memstore-case-id" ;;
-        esac
-        if [[ -r "$id_file" ]] && [[ -s "$id_file" ]]; then
-            printf '  %s: ok (%s)\n' "$slot" "$(command cat "$id_file")"
-        else
-            printf '  %s: missing\n' "$slot"
-            missing=$((missing + 1))
-        fi
-    done
-    if (( missing > 0 )); then
-        printf '\n%d resource(s) missing — run "bl setup" to provision.\n' "$missing"
-        return "$BL_EX_PREFLIGHT_FAIL"
-    fi
-    printf '\nall four resources provisioned.\n'
-    return "$BL_EX_OK"
-}
-
-# bl_setup_sync <prune?> — diff local skills sha256 vs remote MANIFEST; POST/PATCH/DELETE
-# only changed paths. --prune required to actually delete (default warn-only). Updates
-# remote MANIFEST after diff applied. Per setup-flow.md §3 step 6 + §4.5 + DESIGN.md §8.4.
-bl_setup_sync() {
-    local prune="$1"
-    local skills_id=""
-    if [[ -r "$BL_STATE_DIR/memstore-skills-id" ]]; then
-        skills_id=$(command cat "$BL_STATE_DIR/memstore-skills-id")
-    fi
-    [[ -z "$skills_id" ]] && { bl_error_envelope setup "memstore-skills-id not cached; run 'bl setup' first"; return "$BL_EX_NOT_FOUND"; }
-    local repo_root
-    repo_root=$(bl_setup_resolve_source) || return $?
-    local skills_dir="$repo_root/skills"
-    [[ -d "$skills_dir" ]] || { bl_error_envelope setup "skills/ not found at $skills_dir"; return "$BL_EX_PREFLIGHT_FAIL"; }
-    # Build local manifest (sha256 by relative path)
-    local local_manifest_file remote_manifest_file
-    local_manifest_file=$(mktemp)
-    remote_manifest_file=$(mktemp)
-    bl_setup_compute_manifest "$skills_dir" > "$local_manifest_file"
-    # Fetch remote manifest
-    local remote_resp rc=0
-    remote_resp=$(bl_mem_get "$skills_id" "MANIFEST.json") || rc=$?
-    if (( rc != 0 )); then
-        command rm -f "$local_manifest_file" "$remote_manifest_file"
-        return $rc
-    fi
-    # .content is a stringified JSON array per setup-flow.md §4.5 — parse via fromjson
-    printf '%s' "$remote_resp" | jq -r '.content // "[]"' > "$remote_manifest_file"
-    # Diff: arrays of {path, sha256} → {add, modify, remove} keyed by path.
-    local diff_json
-    diff_json=$(jq -n \
-        --slurpfile L "$local_manifest_file" \
-        --slurpfile R "$remote_manifest_file" \
-        '
-            ($L[0]) as $lcl |
-            ($R[0] | (if type == "string" then fromjson else . end)) as $rmt |
-            ($lcl | map({(.path): .sha256}) | add // {}) as $lm |
-            ($rmt | map({(.path): .sha256}) | add // {}) as $rm |
-            {
-                add:    [ $lm | to_entries[] | select($rm[.key] == null)        | .key ],
-                modify: [ $lm | to_entries[] | select($rm[.key] != null and $rm[.key] != .value) | .key ],
-                remove: [ $rm | to_entries[] | select($lm[.key] == null)        | .key ]
-            }
-        ')
-    command rm -f "$local_manifest_file" "$remote_manifest_file"
-    local n_add n_mod n_rm
-    n_add=$(printf '%s' "$diff_json" | jq -r '.add    | length')
-    n_mod=$(printf '%s' "$diff_json" | jq -r '.modify | length')
-    n_rm=$(printf '%s' "$diff_json" | jq -r '.remove | length')
-    if (( n_add == 0 && n_mod == 0 && n_rm == 0 )); then
-        printf 'bl setup --sync: 0 changes (no skills delta)\n'
-        return "$BL_EX_OK"
-    fi
-    printf 'bl setup --sync: %d add, %d modify, %d remove\n' "$n_add" "$n_mod" "$n_rm"
-    local rel sha path
-    while IFS= read -r rel; do
-        [[ -z "$rel" ]] && continue
-        path="$skills_dir/$rel"
-        sha=$(command sha256sum "$path" | command awk '{print $1}')
-        bl_setup_post_memory "$skills_id" "$rel" "$path" "$sha" || bl_warn "bl setup --sync: POST failed for $rel"
-    done < <(printf '%s' "$diff_json" | jq -r '.add[]')
-    while IFS= read -r rel; do
-        [[ -z "$rel" ]] && continue
-        path="$skills_dir/$rel"
-        sha=$(command sha256sum "$path" | command awk '{print $1}')
-        bl_setup_post_memory "$skills_id" "$rel" "$path" "$sha" || bl_warn "bl setup --sync: POST (modify) failed for $rel"
-    done < <(printf '%s' "$diff_json" | jq -r '.modify[]')
-    if [[ "$prune" == "yes" ]]; then
-        while IFS= read -r rel; do
-            [[ -z "$rel" ]] && continue
-            bl_mem_delete_by_key "$skills_id" "$rel" || bl_warn "bl setup --sync: DELETE failed for $rel"
-        done < <(printf '%s' "$diff_json" | jq -r '.remove[]')
-    else
-        (( n_rm > 0 )) && bl_info "bl setup --sync: $n_rm remote-only skill(s) — pass --prune to remove"
-    fi
-    # Update remote MANIFEST to reflect new state (post-add/modify; remove already prune-gated above)
-    local entries
-    entries=$(bl_setup_compute_manifest "$skills_dir" | jq -c '.' | sed -E 's/^\[//; s/\]$//')
-    bl_setup_post_manifest "$skills_id" "$entries" || return $?
-    return "$BL_EX_OK"
-}
-
-# bl_setup_compute_manifest <skills-dir> — emits JSON array of {path, sha256} on stdout.
-bl_setup_compute_manifest() {
-    local skills_dir="$1"
-    local entries=""
-    local path rel sha
-    while IFS= read -r path; do
-        rel="${path#"$skills_dir"/}"
-        [[ "$rel" == "INDEX.md" ]] && continue
-        sha=$(command sha256sum "$path" | command awk '{print $1}')
-        [[ -n "$entries" ]] && entries="$entries,"
-        entries="$entries$(jq -n --arg p "$rel" --arg s "$sha" '{path:$p, sha256:$s}')"
-    done < <(find "$skills_dir" -name '*.md' | sort)
-    printf '[%s]\n' "$entries"
-}
-
-bl_setup_print_exports() {
-    printf '\n'
-    printf 'export BL_READY=1\n'
-    printf '\n'
-    printf '# blacklight workspace provisioned. Persistent IDs written to %s/\n' "$BL_STATE_DIR"
     return "$BL_EX_OK"
 }
