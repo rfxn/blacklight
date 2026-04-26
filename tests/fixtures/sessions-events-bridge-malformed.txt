@@ -1,0 +1,1 @@
+this is not valid JSON — meant to trigger the bridge's "response not parseable" guard (sentinel #9)

@@ -154,3 +154,57 @@ invoke_bridge() {
     run "$BL_SOURCE" flush --session-events
     [ "$status" -eq 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# Sentinel-finding regression tests for M16 P3 follow-up
+# ---------------------------------------------------------------------------
+
+@test "bridge: zero-data-non-null-page advances cursor (sentinel #4)" {
+    bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-empty-with-cursor.json' 200
+    run invoke_bridge CASE-2026-0042
+    [ "$status" -eq 0 ]
+    # Even though data=[], the non-null next_page must be saved so the next
+    # invocation pulls the next page instead of looping on the same window.
+    local cursor
+    cursor=$(jq -r '.session_cursors["CASE-2026-0042"] // empty' "$BL_VAR_DIR/state/state.json")
+    [ "$cursor" = "page_should_advance_even_with_zero_data" ]
+}
+
+@test "bridge: malformed JSON response returns 69 with error envelope (sentinel #9)" {
+    bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-malformed.txt' 200
+    run invoke_bridge CASE-2026-0042
+    [ "$status" -eq 69 ]
+    [[ "$output" == *"not valid JSON"* ]]
+}
+
+@test "bridge: malformed step_id is skipped, not posted (sentinel #8)" {
+    bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-malformed-step-id.json' 200
+    bl_curator_mock_add_route 'POST .*/v1/memory_stores/.*/memories' 'memstore-bridge-step-post-ok.json' 200
+    BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/mock-requests.log"
+    export BL_MOCK_REQUEST_LOG
+    run invoke_bridge CASE-2026-0042
+    [ "$status" -eq 0 ]
+    # Adversarial step_id "../../../etc/passwd" must NOT appear in any POST URL/body.
+    ! grep -F 'etc/passwd' "$BL_MOCK_REQUEST_LOG"
+    # No memstore POST should fire because the only event was guarded out.
+    local post_count
+    post_count=$(grep -c "^POST .*memory_stores" "$BL_MOCK_REQUEST_LOG" || true)
+    [ "$post_count" -eq 0 ]
+}
+
+@test "bridge: last-write-wins via bl_mem_patch (sentinel #5)" {
+    bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-3-report-steps.json' 200
+    # bl_mem_patch issues GET (lookup) + DELETE + POST per key. Mock all three.
+    bl_curator_mock_add_route 'GET .*/v1/memory_stores/.*/memories\?path_prefix' 'memstore-pending-poll-empty.json' 200
+    bl_curator_mock_add_route 'DELETE .*/v1/memory_stores/.*/memories/' 'memstore-bridge-step-post-ok.json' 200
+    bl_curator_mock_add_route 'POST .*/v1/memory_stores/.*/memories' 'memstore-bridge-step-post-ok.json' 200
+    BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/mock-requests.log"
+    export BL_MOCK_REQUEST_LOG
+    run invoke_bridge CASE-2026-0042
+    [ "$status" -eq 0 ]
+    # 3 events × patch (1 GET + 1 POST per call; DELETE only fires when GET found a mem_id,
+    # which the empty fixture does not). So 3 GETs + 3 POSTs to /v1/memory_stores.
+    local memstore_call_count
+    memstore_call_count=$(grep -c "memory_stores" "$BL_MOCK_REQUEST_LOG" || true)
+    [ "$memstore_call_count" -ge 6 ]
+}

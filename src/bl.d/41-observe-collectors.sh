@@ -224,6 +224,12 @@ bl_observe_log_modsec() {
     _parse_modsec_serial() {
         local file="$1"
         command awk '
+        # CRLF strip — ModSec audit logs round-tripped through Windows tooling
+        # or certain SIEM archive formats end lines with \r\n. Without stripping,
+        # the boundary regex `^--<hex>-[A-Z]--$` would silently never match and
+        # the parser would emit zero records (same failure mode as the pre-M16-P1
+        # section-tracking bug). Sentinel finding #6.
+        { sub(/\r$/, "") }
         # JSON string escape: backslash, quote, then a few control chars.
         # Real ModSec rule messages routinely embed quotes around regex patterns.
         function jescape(s,    r) {

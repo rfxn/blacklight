@@ -2,6 +2,66 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== M16 P4 followup — 2026-04-26 (sentinel-review fixups) ===
+
+Adversarial post-impl review of M16 P1-P4 surfaced 3 MAJOR findings (2 with
+FALSE-POSITIVE-RISK pending live-API confirmation) and 5 MINOR. Engineer
+validation against the actual code confirmed all three MAJORs as real bugs.
+This commit folds the validated fixes plus 4 new regression tests.
+
+[Fix] src/bl.d/33-bridge.sh — bl_bridge_post_step now uses bl_mem_patch
+      (DELETE + POST, last-write-wins) instead of bl_mem_post (which returns
+      71 on 409 but retains the OLD body). Curator re-emissions of the same
+      step_id with corrected content now overwrite the prior body — the
+      bridge's claimed "always sync to latest session-event truth" semantic
+      now matches the implementation. Sentinel finding #5.
+[Fix] src/bl.d/33-bridge.sh — cursor save block moved BEFORE the zero-event
+      early return. Prior placement deadlocked on `{"data":[],"next_page":"X"}`
+      responses (legitimate under filtered pagination, internal-event
+      suppression, paginated DELETE-affected histories): cursor never
+      advanced, next invocation re-pulled same window forever. Sentinel #4.
+[Fix] src/bl.d/33-bridge.sh — bl_bridge_post_step adds a step_id format
+      guard mirroring bl_run_step's CLI-dispatch boundary regex. Defense-
+      in-depth against curator-poisoned `step_id` values (e.g.,
+      `../../../etc/passwd`) reaching the memstore key segment. Sentinel #8.
+[Fix] src/bl.d/33-bridge.sh — bl_bridge_session_to_memstore validates
+      response is parseable JSON with `jq -e .` before downstream length
+      queries silently treat parse failures as zero-event no-ops. Returns
+      69 + error envelope on malformed JSON. Sentinel #9.
+[Fix] src/bl.d/33-bridge.sh — return-code map docstring now states 64/65/69/70
+      explicitly and notes that bl_mem_patch's 409→0 conversion means rc=71
+      cannot surface here. Sentinel #2.
+[Fix] src/bl.d/41-observe-collectors.sh — _parse_modsec_serial strips
+      trailing `\r` on every input line. Real-world ModSec audit logs
+      round-tripped through Windows tooling or certain SIEM archive formats
+      use CRLF line endings; the boundary regex `^--<hex>-[A-Z]--$` did not
+      match `\r$`-terminated lines, silently emitting zero records (same
+      failure mode as the pre-M16-P1 section-tracking bug). Sentinel #6.
+[Fix] src/bl.d/60-run.sh — writeback `2>/dev/null` defensive suppression
+      removed; `jq -r '.custom_tool_use_id // empty'` does not write to
+      stderr on a missing key, so the suppression was suppressing nothing.
+      Sentinel #1.
+[New] tests/03-bridge.bats — 4 sentinel-finding regression tests:
+      zero-data-non-null-page cursor advance (#4); malformed JSON response
+      returns 69 (#9); malformed step_id is skipped (#8); last-write-wins
+      via bl_mem_patch verified by GET+POST call counts (#5).
+[New] tests/fixtures/sessions-events-bridge-empty-with-cursor.json —
+      saturated-cursor fixture for #4 regression test.
+[New] tests/fixtures/sessions-events-bridge-malformed-step-id.json —
+      adversarial step_id fixture for #8 regression test.
+[New] tests/fixtures/sessions-events-bridge-malformed.txt — non-JSON
+      response fixture for #9 regression test.
+
+Tests: full debian12 suite 371/371 (was 367 in P4; 4 new sentinel tests).
+
+Sentinel verdict: FIX-AND-SHIP. All 3 validated MAJORs addressed in this
+commit. 1 MINOR (modsec regex too wide — accepts 1+ hex) and 2 MINOR
+(em-dash usage, MEMORY.md staleness) deferred or addressed separately:
+the m12-livetrace-observations memory entry was updated in
+~/.claude/projects/...memory/m12-livetrace-observations.md to reflect
+M16 P3+P4 closing the M12.5 session-creation gap (operator-local; not
+committed).
+
 === M16 P4 — 2026-04-26 (writeback emits user.custom_tool_result) ===
 
 [Fix] src/bl.d/60-run.sh — bl_run_step writeback session-event POST now reads

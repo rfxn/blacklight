@@ -28,8 +28,13 @@
 # ----------------------------------------------------------------------------
 
 bl_bridge_post_step() {
-    # bl_bridge_post_step <case-id> <step-body-json> — 0 on success or 409→success;
-    #   71-pre-conversion is treated as already-posted (idempotent re-run).
+    # bl_bridge_post_step <case-id> <step-body-json> — last-write-wins POST to memstore pending/.
+    # Uses bl_mem_patch (DELETE + POST) instead of bl_mem_post so that curator
+    # re-emissions of the same step_id with corrected content overwrite the
+    # prior body. bl_mem_post returns rc=71 on 409 conflict but the memstore
+    # retains the OLD body — that is the wrong semantic for a bridge whose job
+    # is to keep memstore in sync with the latest session-event truth.
+    # Sentinel finding M16 P3 #5.
     local case_id="$1"
     local step_body="$2"
     local step_id
@@ -38,25 +43,35 @@ bl_bridge_post_step() {
         bl_warn "bridge: skipping event with no step_id"
         return "$BL_EX_OK"
     fi
+    # Step-id format guard — defense-in-depth against curator-poisoned step_id values.
+    # bl_run_step has the same regex guard at its CLI dispatch boundary; this guard
+    # closes the bridge-side path so polluted entries never land in memstore. Sentinel #8.
+    if ! [[ "$step_id" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+        bl_warn "bridge: skipping event with malformed step_id: $step_id"
+        return "$BL_EX_OK"
+    fi
     local key="bl-case/$case_id/pending/$step_id.json"
     local body_file
     body_file=$(command mktemp)
     printf '%s' "$step_body" > "$body_file"
-    bl_mem_post "${BL_MEMSTORE_CASE_ID}" "$key" "$body_file" >/dev/null
+    bl_mem_patch "${BL_MEMSTORE_CASE_ID}" "$key" "$body_file" >/dev/null
     local rc=$?
     command rm -f "$body_file"
-    if (( rc == 71 )); then
-        # 409: step already posted. Idempotent re-run is success.
-        bl_debug "bridge: step $step_id already in pending/ (idempotent re-run)"
-        return "$BL_EX_OK"
-    fi
     return "$rc"
 }
 
 bl_bridge_session_to_memstore() {
     # bl_bridge_session_to_memstore <case-id> — pull new report_step events
     # from the case's session and POST step bodies to memstore pending/.
-    # Returns 0 on success (including no-op), 65 on auth/state, 69/70 on API.
+    # Return-code map:
+    #   0  success (including no-op when no new events or no session_id)
+    #   64 missing/malformed case-id
+    #   65 missing memstore id; bl_api_call 401/403/404/4xx propagation
+    #   69 bl_api_call 5xx after retries
+    #   70 bl_api_call 429 after retries
+    # bl_mem_patch's underlying bl_mem_post 409 conversion returns 0 — the bridge
+    # uses last-write-wins via patch (delete + post), so duplicate POSTs cannot
+    # surface as 71 here.
     local case_id="$1"
     if [[ -z "$case_id" ]]; then
         bl_error_envelope bridge "case-id required"
@@ -90,10 +105,30 @@ bl_bridge_session_to_memstore() {
     resp=$(bl_api_call GET "$url_suffix") || rc=$?
     rc="${rc:-0}"
     (( rc != 0 )) && return "$rc"
+    # Validate response is parseable JSON before downstream jq queries silently
+    # treat parse failures as zero-event no-ops (sentinel finding #9).
+    if ! printf '%s' "$resp" | jq -e . >/dev/null 2>&1; then   # 2>/dev/null: jq parse-error diagnostic redundant; we surface the failure via the explicit error envelope below
+        bl_error_envelope bridge "session events response is not valid JSON for $case_id"
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
     local event_count
     event_count=$(printf '%s' "$resp" | jq '.data | length // 0')
+    # Save next_page cursor BEFORE the zero-event early return — otherwise a
+    # zero-data-non-null-page response (sentinel finding #4) deadlocks: cursor
+    # never advances, next invocation re-pulls the same window, never reaches
+    # populated pages downstream. The Anthropic events endpoint pagination
+    # invariant `next_page=null iff data=[]` is not documented in
+    # ANTHROPIC-API-NOTES.md so we cannot assume it.
+    local next_page
+    next_page=$(printf '%s' "$resp" | jq -r '.next_page // empty')
+    if [[ -n "$next_page" ]]; then
+        local tmp_state="$state_file.tmp.$$"
+        jq --arg c "$case_id" --arg p "$next_page" \
+            '. + {session_cursors: ((.session_cursors // {}) + {($c): $p})}' "$state_file" > "$tmp_state"
+        command mv "$tmp_state" "$state_file"
+    fi
     if (( event_count == 0 )); then
-        bl_debug "bridge: no new events for $case_id"
+        bl_debug "bridge: no new events for $case_id (cursor: $([[ -n "$next_page" ]] && printf 'advanced' || printf 'end-of-stream'))"
         return "$BL_EX_OK"
     fi
     # Process events in document order; only agent.custom_tool_use(report_step) drive POSTs.
@@ -122,16 +157,7 @@ bl_bridge_session_to_memstore() {
         }
         posted=$((posted + 1))
     done
-    # Save next_page cursor (may be null if we've reached end-of-stream).
-    local next_page
-    next_page=$(printf '%s' "$resp" | jq -r '.next_page // empty')
-    if [[ -n "$next_page" ]]; then
-        local tmp_state="$state_file.tmp.$$"
-        jq --arg c "$case_id" --arg p "$next_page" \
-            '. + {session_cursors: ((.session_cursors // {}) + {($c): $p})}' "$state_file" > "$tmp_state"
-        command mv "$tmp_state" "$state_file"
-    fi
-    bl_info "bridge: $case_id — posted $posted, skipped $skipped (cursor: $([[ -n "$next_page" ]] && printf 'advanced' || printf 'end-of-stream'))"
+    bl_info "bridge: $case_id posted=$posted skipped=$skipped (cursor: $([[ -n "$next_page" ]] && printf 'advanced' || printf 'end-of-stream'))"
     return "$BL_EX_OK"
 }
 

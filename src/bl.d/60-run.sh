@@ -176,7 +176,7 @@ bl_run_step() {
         # may be sent'). When the field is absent — legacy step paths, mocked-step
         # BATS tests pre-dating the bridge, manually-staged pending entries — fall
         # back to user.message which is what the session expects pre-handshake.
-        custom_tool_use_id=$(jq -r '.custom_tool_use_id // empty' "$pending_tmp" 2>/dev/null || printf '')   # 2>/dev/null: pending_tmp may have been rm-ed by an earlier abort; treat as legacy
+        custom_tool_use_id=$(jq -r '.custom_tool_use_id // empty' "$pending_tmp")
         summary_text="result landed: $step_id rc=$exec_rc"
         if [[ -n "$custom_tool_use_id" ]]; then
             jq -n --arg id "$custom_tool_use_id" --arg t "$summary_text" \

@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "type": "agent.custom_tool_use",
+      "id": "sevt_01MalformedStepIdAAAAAAAA",
+      "name": "report_step",
+      "input": {
+        "step_id": "../../../etc/passwd",
+        "verb": "observe.file",
+        "action_tier": "read-only",
+        "reasoning": "adversarial: traversal in step_id",
+        "args": [],
+        "diff": "",
+        "patch": ""
+      },
+      "processed_at": "2026-04-26T00:00:01.000Z"
+    }
+  ],
+  "next_page": null
+}
