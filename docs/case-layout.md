@@ -223,7 +223,39 @@ The ledger is NOT a cache — it is authoritative for local state after a memsto
 
 ---
 
-## 11. Change control
+## 11. Path C primitives — Files API evidence paths (M13)
+
+M13 (Skills primitive realignment) migrated per-case evidence blobs from the `bl-case`
+memstore to the Anthropic Files API. The memstore retains hypothesis + steps + working
+memory only; raw evidence and summaries live in mounted Files.
+
+### Evidence path convention
+
+| Kind | Path in Files API mount | Description |
+|------|------------------------|-------------|
+| Raw observation bundle | `/case/<id>/raw/<source>.<ext>` | JSONL observation output (was `bl-case/<id>/evidence/obs-<id>-<kind>.json`) |
+| Summary | `/case/<id>/summary/<source>.md` | curator-authored evidence summary (was `bl-case/<id>/evidence/evid-<id>.md`) |
+
+`<source>` is a kebab-slug derived from the observation command (e.g., `apache-log`, `mtime-cluster-fs`, `htaccess`). `<ext>` is `jsonl` for structured observation output, `json` for single-record envelopes.
+
+### Per-case Files mounts vs memstore working-memory keys
+
+| Surface | Holds | Mount point | Access |
+|---------|-------|-------------|--------|
+| Files API | Raw evidence bundles + closed-case briefs + shell samples | `/case/<id>/raw/` + `/case/<id>/summary/` | hot-attachable mid-session via `sessions.resources.add` |
+| `bl-case` memstore | Hypothesis + steps (pending + results) + actions + open-questions + attribution | `bl-case/CASE-<id>/` key prefix | always-on read_write |
+
+Key invariant: the Files API is the blob store; the memstore is the reasoning scratchpad.
+Evidence is uploaded to Files on observation (`bl observe`) and attached to the curator
+session at `bl consult`. After `bl case close`, the per-case Files are moved to
+`files_pending_deletion[]` in `state.json` and deleted by `bl setup --gc` once no live
+sessions hold them.
+
+See also: `DESIGN.md §3.4` (Primitives map), `docs/managed-agents.md §11` (Path C primitives map).
+
+---
+
+## 12. Change control
 
 Additions to the tree: new path → §3 writer-owner row (required) + §2 tree entry (or waiver inline) + M2 template update if on-open-materialized + any consuming handler (M5/M6/M7/setup) updated. Reviewer flags missing targets as MUST-FIX.
 

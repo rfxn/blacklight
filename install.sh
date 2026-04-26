@@ -78,7 +78,7 @@ blacklight installed. Next steps:
   1. Set your workspace key:
        export ANTHROPIC_API_KEY="sk-ant-..."
 
-  2. Provision the managed agent + skills memstore (one-time per workspace):
+  2. Provision the managed agent + routing Skills + corpus Files (one-time per workspace):
        bl setup
 
   3. Start an investigation:

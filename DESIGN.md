@@ -37,9 +37,9 @@ Scope: architecture, command surface, runtime flow, state model, safety gates, e
 │  agent         bl-curator  (Opus 4.7 + 1M context, Managed Agent session) │
 │  environment   bl-curator-env  (apt: apache2, mod_security2, yara,       │
 │                jq, zstd, duckdb — installed once at env creation)        │
-│  memory store  bl-skills   ~22 operator-voice files, read_only           │
-│  memory store  bl-case     hypothesis + evidence + pending + results     │
-│  files         evidence bundles, shell samples, closed-case briefs       │
+│  skills        6 routing Skills (description-routed behavior modules)    │
+│  memory store  bl-case     hypothesis + steps + working memory           │
+│  files         corpus (8 files) + per-case evidence + closed briefs      │
 │                                                                           │
 │  No local runtime process. The session lives in the Anthropic workspace. │
 │  `bl` reaches it via HTTPS on every invocation.                           │
@@ -64,6 +64,23 @@ Scope: architecture, command surface, runtime flow, state model, safety gates, e
 - Layer B never touches the host filesystem or primitives directly. It reasons, authors, prescribes — never applies.
 - Layer C is untouched by blacklight source code. No new rule engines, no new manifests, no new wire formats — only native usage of existing primitives.
 
+### 3.4 Primitives map (Path C — M13 Skills realignment)
+
+M13 realigned the Layer B surface from the pre-Path-C layout (two memory stores: `bl-skills`
+read_only + `bl-case` read_write) to the full four-primitive Managed Agents surface.
+
+| Primitive | Instance | blacklight role | Path key in `state.json` |
+|-----------|----------|-----------------|--------------------------|
+| **Skills** | 6 routing Skills | Description-routed lazy-loaded operator-voice behavior (synthesizing-evidence, prescribing-defensive-payloads, curating-cases, gating-false-positives, extracting-iocs, authoring-incident-briefs) | `agent.skill_versions.<slug>` |
+| **Files** (workspace) | 8 corpus files | Skill corpora (foundations + 6 routing-skill corpora + substrate-context); mounted at session create | `files.<slug>.file_id` |
+| **Files** (per-case) | Evidence bundles + briefs | Raw observation JSONL + closed-case briefs; hot-attached mid-session; GC'd after close | `case_files.<case-id>.<path>.workspace_file_id` |
+| **Memory Store** | `bl-case` (read_write) | Curator working memory: hypothesis + steps + actions + open-questions | `case_memstores._legacy` |
+| **Sessions** | Per-case curator session | Opus 4.7, 1M context; case-scoped reasoning; resumable across 30-day checkpoint window | `session_ids.<case-id>` |
+
+`bl-skills` memory store is **retired** in Path C. See §7.1 for the retirement note.
+
+Full primitives reference: `docs/managed-agents.md`.
+
 ---
 
 ## 4. Runtime flow — the agent-directed REPL
@@ -79,7 +96,7 @@ $ bl consult \
                            │  create case record
                            │  POST session event
                                                     session.wake
-                                                    read bl-skills/*
+                                                    invoke routing Skills
                                                     read bl-case/hypothesis
                                                     reason, emit 4 steps to
                                                     bl-case/pending/s-01..04
@@ -352,13 +369,19 @@ Every action blacklight takes is classified into one of five tiers. The tier det
 
 Two memory stores. Files for blobs. No local state store on the host beyond `/var/lib/bl/`.
 
-### 7.1 `bl-skills` memory store
+### 7.1 `bl-skills` memory store — RETIRED (Path C, M13)
 
+**Status: RETIRED.** The `bl-skills` memory store was removed in M13 (Skills primitive
+realignment). Skill content now lives in Anthropic Skills primitives (description-routed,
+lazy-loaded) instead of a flat read_only memory store. See §3.4 for the Path C primitives
+map and `docs/managed-agents.md §4` for the Skills primitive reference.
+
+Pre-Path-C contract (preserved for history):
 - Access: `read_only` from the agent's perspective (mounted at session creation)
 - Written only by `bl setup` via the external Memories API
 - Contents: ~22 operator-voice markdown files (see §9)
 - Size target: ≤ 50 KB total
-- **Kernel-enforced read-only is load-bearing**: attacker-supplied log content cannot rewrite operator knowledge mid-investigation
+- Kernel-enforced read-only: attacker-supplied log content cannot rewrite operator knowledge mid-investigation
 
 ### 7.2 `bl-case` memory store
 
@@ -468,16 +491,17 @@ EOF
    - `type: cloud`
    - `packages.apt: [apache2, libapache2-mod-security2, modsecurity-crs, yara, jq, zstd, duckdb]`
    - `networking: {type: unrestricted}` (required for apt at env creation; sessions can use `limited` thereafter)
-3. **Create memory stores**:
-   - `bl-skills` (`access: read_only` to agent)
-   - `bl-case` (`access: read_write` to agent)
-4. **Seed skills**: iterate `skills/**/*.md`, POST each via the Memories API, compute sha256 of each, store in `bl-skills/MANIFEST.json` for delta detection on future `--sync`.
-5. **Persist IDs** to `/var/lib/bl/state/`:
-   - `agent-id`
-   - `env-id`
-   - `memstore-skills-id`
-   - `memstore-case-id`
-6. **Print operator exports**:
+3. **Create memory store** `bl-case` (`access: read_write` to agent). Note: `bl-skills`
+   memory store is retired in Path C (M13) — skill content lives in Anthropic Skills
+   primitives. See §3.4 and §7.1.
+4. **Upload routing Skills** (6): synthesizing-evidence, prescribing-defensive-payloads,
+   curating-cases, gating-false-positives, extracting-iocs, authoring-incident-briefs.
+   SHA-256 delta check: skip if already uploaded at the current version. See `routing-skills/`.
+5. **Upload corpus Files** (8): foundations + 6 routing-skill corpora + substrate-context.
+   SHA-256 delta check: skip if content unchanged. Replaces old file_id on change;
+   queues old ID for `bl setup --gc`. See `skills-corpus/`.
+6. **Persist state** to `$BL_STATE_DIR/state.json` (schema: `docs/state-schema.md`).
+7. **Print operator exports**:
    ```
    export ANTHROPIC_API_KEY="<unchanged — use your current key>"
    export BL_READY=1
@@ -487,7 +511,7 @@ EOF
 
 `bl setup` discovers skill content in this order:
 
-1. Current working directory has `skills/` and `prompts/` — use those
+1. Current working directory has `routing-skills/`, `skills-corpus/`, and `prompts/` — use those
 2. `$BL_REPO_URL` set — shallow clone to `$XDG_CACHE_HOME/blacklight/repo`, use
 3. Default → `git clone https://github.com/rfxn/blacklight $XDG_CACHE_HOME/blacklight/repo`, use
 
@@ -495,7 +519,10 @@ This covers three adoption paths: operator-from-clone, operator-from-fork, opera
 
 ### 8.4 `bl setup --sync`
 
-Compares local `skills/**/*.md` sha256 against `bl-skills/MANIFEST.json`, POSTs only changed files, updates manifest. Also detects deletions (local file missing → remote DELETE). Safe to re-run daily.
+Delta-push routing Skills and corpus Files: compute SHA-256 per file, compare against
+`state.json .skills` and `.files` maps, upload only changed files. Replaces old file_ids
+on content change; old IDs are queued in `files_pending_deletion[]` for `bl setup --gc`.
+Safe to re-run daily.
 
 ### 8.5 Idempotency contract
 
@@ -699,7 +726,7 @@ rendering pass `BL_BRIEF_MIMES=text/markdown` to skip the stage-2 delegate.
     {"type": "custom", "name": "reconstruct_intent",  "description": "<§12.3>",   "input_schema": "<schemas/intent.json>"}
   ]
   ```
-- Memory stores: `bl-skills` (read-only) + `bl-case` (read-write), attached at session creation as `resources[]`.
+- Resources at session creation: `bl-case` memory store (read-write) + routing Skills (6, lazy-loaded) + corpus Files (8, read-only mounts) + per-case evidence Files (hot-attached via `sessions.resources.add`). See §3.4 for the full primitives map.
 - Lifetime: one session per case; resumable across 30-day checkpoint window; files hot-swap via `/v1/sessions/:sid/resources`.
 - Reasoning behavior: Opus 4.7 reasoning is model-internal. The platform SSE stream surfaces reasoning content at runtime via dedicated event types; blacklight does not configure or control reasoning depth — it is not an operator-settable parameter on the Managed Agents surface.
 
@@ -782,6 +809,21 @@ The curator is responsible for attaching the sample via `sessions.resources.add`
 
 Hunter parallelism is not load-bearing in v2 — the 1M-context curator does single-session correlation directly. If a future case has a correlation scope exceeding the curator's turn budget (thousands of records), the P3 roadmap spawns Sonnet 4.6 hunters via direct `messages.create` calls OUTSIDE the Managed Agents surface (no session, no memory stores). `messages.create` is where `output_config.format` and forced `tool_choice` live — they apply to that call, not to the curator's agent-create shape. v2 does not exercise this path by default.
 
+### 12.5 Model calls addendum — Path C (M13)
+
+M13 introduced two additional model call contexts that emit to the Files API rather than
+the memstore:
+
+| Call | Model | Trigger | Output destination |
+|------|-------|---------|-------------------|
+| Bundle summary render | Sonnet 4.6 (`bl_messages_call`) | `bl observe` evidence rotate | Summary written to Files API as `/case/<id>/summary/<source>.md`; file_id recorded in `state.json case_files` |
+| FP-gate adjudication | Haiku 4.5 (`bl_messages_call`) | `bl defend sig` before rule promotion | Pass/fail verdict; no Files API write — verdict embedded in action JSON |
+
+Both calls use the Messages API (`POST /v1/messages`) — not the Managed Agents surface.
+`output_config.format` and `tool_choice` constraints documented in §12.4 apply here.
+`BL_DISABLE_LLM=1` bypasses both calls for testing and cost-control (tests export this
+before each session).
+
 ---
 
 ## 13. Security model
@@ -796,7 +838,7 @@ blacklight operates with root-equivalent privilege on target hosts (modifying Mo
 
 ### 13.2 Prompt-injection hardening
 
-- `bl-skills` is kernel-enforced read-only — attacker-supplied log content cannot rewrite operator knowledge
+- Routing Skills are version-pinned at session creation and cannot be modified by an active curator session — attacker-supplied log content cannot rewrite operator knowledge (Skills API does not expose a write path to the agent)
 - Every evidence record is wrapped in an untrusted-content fence when passed to the curator; the curator's system prompt includes an explicit taxonomy of injection attempts (role reassignment, schema override, verdict flip) and routes those strings to evidence fields, never acts on them
 - Session-unique fence tokens derived from the case-id + payload sha256 (64-bit entropy; attacker cannot forge a matching end-token without changing the payload hash)
 - Pattern carried over from hardening done in prior commit (`9d56214`)
@@ -879,7 +921,7 @@ This document and v2 deliberately do not describe:
 - **Case** — an investigation; carries hypothesis, evidence, actions, precedent. One per incident.
 - **Step** — a single action the agent prescribes. Has an action tier, a verb, typed arguments, and a reasoning field. Written to `bl-case/pending/`.
 - **Action tier** — one of `read-only`, `auto`, `suggested`, `destructive`, `unknown`. Determines gate behavior.
-- **Skill** — an operator-voice markdown file in `bl-skills`. The programmable knowledge surface.
+- **Skill** — a description-routed operator-voice behavior module uploaded to the Anthropic Skills API. Lazy-loaded by the curator when the description matches the current reasoning need. Six routing Skills in Path C; corpus content delivered via Files API. See §3.4.
 - **Trigger** — the first signal that opens a case (e.g. maldet quarantine, auditd critical event, ModSec rule fire).
 - **Curator** — the Managed Agents session that owns a case.
 - **Synthesizer** — a one-shot Opus 4.7 call invoked by the curator to author a specific defensive payload.

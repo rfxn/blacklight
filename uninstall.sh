@@ -33,6 +33,12 @@ done
 _info() { printf '==> %s\n' "$*"; }
 _warn() { printf 'uninstall.sh: %s\n' "$*" >&2; }
 
+# For full remote cleanup (agent + routing Skills + workspace Files), run this before
+# uninstalling:
+#   bl setup --reset --force
+# Without this, the Anthropic workspace retains the bl-curator agent + uploaded Files.
+# uninstall.sh removes only the local binary and local state directory.
+
 # --- Binary removal ---
 if [[ -f "$BL_BIN" ]]; then
     _info "removing $BL_BIN"

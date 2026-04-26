@@ -37,5 +37,10 @@ PKG_CONFLICTS_DEB=""
 # Documentation
 PKG_DOCS="README.md CHANGELOG LICENSE"
 
+# Skills + corpus — ship with binary (required for bl setup to seed workspace)
+PKG_SKILLS_DIR="routing-skills"
+PKG_CORPUS_DIR="skills-corpus"
+PKG_CORPUS_BUILD_SCRIPT="scripts/build-skills-corpus.sh"
+
 # Docker — blacklight is unprivileged
 PKG_DOCKER_FLAGS=""

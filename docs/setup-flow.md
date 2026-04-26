@@ -11,8 +11,10 @@ One-time (per Anthropic workspace) bootstrap. After `bl setup` completes on host
 Outputs:
 - 1 agent record (`bl-curator`) with the three custom tools mounted
 - 1 environment record (`bl-curator-env`) with Apache + mod_security + YARA + jq + zstd + duckdb
-- 2 memory stores (`bl-skills` read-only + `bl-case` read-write) seeded
-- Local state cached at `/var/lib/bl/state/{agent-id,env-id,memstore-skills-id,memstore-case-id}`
+- `bl-case` memory store (read-write; `bl-skills` memstore retired in Path C — skills now live as Anthropic Skills primitives)
+- 6 routing Skills (synthesizing-evidence, prescribing-defensive-payloads, curating-cases, gating-false-positives, extracting-iocs, authoring-incident-briefs) uploaded via Skills API
+- 8 corpus Files (foundations + 6 routing-skill corpora + substrate-context) uploaded via Files API
+- Local state persisted to `$BL_STATE_DIR/state.json` (schema: `docs/state-schema.md`)
 - Operator-facing `export BL_READY=1` export line printed
 
 ---
@@ -32,19 +34,40 @@ No TLS cert pinning beyond what `curl` + host OS certificate store provides. No 
 
 ## 3. Happy path sequence
 
-Six ordered steps. Each is idempotent — §5 covers re-invocation safety.
+Seven ordered steps. Each is idempotent — §5 covers re-invocation safety.
 
-1. **Discover skill source** (`DESIGN.md §8.3` order: cwd `skills/` → `$BL_REPO_URL` clone → default clone).
-2. **Preflight** — `GET /v1/agents?name=bl-curator`. If result list non-empty → cache the agent id to `/var/lib/bl/state/agent-id`, skip to step 5 (memstore probe). If empty → proceed to step 3.
-3. **Create agent** — `POST /v1/agents` (§4.2). Capture the returned `id`; write to `/var/lib/bl/state/agent-id`.
-4. **Create environment** — `POST /v1/environments` (§4.3). Capture `id`; write to `/var/lib/bl/state/env-id`.
-5. **Probe + create memory stores** — `GET /v1/memory_stores?name=bl-skills` + `GET /v1/memory_stores?name=bl-case`; for each that returns empty → `POST /v1/memory_stores` (§4.4). Capture ids to `/var/lib/bl/state/memstore-{skills,case}-id`.
-6. **Seed skills** — iterate `skills/**/*.md`, for each: `POST /v1/memory_stores/<skills-id>/memories` (§4.5). Compute sha256 per file; collect into `bl-skills/MANIFEST.json` (written via memstore) for delta detection on `bl setup --sync`.
+1. **Discover content source** (`DESIGN.md §8.3` order: cwd `routing-skills/` + `skills-corpus/` → `$BL_REPO_URL` clone → default clone).
+2. **Preflight** — `GET /v1/agents?name=bl-curator`. If result list non-empty → cache the agent id to `state.json`, skip to step 5 (memory store probe). If empty → proceed to step 3.
+3. **Create agent** — `POST /v1/agents` (§5.2). Capture the returned `id`; write to `state.json .agent.id`.
+4. **Create environment** — `POST /v1/environments` (§5.3). Capture `id`; write to `state.json .env_id`.
+5. **Probe + create memory store** — `GET /v1/memory_stores?name=bl-case`; if empty → `POST /v1/memory_stores` (§5.4). Capture id to `state.json .case_memstores._legacy`. Note: `bl-skills` memstore probe is skipped in Path C — only `bl-case` is created.
+6. **Upload routing Skills + corpus Files** — SHA-256 delta check per skill/file; upload only changed content (§5.4a, §5.5). Write ids + versions to `state.json`.
 7. **Print exports** — emit `export BL_READY=1` to stdout; operator sources their shell or adds to `.bashrc`.
 
 ---
 
-## 4. Per-call specification
+## 4. Path C verbs (M13)
+
+M13 replaced the single `bl setup` bootstrap path with a verb dispatcher. All verbs write
+through `$BL_STATE_DIR/state.json` (see `docs/state-schema.md`) as the single state source
+of truth.
+
+| Verb | Purpose | Idempotent | Notes |
+|------|---------|------------|-------|
+| `bl setup` (bare) | Full workspace bootstrap: agent + Skills + corpus Files | Yes | Replaces §3 happy path; skips creates when IDs already in state.json |
+| `bl setup --sync` | Delta-push routing Skills + corpus Files | Yes | Computes sha256 diff; uploads changed files only; updates state.json `.skills` map |
+| `bl setup --dry-run` | Print what `--sync` would do, without making API calls | Yes | Reads state.json + scans routing-skills/ + skills-corpus/ |
+| `bl setup --reset` | Archive agent + delete pending Files; write empty state.json | No | Requires `--force` unless run interactively; irreversible for the current workspace |
+| `bl setup --gc` | Delete `files_pending_deletion[]` entries when no live sessions hold them | Yes | Conservative: skips if any `session_ids` entry is non-empty |
+| `bl setup --eval` | Run skill eval suite (tests/skill-routing/eval-cases/); emit JSON metrics | Yes | `--promote` flag bumps agent.skill_versions on pass |
+| `bl setup --check` | Report workspace state summary (agent version, skill count, pending GC) | Yes | Read-only |
+| `bl setup --help` | Print verb summary to stdout | Yes | No API call |
+
+State file location: `$BL_STATE_DIR/state.json` (default `$BL_VAR_DIR/state/state.json` → `/var/lib/bl/state/state.json`). Schema: `docs/state-schema.md`.
+
+---
+
+## 5. Per-call specification
 
 Standard request headers for every call (derived from Phase 1 probe at §8; absent `anthropic-version` causes 400 on otherwise-valid bodies — see §8.4):
 
@@ -136,49 +159,61 @@ Body MAY include:
 - Success: persist `id` to `/var/lib/bl/state/env-id`.
 - Failure modes: identical to §4.2.
 
-### 4.4 Create memory stores — `POST /v1/memory_stores`
+### 4.4 Create memory store — `POST /v1/memory_stores`
 
-One call per store. Shape:
-
-```json
-{"name": "bl-skills"}
-```
+Path C creates one memory store only. Shape:
 
 ```json
 {"name": "bl-case"}
 ```
 
-Both are minimal. Access control is set when the memory store is **attached** to a session/agent via `resources[]` — the store itself carries no global access mode.
+Note: `bl-skills` memory store is **retired** in Path C (M13). Skill content lives in
+Anthropic Skills primitives (§4.4a). The `bl-case` memory store carries curator working
+memory only — hypothesis, steps, actions, open-questions.
 
-- Success: persist ids to `/var/lib/bl/state/memstore-{skills,case}-id`.
+Access control is set at session attachment time via `resources[]` — the store itself
+carries no global access mode.
+
+- Success: persist `id` to `state.json .case_memstores._legacy`.
 - Failure: §4.2.
 
-### 4.5 Seed skills — `POST /v1/memory_stores/<skills-id>/memories`
+### 4.4a Upload routing Skills — `POST /v1/skills`
 
-One call per `skills/**/*.md` file. Body per Memories API contract:
-
-```json
-{
-  "key": "<relative path, e.g., 'ir-playbook/case-lifecycle.md'>",
-  "content": "<file content as string>",
-  "metadata": {"sha256": "<hex>"}
-}
-```
-
-After all files ingest, also write the skill manifest as a memory:
+Six routing Skills. One create call per Skill (or version create on update). Shape:
 
 ```json
 {
-  "key": "MANIFEST.json",
-  "content": "<JSON array of {path, sha256} entries for all skills>",
-  "metadata": {"generated_at": "<ISO-ts>"}
+  "name": "<slug>",
+  "description": "<≤1024-char operator-voice description>",
+  "body": "<SKILL.md content, ≤500 lines>"
 }
 ```
 
-`bl setup --sync` (DESIGN.md §8.4) diffs local `skills/**/*.md` sha256 against the remote `MANIFEST.json` and issues per-file POST/PATCH/DELETE requests only for changed paths.
+SHA-256 delta check against `state.json .agent.skill_versions.<slug>`: skip if already
+at current version. Versioned via `POST /v1/skills/<id>/versions` on update.
 
-- Failure (413 payload too large): skill file >100 KB (platform cap). Split the file; flag in `open-questions.md` / skills-authoring checklist.
-- Failure (429): rate limit; caller MUST throttle to ≤50 RPM (DESIGN.md §13.5) and queue via `/var/lib/bl/outbox/`.
+- Success: persist `skill_id` + `version` to `state.json .agent.skill_versions.<slug>`.
+- Failure (429): rate limit; queue via `/var/lib/bl/outbox/`.
+
+### 4.5 Upload corpus Files — `POST /v1/files`
+
+Eight corpus files (foundations + 6 routing-skill corpora + substrate-context). Multipart
+upload:
+
+```
+POST /v1/files
+content-type: multipart/form-data
+anthropic-beta: files-api-2025-04-14
+
+file=@<path>; purpose=assistants
+```
+
+SHA-256 delta check against `state.json .files.<slug>.sha256`: skip if content unchanged.
+On content change: upload new file, record new `file_id`, queue old `file_id` in
+`files_pending_deletion[]` for `bl setup --gc`.
+
+- Failure (429): rate limit; queue via `/var/lib/bl/outbox/`.
+- Failure (413): corpus file too large (500 MB workspace cap, not per-file).
 
 ### 4.6 Print exports
 
@@ -196,12 +231,13 @@ Operator pastes into their shell init. Future `bl` invocations source the cached
 
 Every operation in §3 MUST be safely re-executable. Re-running `bl setup` on host 5 after host 1 already completed it produces a no-op summary:
 
-- Step 2 preflight: agent-id returned; cached; steps 3–4 skipped.
-- Step 5: each memstore GET probe hits; ids cached; no POST issued.
-- Step 6: skill sha256s identical to remote MANIFEST.json; no memory writes.
-- Step 7: exports printed regardless.
+- Preflight: agent-id in `state.json` → agent create skipped.
+- Memory store probe: `case_memstores._legacy` populated → store create skipped.
+- Routing Skills: SHA-256 check → skip if version unchanged.
+- Corpus Files: SHA-256 check → skip if content unchanged.
+- Exports printed regardless.
 
-Strict-equals checks, not version-semantic compares: if a skill file's sha256 differs from remote → POST; if a new local file appears → POST; if a remote file has no local peer → DELETE (with operator opt-in via `bl setup --sync --prune`).
+Strict-equals SHA-256 checks, not version-semantic compares: if a Skill or File content differs → upload new; old File IDs queued for GC. `bl setup --sync --prune` deletes remote Skills/Files with no local peer.
 
 **Archiving on re-create collision:** if an operator runs `bl setup` in a workspace where a previous curator record exists but the operator wants a fresh agent (e.g., after DESIGN.md §12 shape changed), they can archive the old one via `POST /v1/agents/<id>/archive` (beta header `managed-agents-2026-04-01`). DELETE is not supported under the managed-agents beta; archive is the cleanup primitive. See §8 provenance note under probe cleanup.
 

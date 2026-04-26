@@ -2,6 +2,21 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== M13 — Skills primitive realignment (Path C) — 2026-04-26 ===
+
+[New] M13 — Skills API + Files API + state.json consolidation
+- Routing Skills (description-routed): synthesizing-evidence, prescribing-defensive-payloads, curating-cases, gating-false-positives, extracting-iocs, authoring-incident-briefs
+- Workspace Files: 8 generated corpora (foundations + 6 routing-skill corpora + substrate-context); per-case raw + summary mounts
+- Memory Store narrowed: bl-case (curator working memory only); bl-skills retired
+- state.json: single $BL_STATE_DIR/state.json with first-run migration from per-key files
+- bl setup verbs: --sync / --dry-run / --reset / --gc / --eval / --check / --help
+- bl_files_api_upload → bl_files_create (relocated to 23-files.sh)
+- Python URL-encode in bl_mem_* → sed-only (Zero Python on main)
+- skills/INDEX.md router retired; routing now via Skill descriptions + harness
+- docs/managed-agents.md: Anthropic primitives reference + Path C primitives map (new)
+- DESIGN.md §3.4: Primitives map; §7.1 bl-skills memstore marked RETIRED; §12.5 model-calls addendum
+- pkg.manifest: routing-skills/ + skills-corpus/ + scripts/build-skills-corpus.sh added
+
 === M12 — Demo readiness ===
 [Change] M12 P1 — thesis scrub: drop "thinking" feature framing from README/DESIGN/PIVOT-v2/curator-agent prompt/docs; remaining hits are factual rejection documentation or literal Managed Agents API event-type names; pillars repositioned to 1M context + Managed Agents persistence + cost-discipline three-tier routing
 [New] M12 P2 — corpus expansion: tools/synth-corpus.sh orchestrator + scripts/synthesize-fixture-logs.sh extension; exhibits/fleet-01/large-corpus/ ~348k-token deterministic APSB25-94-shaped bundle (apache+modsec+fs+cron+proc+journal+maldet); tests/04-observe-scale.bats for determinism + token-band + leakage gates; tests/Dockerfile carries scripts/ + tools/ for in-container synth

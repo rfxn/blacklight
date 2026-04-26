@@ -443,6 +443,75 @@ teardown() {
     [ "$session_ids_val" = "null" ]
 }
 
+# ---------------------------------------------------------------------------
+# G18: integration — observe rotate → case close → gc end-to-end (spec §11b row 10)
+# Verifies the chain: evidence uploaded to Files API (state.json case_files populated),
+# then bl case close moves the file_id to files_pending_deletion + clears case_files,
+# then bl setup --gc deletes the pending file_id (no live sessions hold it after close).
+# ---------------------------------------------------------------------------
+
+@test "integration: case close queues file_id for GC; setup --gc removes it" {
+    bl_case_fixture_seed CASE-2026-0001
+    # Seed state.json with a case_files entry for CASE-2026-0001 (simulates post-observe rotate)
+    mkdir -p "$BL_VAR_DIR/state"
+    local fid_before="file_TESTINTEGRATION01"
+    jq -n \
+        --arg fid "$fid_before" \
+        '{
+            schema_version: 1,
+            agent: {id: "agent_test_stub", version: 1, skill_versions: {}},
+            env_id: "env_test_stub",
+            skills: {},
+            files: {},
+            files_pending_deletion: [],
+            case_memstores: {_legacy: "memstore_test_stub"},
+            case_files: {
+                "CASE-2026-0001": {
+                    "/case/CASE-2026-0001/raw/apache.jsonl": {
+                        workspace_file_id: $fid,
+                        session_resource_id: "sesrsc_TESTINTEGRATION01"
+                    }
+                }
+            },
+            case_id_counter: {},
+            case_current: "CASE-2026-0001",
+            session_ids: {},
+            last_sync: "2026-04-26T00:00:00Z"
+        }' > "$BL_VAR_DIR/state/state.json"
+    # Mock routes for bl case close: all preconditions pass (empty open-questions,
+    # no pending steps, no applied actions requiring retire_hint)
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    bl_curator_mock_add_route 'open-questions' 'memstore-get-empty.json' 200
+    bl_curator_mock_add_route 'pending' 'memstore-pending-list-empty.json' 200
+    bl_curator_mock_add_route 'results' 'memstore-pending-list-empty.json' 200
+    bl_curator_mock_add_route 'actions/applied' 'memstore-pending-list-empty.json' 200
+    bl_curator_mock_add_route 'hypothesis' 'memstore-get-empty.json' 200
+    bl_curator_mock_add_route 'v1/sessions$' 'sessions-create.json' 200
+    bl_curator_mock_add_route 'INDEX' 'memstore-index.json' 200
+    export BL_BRIEF_MIMES="text/markdown"   # skip HTML/PDF render in mock env
+    # Step 1: bl case close moves file_id → files_pending_deletion + clears case_files
+    run "$BL_SOURCE" case close CASE-2026-0001 --force
+    [ "$status" -eq 0 ]
+    # case_files["CASE-2026-0001"] must be absent after close
+    local case_files_val
+    case_files_val=$(jq '.case_files["CASE-2026-0001"] // null' "$BL_VAR_DIR/state/state.json" 2>/dev/null)
+    [ "$case_files_val" = "null" ]
+    # file_id must appear in files_pending_deletion
+    local in_pending
+    in_pending=$(jq --arg f "$fid_before" '[.files_pending_deletion[] | select(.file_id == $f)] | length' \
+        "$BL_VAR_DIR/state/state.json" 2>/dev/null || printf '0')
+    [ "$in_pending" -ge 1 ]
+    # Step 2: bl setup --gc deletes the pending file_id (session_ids is empty — no live sessions)
+    bl_curator_mock_reset_routes
+    bl_curator_mock_set_response 'setup-agent-create-success.json' 200
+    run "$BL_SOURCE" setup --gc
+    [ "$status" -eq 0 ]
+    # files_pending_deletion must be empty after GC
+    local post_gc_pending
+    post_gc_pending=$(jq '.files_pending_deletion | length' "$BL_VAR_DIR/state/state.json" 2>/dev/null || printf '1')
+    [ "$post_gc_pending" -eq 0 ]
+}
+
 @test "bl run rejects malformed step (missing step_id) with exit 67" {
     bl_case_fixture_seed CASE-2026-0001
     printf 'CASE-2026-0001' > "$BL_VAR_DIR/state/case.current"
