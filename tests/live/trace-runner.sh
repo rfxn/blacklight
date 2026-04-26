@@ -149,8 +149,8 @@ T0="$(/usr/bin/date +%s)"
 T1="$(/usr/bin/date +%s)"
 printf '```\n\n**Wall-clock for hypothesis turn:** %ds\n\n' "$((T1-T0))"
 
-# Poll for hypothesis (up to 120s)
-HYPO_TIMEOUT=120
+# Poll for hypothesis (default 120s; override via BL_LIVE_TRACE_HYPO_TIMEOUT)
+HYPO_TIMEOUT="${BL_LIVE_TRACE_HYPO_TIMEOUT:-120}"
 HYPO_FOUND=0
 for i in $(seq 1 "$HYPO_TIMEOUT"); do
     if "$REPO_ROOT/bl" case show "$CASE_ID" 2>/dev/null | /usr/bin/grep -q "HIGH\|MEDIUM"; then # 2>/dev/null: case state may not exist during poll warm-up; stderr is noisy but non-fatal
@@ -167,10 +167,21 @@ fi
 # Scene 3 is the dominant-cost turn; check cap before proceeding
 bl_check_cost_cap
 
-# ── Scene 4 — Pending-step queue (auto-tier resolution is the default for exec)─
-printf '## Scene 4 — Pending step queue\n\n```bash\n'
-"$REPO_ROOT/bl" run --list || true # non-fatal in trace; lists pending steps without execution. Auto-tier resolution is the wrapper default for `bl run <step-id>` per src/bl.d/60-run.sh:bl_run_evaluate_tier.
-printf '```\n\n'
+# ── Scene 4 — Pending step queue (gated on Scene 3 producing a hypothesis) ───
+# Steady-state path: Scene 3 returns a hypothesis, the curator has emitted
+# steps to the memstore, and `bl run --list` displays the queue. If the
+# Scene-3 polling window happens to close before the hypothesis lands, we
+# label-skip Scene 4 rather than emit an empty queue. The pending-step
+# surface is independently exercised by the 348-test BATS suite under
+# fixture mock.
+if (( HYPO_FOUND == 1 )); then
+    printf '## Scene 4 — Pending step queue\n\n```bash\n'
+    "$REPO_ROOT/bl" run --list || true # non-fatal in trace; lists pending steps without execution. Auto-tier resolution is the wrapper default for `bl run <step-id>` per src/bl.d/60-run.sh:bl_run_evaluate_tier.
+    printf '```\n\n'
+else
+    printf '## Scene 4 — Pending step queue (deferred)\n\n'
+    printf '> Scene 3 polling window closed before a hypothesis surfaced; pending-step queue is gated on the curator emit. Re-run with a longer polling window (`BL_LIVE_TRACE_HYPO_TIMEOUT=240 make live-trace`) or inspect the fixture-mock coverage in `tests/05-consult-run-case.bats` and `tests/06-tier-resolve.bats` for the surface.\n\n'
+fi
 
 # ── Scenes 5-6 — Suggested + destructive (operator-confirm required; skipped) ─
 printf '## Scene 5-6 — Suggested + destructive (skipped in live-trace; acknowledged)\n\n'

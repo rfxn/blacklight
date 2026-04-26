@@ -67,7 +67,6 @@ Output is byte-deterministic — same seed produces the same bundle.
 
 ## Synthesis format notes
 
-- **ModSec Section A** uses the simplified shape `[ISO-8601] [client IP] hostname ModSecurity-Audit` — the synthesizer does not generate `mod_unique_id` values. Transfer-log join falls back to `(client_ip, timestamp, request_line)`. See `skills/linux-forensics/modsec-audit-format.md` §"Simplified Section A" for parser guidance.
 - **Section C** (request body) is omitted from POST transactions — the synthesis does not model `SecRequestBodyAccess On` deployments. POST payloads are visible in the access log only.
 - **Webshell staging** (`.cache/a.php` mtime at `2026-03-21T23:58:14Z`) precedes the in-corpus modsec dispatch cluster (`2026-03-22T12:00Z+`) by ~14 hours. The corpus models post-drop dispatch traffic; the initial-RCE event that planted `a.php` is out of capture window — a realistic hosting-stack scenario where forensic capture begins after the operator notices anomalous traffic, not at compromise time. The temporal gap between mtime and visible attack traffic is a forensic signal: a curator surfacing it correctly identifies that the initial-access vector is offstage and recommends pulling earlier log windows or sibling-host evidence.
 
