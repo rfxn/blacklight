@@ -3559,7 +3559,89 @@ BOOTSTRAP_EOF
         bl_info "preflight: outbox has aged entries — draining"
         bl_outbox_drain --max "$BL_OUTBOX_DRAIN_DEFAULT_MAX" --deadline "$BL_OUTBOX_DRAIN_DEFAULT_DEADLINE_SECS" >/dev/null 2>&1 || bl_warn "outbox drain returned $? — entries remain queued for next preflight"   # 2>/dev/null: drain emits per-entry chatter that pollutes preflight — only the rc matters here
     fi
+
+    # 6. Operator config tree (M14): load allowlisted keys + register notify channels
+    _bl_load_blacklight_conf || true   # || true: malformed conf logs + falls back to defaults; never blocks preflight
+    _bl_notify_register_channels || bl_warn "preflight: notify channel registration returned non-zero (proceeding)"
+
     return "$BL_EX_OK"
+}
+
+# ----------------------------------------------------------------------------
+# M14: operator config tree at /etc/blacklight/blacklight.conf
+# ----------------------------------------------------------------------------
+
+# _bl_load_blacklight_conf — parse allowlisted shell-source-able conf, export
+# BL_* env vars. Fail-soft: returns 0 even on parse fail (logs + skip).
+# Allowlist:
+#   unattended_mode notify_channels_enabled notify_severity_floor
+#   lmd_trigger_dedup_window_hours lmd_conf_path
+#   cpanel_lockin cpanel_lockin_timeout_seconds
+_bl_load_blacklight_conf() {
+    local conf="${BL_BLACKLIGHT_CONF:-/etc/blacklight/blacklight.conf}"
+    [[ -r "$conf" ]] || return "$BL_EX_OK"   # absent conf is normal; defaults apply
+
+    local line key value
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip blank + comment lines
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        # Strip leading whitespace
+        line="${line#"${line%%[![:space:]]*}"}"
+        # Match key="value" or key='value' or key=value
+        if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+            # Strip surrounding quotes
+            value="${value%\"}"; value="${value#\"}"
+            value="${value%\'}"; value="${value#\'}"
+            # Allowlist key
+            case "$key" in
+                unattended_mode|notify_channels_enabled|notify_severity_floor|lmd_trigger_dedup_window_hours|lmd_conf_path|cpanel_lockin|cpanel_lockin_timeout_seconds)
+                    ;;
+                *)
+                    bl_warn "blacklight.conf: unknown key '$key' (line: $line)"
+                    continue
+                    ;;
+            esac
+            # Reject metacharacters
+            if [[ "$value" =~ [\;\|\&\$\(\)\{\}\`\<\>] ]]; then
+                bl_warn "blacklight.conf: $key value rejected (metacharacter): $value"
+                continue
+            fi
+            # Export as BL_<KEY-UPPERCASE>
+            local upper
+            upper=$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
+            export "BL_${upper}=$value"
+        else
+            bl_warn "blacklight.conf: malformed line (skipped): $line"
+        fi
+    done < "$conf"
+
+    # Map known keys to runtime BL_* names that other parts read
+    [[ -n "${BL_NOTIFY_SEVERITY_FLOOR:-}" ]] || \
+        export BL_NOTIFY_SEVERITY_FLOOR="${BL_NOTIFY_SEVERITY_FLOOR:-info}"
+    [[ -n "${BL_LMD_TRIGGER_DEDUP_WINDOW_HOURS:-}" ]] || \
+        export BL_LMD_TRIGGER_DEDUP_WINDOW_HOURS="24"
+
+    return "$BL_EX_OK"
+}
+
+# bl_is_unattended — resolution chain (most-explicit-wins):
+# 1. --unattended CLI flag (caller sets BL_UNATTENDED_FLAG=1 before calling)
+# 2. BL_UNATTENDED env
+# 3. /etc/blacklight/blacklight.conf unattended_mode="1" (exported as BL_UNATTENDED_MODE)
+# 4. BL_INVOKED_BY non-empty (lmd-hook, cron, future hooks)
+# 5. No controlling TTY on stdin AND stdout
+# Returns 0 if any layer fires; 1 otherwise.
+bl_is_unattended() {
+    [[ "${BL_UNATTENDED_FLAG:-}" == "1" ]] && return 0
+    [[ "${BL_UNATTENDED:-}" == "1" ]] && return 0
+    [[ "${BL_UNATTENDED_MODE:-}" == "1" ]] && return 0
+    [[ -n "${BL_INVOKED_BY:-}" ]] && return 0
+    if [[ ! -t 0 ]] && [[ ! -t 1 ]]; then
+        return 0
+    fi
+    return 1
 }
 
 # ----------------------------------------------------------------------------

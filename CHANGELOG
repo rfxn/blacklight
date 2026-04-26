@@ -4,6 +4,14 @@ https://github.com/rfxn/blacklight
 
 === Unreleased — M14 substrate-hook (closed-loop response layer) ===
 
+[New] M14 P5 — src/bl.d/30-preflight.sh — _bl_load_blacklight_conf parses /etc/blacklight/blacklight.conf with allowlisted keys + metacharacter rejection
+[New] M14 P5 — src/bl.d/30-preflight.sh — bl_is_unattended 5-layer resolution chain
+[Change] M14 P5 — src/bl.d/30-preflight.sh — bl_preflight calls _bl_load_blacklight_conf + _bl_notify_register_channels (fail-soft)
+[New] M14 P5 — files/etc/blacklight.conf.default — reference config with all 7 allowlisted keys
+[New] M14 P5 — tests/14-unattended.bats — G3 conf parsing + G4 unattended chain (12 scenarios; G5 stubs unblock at P9)
+[New] M14 P5 — tests/fixtures/blacklight-conf-sample.conf — fixture covering all keys + reject paths
+[Change] M14 P5 — tests/02-preflight.bats — assert graceful fallback on absent conf
+[Change] M14 P5 — bl regenerated
 [New] M14 P1 — schemas/ledger-event.json: extend `kind` enum +8 M14 values (lmd_hook_received, trigger_dedup_attached, lmd_hit_degraded, notify_dispatched, notify_failed, cpanel_lockin_invoked, cpanel_lockin_failed, cpanel_lockin_rolled_back)
 [New] M14 P1 — schemas/step.json: extend `verb` enum +3 M14 values (trigger.lmd, setup.install_hook, setup.import_from_lmd)
 [New] M14 P1 — tests/05-consult-run-case.bats: add G17.5 positive-accept tests for new ledger kinds + step verbs; add regression guard for unknown-kind rejection

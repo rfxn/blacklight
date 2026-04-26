@@ -1,0 +1,41 @@
+##
+# blacklight default configuration
+# Path: /etc/blacklight/blacklight.conf
+# Format: shell-source-able key="value"; allowlisted keys only
+# Edit via: bl setup --import-from-lmd (auto), or manual edit
+##
+
+# --- Unattended mode (substrate hook flow) ---
+# 0 = interactive (default), 1 = unattended (hook-driven, queue cleanup ops, notify)
+# Resolution chain (most-explicit-wins): --unattended → BL_UNATTENDED → this → BL_INVOKED_BY → no-TTY
+unattended_mode="0"
+
+# --- Notification channels ---
+# Comma-separated list of channels enabled by default. Channels still require
+# their token files in /etc/blacklight/notify.d/ to actually send.
+# Available: slack, syslog, email, telegram, discord
+notify_channels_enabled="slack,syslog"
+
+# Severity threshold for notify dispatch — channels do not fire below this
+# Available: info, warn, critical
+notify_severity_floor="info"
+
+# --- LMD trigger ---
+# Identical-fingerprint dedup window (hours). Within this window, identical
+# (scanid, sorted-sigs, sorted-paths) clusters attach to existing case rather
+# than spawning new case.
+lmd_trigger_dedup_window_hours="24"
+
+# Path to LMD's main config (used by --import-from-lmd)
+lmd_conf_path="/usr/local/maldetect/conf.maldet"
+
+# --- cPanel lock-in ---
+# Use cPanel's restartsrv_httpd for graceful restart instead of apachectl graceful
+# Auto-detected if /usr/local/cpanel exists
+cpanel_lockin="auto"
+
+# Two-stage rollback timeout — seconds to wait for restartsrv_httpd return
+cpanel_lockin_timeout_seconds="60"
+
+# --- Outbox ---
+# Inherit existing /var/lib/bl/outbox behavior; no new flags

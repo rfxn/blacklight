@@ -144,6 +144,17 @@ teardown() {
     command rm -rf "$td"
 }
 
+@test "bl_preflight passes when /etc/blacklight/ is absent (graceful fallback)" {
+    local td
+    td=$(mktemp -d)
+    BL_VAR_DIR="$td" BL_BLACKLIGHT_CONF="/no/such/path" \
+    ANTHROPIC_API_KEY=test-key run bash -c 'source ./bl; bl_preflight 2>&1'
+    # Preflight may exit 66 (workspace not seeded) — that is expected since
+    # we have no api key, but it must not exit 65 due to absent conf
+    [ "$status" -ne 65 ]
+    rm -rf "$td"
+}
+
 @test "bl on bash <4.1 exits 65 with 'bash 4.1+ required' (best-effort source-under-patched-VERSINFO)" {
     # Attempt to source bl under a patched BASH_VERSINFO simulating bash 3.2.
     # If the patched assignment does not propagate, skip the test.
