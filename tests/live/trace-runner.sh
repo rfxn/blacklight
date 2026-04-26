@@ -167,9 +167,9 @@ fi
 # Scene 3 is the dominant-cost turn; check cap before proceeding
 bl_check_cost_cap
 
-# ── Scene 4 — Auto tier ───────────────────────────────────────────────────────
-printf '## Scene 4 — Auto tier\n\n```bash\n'
-"$REPO_ROOT/bl" run --tier auto || true # non-zero exit is non-fatal in trace; --case removed (uses current case from state)
+# ── Scene 4 — Pending-step queue (auto-tier resolution is the default for exec)─
+printf '## Scene 4 — Pending step queue\n\n```bash\n'
+"$REPO_ROOT/bl" run --list || true # non-fatal in trace; lists pending steps without execution. Auto-tier resolution is the wrapper default for `bl run <step-id>` per src/bl.d/60-run.sh:bl_run_evaluate_tier.
 printf '```\n\n'
 
 # ── Scenes 5-6 — Suggested + destructive (operator-confirm required; skipped) ─
@@ -198,8 +198,8 @@ bl_check_cost_cap
 # ── Trace summary ─────────────────────────────────────────────────────────────
 TOTAL_REQUESTS="$(/usr/bin/wc -l < "$TRACE_LOG" 2>/dev/null || /usr/bin/echo 0)" # trace log absent if no API calls were made (dry-run path); default to 0
 printf '## Trace summary\n\n'
-printf -- '- Total API requests: %d\n' "$TOTAL_REQUESTS"   # printf '--' ends option parsing — leading '-' in fmt would otherwise trigger 'invalid option'
-printf -- '- Trace log: `%s`\n' "$TRACE_LOG"
-printf -- '- Evidence file: `%s`\n\n' "$EVIDENCE_FILE"
+printf '%s\n' "- Total API requests: $TOTAL_REQUESTS"   # leading '-' in fmt-string trips 'invalid option' on some printf builtins; build the line as an arg, format is bare '%s\n'
+printf '%s\n' "- Trace log: \`$TRACE_LOG\`"
+printf '%s\n\n' "- Evidence file: \`$EVIDENCE_FILE\`"
 
 printf 'Run grader: `make live-trace-grade EVIDENCE=%s`\n' "$EVIDENCE_FILE"
