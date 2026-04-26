@@ -166,3 +166,48 @@ bl_curator_mock_teardown() {
     unset BL_CURATOR_MOCK_ROUTE_PATTERNS BL_CURATOR_MOCK_ROUTE_FIXTURES BL_CURATOR_MOCK_ROUTE_STATUS
     unset BL_CURATOR_MOCK_FIXTURES_DIR BL_CURATOR_MOCK_DEFAULT_FIXTURE BL_CURATOR_MOCK_DEFAULT_STATUS
 }
+
+# Files API mocks — fixtures live in tests/fixtures/files-api-*.json
+_mock_files_api_upload() {
+    cat "${BATS_TEST_DIRNAME}/fixtures/files-api-create.json"
+    printf '\n200'
+}
+
+_mock_files_api_attach() {
+    cat "${BATS_TEST_DIRNAME}/fixtures/sessions-resources-add.json"
+    printf '\n200'
+}
+
+_mock_files_api_detach() {
+    printf '\n200'
+}
+
+# Skills API mocks — fixtures live in tests/fixtures/skills-api-*.json
+_mock_skills_api_create() {
+    cat "${BATS_TEST_DIRNAME}/fixtures/skills-api-create.json"
+    printf '\n200'
+}
+
+_mock_skills_api_versions_create() {
+    jq -n '{version:"1759178010641130"}'
+    printf '\n200'
+}
+
+_mock_skills_api_get() {
+    cat "${BATS_TEST_DIRNAME}/fixtures/skills-api-create.json"
+    printf '\n200'
+}
+
+_mock_skills_api_list() {
+    jq -n '{data: [{id:"skill_01ABCFIXTUREABC", name:"fixture-skill", version:"1759178010641129"}]}'
+    printf '\n200'
+}
+
+_mock_skills_api_delete() {
+    printf '\n200'
+}
+
+_mock_sessions_create() {
+    jq -n '{id:"sesn_01ABCFIXTURESES", agent_id:"agent_01ABCFIXTUREAGT"}'
+    printf '\n200'
+}

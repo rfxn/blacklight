@@ -201,3 +201,143 @@ _bl_obs_close_stream() {
 # ---------------------------------------------------------------------------
 # bl_observe_log_apache — parse combined-format apache/nginx access log
 # ---------------------------------------------------------------------------
+
+bl_observe_evidence_threshold_check() {
+    # bl_observe_evidence_threshold_check <case-id> <source> — 0 if upload-due, 1 if not.
+    # Threshold per spec §5.5 table: 10 events / 100 events / 100 paths / per-call OR 1 MB grown.
+    # Reads bytes-since-last-upload from $BL_VAR_DIR/cases/<case-id>/evidence/<source>.upload.json
+    # (created/updated by bl_observe_evidence_rotate). First-call returns 0 (always upload).
+    local case_id="$1" source="$2"
+    [[ -z "$case_id" || -z "$source" ]] && return 1
+    local evidence_path="$BL_VAR_DIR/cases/$case_id/evidence/$source"
+    local upload_meta_file="$evidence_path.upload.json"
+    # Find evidence file by extension (.json for JSONL collectors, .txt for raw cron, etc.)
+    local actual=""
+    local ext
+    for ext in json txt log; do
+        if [[ -r "$evidence_path.$ext" ]]; then actual="$evidence_path.$ext"; break; fi
+    done
+    [[ -z "$actual" ]] && return 1   # no evidence written yet — nothing to upload
+    [[ ! -r "$upload_meta_file" ]] && return 0   # never uploaded — first call always rotates
+    local last_bytes last_count
+    last_bytes=$(jq -r '.bytes_at_upload // 0' "$upload_meta_file" 2>/dev/null || printf '0')   # 2>/dev/null + fallback: malformed meta → treat as zero (force re-upload)
+    last_count=$(jq -r '.count_at_upload // 0' "$upload_meta_file" 2>/dev/null || printf '0')
+    local cur_bytes cur_count
+    cur_bytes=$(command stat -c '%s' "$actual" 2>/dev/null || command stat -f '%z' "$actual" 2>/dev/null || printf '0')
+    cur_count=$(command wc -l < "$actual" 2>/dev/null || printf '0')   # JSONL line count proxy for record count
+    local bytes_delta=$(( cur_bytes - last_bytes ))
+    local count_delta=$(( cur_count - last_count ))
+    # Per-source threshold map (matches spec §5.5 table)
+    local count_threshold
+    case "$source" in
+        apache|modsec)        count_threshold=10  ;;
+        journal|fs)           count_threshold=100 ;;
+        file|cron|proc|htaccess|firewall|sigs|substrate) count_threshold=1 ;;   # per-call sources
+        *)                    count_threshold=10  ;;
+    esac
+    if (( count_delta >= count_threshold )) || (( bytes_delta >= 1048576 )); then
+        return 0   # upload due
+    fi
+    return 1   # not yet
+}
+
+bl_observe_evidence_rotate() {
+    # bl_observe_evidence_rotate <case-id> <source> — 0/65/69.
+    # Full lifecycle: read prior case_files entry → upload-new → attach-new at same mount path
+    # (if a live session for this case exists) → detach-old → write new state.json case_files entry.
+    # Order preserves curator-visible path availability throughout the swap (spec R6). If no live
+    # session exists yet (case opened before sessions.create), the upload + state.json write
+    # still happen; bl_setup_attach_session_resources picks up the file at session-create time.
+    local case_id="$1" source="$2"
+    [[ -z "$case_id" || -z "$source" ]] && {
+        bl_error_envelope observe "bl_observe_evidence_rotate: case-id + source required"
+        return "$BL_EX_USAGE"
+    }
+    local evidence_path="$BL_VAR_DIR/cases/$case_id/evidence/$source"
+    local actual="" ext
+    for ext in json txt log; do
+        if [[ -r "$evidence_path.$ext" ]]; then actual="$evidence_path.$ext"; break; fi
+    done
+    [[ -z "$actual" ]] && {
+        bl_error_envelope observe "no evidence file at $evidence_path.{json,txt,log}"
+        return "$BL_EX_NOT_FOUND"
+    }
+    local mime
+    case "$ext" in
+        json) mime="application/json" ;;
+        log)  mime="text/plain"       ;;
+        *)    mime="text/plain"       ;;
+    esac
+    local mount_path="/case/$case_id/raw/$source.$ext"
+    local state_file="$BL_STATE_DIR/state.json"
+    # Read prior workspace_file_id + session_resource_id (may be empty for first rotate)
+    local old_file_id="" old_sesrsc_id="" session_id=""
+    if [[ -f "$state_file" ]]; then
+        old_file_id=$(jq -r --arg c "$case_id" --arg p "$mount_path" '.case_files[$c][$p].workspace_file_id // empty' "$state_file")
+        old_sesrsc_id=$(jq -r --arg c "$case_id" --arg p "$mount_path" '.case_files[$c][$p].session_resource_id // empty' "$state_file")
+        session_id=$(jq -r --arg c "$case_id" '.session_ids[$c] // empty' "$state_file")
+    fi
+    # Step 1: upload-new
+    local new_file_id
+    new_file_id=$(bl_files_create "$mime" "$actual") || return $?
+    bl_debug "bl_observe_evidence_rotate: uploaded $actual → $new_file_id"
+    # Step 2 (if live session): attach-new at same mount path → emit new sesrsc_id
+    local new_sesrsc_id=""
+    if [[ -n "$session_id" ]]; then
+        new_sesrsc_id=$(bl_files_attach_to_session "$session_id" "$new_file_id" "$mount_path") || {
+            bl_warn "bl_observe_evidence_rotate: attach-new failed; file_id $new_file_id will be GC'd"
+            new_sesrsc_id=""
+        }
+        # Step 3: detach-old (only after new is attached) — preserves path availability
+        if [[ -n "$new_sesrsc_id" && -n "$old_sesrsc_id" ]]; then
+            bl_files_detach_from_session "$session_id" "$old_sesrsc_id" >/dev/null || bl_warn "detach-old failed for $old_sesrsc_id"
+        fi
+    fi
+    # Step 4: write state.json case_files entry (queue old file_id for GC if changed)
+    local cur_bytes cur_count now_ts content_sha
+    cur_bytes=$(command stat -c '%s' "$actual" 2>/dev/null || command stat -f '%z' "$actual" 2>/dev/null || printf '0')   # GNU then BSD; both fail → 0 (defensive)
+    cur_count=$(command wc -l < "$actual" 2>/dev/null || printf '0')
+    now_ts=$(command date -u +%Y-%m-%dT%H:%M:%SZ)
+    content_sha=$(command sha256sum "$actual" | command awk '{print $1}')
+    if [[ -f "$state_file" ]]; then
+        local tmp_state="$state_file.tmp.$$"
+        jq \
+            --arg c "$case_id" \
+            --arg p "$mount_path" \
+            --arg fid "$new_file_id" \
+            --arg sid "$new_sesrsc_id" \
+            --arg sha "$content_sha" \
+            --argjson b "$cur_bytes" \
+            --argjson n "$cur_count" \
+            --arg old "$old_file_id" \
+            --arg ts "$now_ts" \
+            '
+            .case_files //= {} |
+            .case_files[$c] //= {} |
+            .case_files[$c][$p] = {
+                workspace_file_id: $fid,
+                session_resource_id: $sid,
+                content_sha256: $sha,
+                obs_count_since_upload: 0,
+                bytes_since_upload: 0,
+                uploaded_at: $ts
+            } |
+            if $old != "" and $old != $fid then
+                .files_pending_deletion += [{file_id: $old, marked_at: $ts, reason: ("rotated by " + $fid), previous_mount_path: $p}]
+            else . end
+            ' "$state_file" > "$tmp_state"
+        command mv "$tmp_state" "$state_file"
+    fi
+    # Step 5: persist threshold-check metadata (bytes-at-upload + count-at-upload)
+    local upload_meta_file="$evidence_path.upload.json"
+    local tmp_meta="$upload_meta_file.tmp.$$"
+    jq -n \
+        --arg fid "$new_file_id" \
+        --arg mp "$mount_path" \
+        --argjson b "$cur_bytes" \
+        --argjson c "$cur_count" \
+        '{file_id:$fid, mount_path:$mp, bytes_at_upload:$b, count_at_upload:$c}' > "$tmp_meta"
+    command mv "$tmp_meta" "$upload_meta_file"
+    printf '%s\n' "$new_file_id"
+    return "$BL_EX_OK"
+}
