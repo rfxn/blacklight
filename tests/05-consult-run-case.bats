@@ -27,22 +27,32 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl consult --new allocates CASE-YYYY-NNNN and writes case.current" {
-    # Seed agent-id; all API calls to memstore succeed (201 POST, 200 GET)
+    # Seed agent-id + state.json so bl_consult_create_session can POST /v1/sessions.
+    # Unset BL_SESSION_ID to force the create-then-register path (Path C).
     mkdir -p "$BL_VAR_DIR/state"
     printf 'agent_test_stub' > "$BL_VAR_DIR/state/agent-id"
     printf 'memstore_test_stub' > "$BL_VAR_DIR/state/memstore-case-id"
-    # Default catch-all first, then specific overrides (routes matched in order)
+    # state.json with agent.id + 2 workspace files so resources[] is non-empty
+    cp "$BATS_TEST_DIRNAME/fixtures/state-json-baseline.json" "$BL_VAR_DIR/state/state.json"
+    unset BL_SESSION_ID
+    # Route /v1/sessions POST → sessions-create.json; default catch-all for memstore
     bl_curator_mock_set_response 'files-api-upload.json' 200
+    bl_curator_mock_add_route 'v1/sessions$' 'sessions-create.json' 200
     bl_curator_mock_add_route 'memories/bl-case%2FINDEX' 'memstore-case-not-found.json' 404
     local trigger
     trigger=$(mktemp)
     printf 'apsb25-94-htaccess-sample\n' > "$trigger"
     run "$BL_SOURCE" consult --new --trigger "$trigger"
     rm -f "$trigger"
+    export BL_SESSION_ID="sesn_test_stub"   # restore for teardown safety
     [ "$status" -eq 0 ]
     [[ "$output" =~ CASE-[0-9]{4}-[0-9]{4} ]]
     [ -f "$BL_VAR_DIR/state/case.current" ]
     [[ "$(cat "$BL_VAR_DIR/state/case.current")" =~ ^CASE-[0-9]{4}-[0-9]{4}$ ]]
+    # Assert session-$case_id was written (create-then-register path persists it)
+    local allocated_case
+    allocated_case=$(cat "$BL_VAR_DIR/state/case.current")
+    [ -f "$BL_VAR_DIR/state/session-$allocated_case" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -53,6 +63,8 @@ teardown() {
     bl_case_fixture_seed CASE-2026-0001
     # hypothesis.md probe returns 200 → case found
     bl_curator_mock_add_route 'hypothesis' 'files-api-upload.json' 200
+    # sessions.create route available; attach itself does not call register_curator
+    bl_curator_mock_add_route 'v1/sessions$' 'sessions-create.json' 200
     run "$BL_SOURCE" consult --attach CASE-2026-0001
     [ "$status" -eq 0 ]
     [ "$(cat "$BL_VAR_DIR/state/case.current")" = "CASE-2026-0001" ]
@@ -114,11 +126,13 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "two concurrent bl consult --new invocations allocate sequential ids via flock" {
-    # Seed agent-id so preflight passes; mock all memstore calls
+    # Seed agent-id + state.json so bl_consult_create_session can run; route sessions.create
     mkdir -p "$BL_VAR_DIR/state"
     printf 'agent_test_stub' > "$BL_VAR_DIR/state/agent-id"
     printf 'memstore_test_stub' > "$BL_VAR_DIR/state/memstore-case-id"
+    cp "$BATS_TEST_DIRNAME/fixtures/state-json-baseline.json" "$BL_VAR_DIR/state/state.json"
     bl_curator_mock_set_response 'files-api-upload.json' 201
+    bl_curator_mock_add_route 'v1/sessions$' 'sessions-create.json' 200
     local trig1 trig2
     trig1=$(mktemp)
     trig2=$(mktemp)
@@ -370,7 +384,7 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "full-lifecycle: new case → run-list → log shows events" {
-    skip "comprehensive integration test; enable after G1/G4/G6/G8 all pass green"
+    skip "comprehensive integration test; enable after G1/G4/G6/G8 all pass green (session_id persisted to state.json via bl_consult_create_session)"
 }
 
 # ---------------------------------------------------------------------------
@@ -381,6 +395,53 @@ teardown() {
 # test exercises the schema-validation gate against the bare-step canonical
 # fixture grep-trackable at tests/fixtures/step-schema-fail.json.
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# G17: bl case close detaches per-case Files + queues GC (M13 P8 regression)
+# ---------------------------------------------------------------------------
+
+@test "bl case close detaches per-case Files + queues GC" {
+    # Seed a case in closed-able state: pass all preconditions by mocking the
+    # memstore to return empty open-questions.md, empty pending/, and no
+    # applied-actions (so retire_hint check passes vacuously).
+    bl_case_fixture_seed CASE-2026-0001
+    # state.json with case_files + session_ids for CASE-2026-0001
+    cp "$BATS_TEST_DIRNAME/fixtures/state-json-baseline.json" "$BL_VAR_DIR/state/state.json"
+    # Inject case_files and session_ids into state.json
+    local updated_state
+    updated_state=$(jq \
+        '.case_files["CASE-2026-0001"] = {"/case/raw.md": {workspace_file_id: "file_01CASERAW001", session_resource_id: "sesrsc_01CASERAW001"}} |
+         .session_ids["CASE-2026-0001"] = "sesn_01CASESESSION01" |
+         .files_pending_deletion = []' \
+        "$BL_VAR_DIR/state/state.json")
+    printf '%s\n' "$updated_state" > "$BL_VAR_DIR/state/state.json"
+    # Mock: open-questions.md returns empty content (no unresolved questions)
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    bl_curator_mock_add_route 'open-questions' 'memstore-get-empty.json' 200
+    bl_curator_mock_add_route 'pending' 'memstore-pending-list-empty.json' 200
+    bl_curator_mock_add_route 'results' 'memstore-pending-list-empty.json' 200
+    bl_curator_mock_add_route 'actions/applied' 'memstore-pending-list-empty.json' 200
+    bl_curator_mock_add_route 'hypothesis' 'memstore-get-empty.json' 200
+    bl_curator_mock_add_route 'v1/sessions$' 'sessions-create.json' 200
+    bl_curator_mock_add_route 'INDEX' 'memstore-index.json' 200
+    # Skip stage-2 HTML/PDF render (avoids 60s poll loop in mock environment)
+    export BL_BRIEF_MIMES="text/markdown"
+    # Run bl case close with --force (bypass confidence gate since mock hypothesis is empty)
+    run "$BL_SOURCE" case close CASE-2026-0001 --force
+    [ "$status" -eq 0 ]
+    # Assert files_pending_deletion grew by 1 (the per-case file)
+    local pending_count
+    pending_count=$(jq '.files_pending_deletion | length' "$BL_VAR_DIR/state/state.json" 2>/dev/null || printf '0')
+    [ "$pending_count" -ge 1 ]
+    # Assert case_files["CASE-2026-0001"] no longer present
+    local case_files_val
+    case_files_val=$(jq '.case_files["CASE-2026-0001"] // null' "$BL_VAR_DIR/state/state.json" 2>/dev/null)
+    [ "$case_files_val" = "null" ]
+    # Assert session_ids["CASE-2026-0001"] no longer present
+    local session_ids_val
+    session_ids_val=$(jq '.session_ids["CASE-2026-0001"] // null' "$BL_VAR_DIR/state/state.json" 2>/dev/null)
+    [ "$session_ids_val" = "null" ]
+}
 
 @test "bl run rejects malformed step (missing step_id) with exit 67" {
     bl_case_fixture_seed CASE-2026-0001

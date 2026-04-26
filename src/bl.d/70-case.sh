@@ -341,6 +341,29 @@ bl_case_close() {
             IFS='|' read -r fid_html fid_pdf <<< "$render_out"
         fi
     fi
+    # Path C: detach per-case Files from any live session + queue file_ids for GC
+    local state_file="$BL_STATE_DIR/state.json"
+    if [[ -f "$state_file" ]]; then
+        local session_id
+        session_id=$(jq -r --arg c "$case_id" '.session_ids[$c] // empty' "$state_file")
+        local mount_path file_id sesrsc_id
+        while IFS=$'\t' read -r mount_path file_id sesrsc_id; do
+            [[ -z "$mount_path" ]] && continue
+            if [[ -n "$session_id" && -n "$sesrsc_id" ]]; then
+                bl_files_detach_from_session "$session_id" "$sesrsc_id" >/dev/null || bl_warn "detach $sesrsc_id from $session_id failed"
+            fi
+            # Queue file_id for next bl setup --gc cycle
+            local tmp_state="$state_file.tmp.$$"
+            jq --arg fid "$file_id" --arg p "$mount_path" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                '.files_pending_deletion += [{file_id: $fid, marked_at: $ts, reason: "case closed", previous_mount_path: $p}]' \
+                "$state_file" > "$tmp_state"
+            command mv "$tmp_state" "$state_file"
+        done < <(jq -r --arg c "$case_id" '.case_files[$c] // {} | to_entries[] | "\(.key)\t\(.value.workspace_file_id)\t\(.value.session_resource_id // "")"' "$state_file")
+        # Drop case_files entry + session_id entry
+        local tmp_state="$state_file.tmp.$$"
+        jq --arg c "$case_id" 'del(.case_files[$c]) | del(.session_ids[$c])' "$state_file" > "$tmp_state"
+        command mv "$tmp_state" "$state_file"
+    fi
     bl_case_close_write_closed_md "$case_id" "$fid_md" "$fid_html" "$fid_pdf" || {
         jq -n --arg c "$case_id" --arg m "$fid_md" --arg h "$fid_html" --arg p "$fid_pdf" \
             '{case:$c, fid_md:$m, fid_html:$h, fid_pdf:$p, phase:"closed_md_pending"}' > "$checkpoint"

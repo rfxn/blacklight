@@ -133,18 +133,24 @@ bl_consult_register_curator() {
     [[ -r "$session_id_file" ]] && session_id=$(command cat "$session_id_file")
     [[ -z "$session_id" ]] && session_id="${BL_SESSION_ID:-}"
     if [[ -z "$session_id" ]]; then
-        bl_warn "no bl-curator session; wake event queued to outbox"
-        # M9 P5: fence the trigger-fingerprint + case as untrusted (kind=wake_trigger)
-        local trigger_payload_file fenced_trigger
-        trigger_payload_file=$(mktemp)
-        printf '%s %s' "$case_id" "$fp" > "$trigger_payload_file"
-        fenced_trigger=$(bl_fence_wrap "$case_id" wake_trigger "$trigger_payload_file")
-        command rm -f "$trigger_payload_file"
-        local wake_payload
-        wake_payload=$(jq -n --arg c "$case_id" --arg f "$fp" --arg ft "$fenced_trigger" \
-            '{type:"user.message", case:$c, content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f)}], trigger_fingerprint_fenced:$ft}')
-        bl_outbox_enqueue wake "$wake_payload" || bl_warn "outbox enqueue failed; wake event lost for $case_id"
-        return "$BL_EX_OK"
+        # Path C: create a session for this case, attaching workspace + per-case Files.
+        # Falls back to outbox path if session-create fails (spec R6 — hot-attach safety).
+        session_id=$(bl_consult_create_session "$case_id") || {
+            bl_warn "bl_consult_create_session failed; falling back to outbox wake"
+            local trigger_payload_file fenced_trigger
+            trigger_payload_file=$(command mktemp)
+            printf '%s %s' "$case_id" "$fp" > "$trigger_payload_file"
+            fenced_trigger=$(bl_fence_wrap "$case_id" wake_trigger "$trigger_payload_file")
+            command rm -f "$trigger_payload_file"
+            local wake_payload
+            wake_payload=$(jq -n --arg c "$case_id" --arg f "$fp" --arg ft "$fenced_trigger" \
+                '{type:"user.message", case:$c, content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f)}], trigger_fingerprint_fenced:$ft}')
+            bl_outbox_enqueue wake "$wake_payload" || bl_warn "outbox enqueue failed; wake event lost for $case_id"
+            return "$BL_EX_OK"
+        }
+        # Persist session-id to legacy per-key path (consumed by 60-run.sh + 70-case.sh until M14 migration)
+        printf '%s' "$session_id" > "$BL_STATE_DIR/session-$case_id"
+        bl_info "bl consult: created session $session_id for $case_id (workspace + per-case Files attached)"
     fi
     local body_file
     body_file=$(mktemp)
@@ -161,6 +167,48 @@ bl_consult_register_curator() {
     local rc=$?
     command rm -f "$body_file"
     return "$rc"
+}
+
+# bl_consult_create_session <case-id> — POST /v1/sessions with resources[] for workspace corpora + per-case Files.
+# Returns session_id on stdout. 0/65/69/70.
+bl_consult_create_session() {
+    local case_id="$1"
+    [[ -z "$case_id" ]] && { bl_error_envelope consult "bl_consult_create_session: case-id required"; return "$BL_EX_USAGE"; }
+    local state_file="$BL_STATE_DIR/state.json"
+    [[ -f "$state_file" ]] || { bl_error_envelope consult "state.json missing; run 'bl setup --sync' first"; return "$BL_EX_PREFLIGHT_FAIL"; }
+    local agent_id
+    agent_id=$(jq -r '.agent.id // empty' "$state_file")
+    [[ -z "$agent_id" ]] && { bl_error_envelope consult "agent.id missing in state.json; run 'bl setup --sync'"; return "$BL_EX_PREFLIGHT_FAIL"; }
+    # Build resources[] array — 8 workspace files + per-case files for this case_id
+    local resources_json
+    resources_json=$(jq -c \
+        --arg c "$case_id" \
+        '
+        ([.files // {} | to_entries[] | {type:"file", file_id:.value.file_id, mount_path:.key}])
+        + ([.case_files[$c] // {} | to_entries[] | {type:"file", file_id:.value.workspace_file_id, mount_path:.key}])
+        ' "$state_file")
+    local body_file
+    body_file=$(command mktemp)
+    jq -n \
+        --arg aid "$agent_id" \
+        --argjson rs "$resources_json" \
+        '{agent_id: $aid, resources: $rs}' > "$body_file"
+    local resp rc session_id
+    resp=$(bl_api_call POST "/v1/sessions" "$body_file")
+    rc=$?
+    command rm -f "$body_file"
+    (( rc != 0 )) && return $rc
+    session_id=$(printf '%s' "$resp" | jq -r '.id // empty')
+    if [[ -z "$session_id" ]]; then
+        bl_error_envelope consult "sessions.create returned empty id"
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
+    # Persist session_id to state.json
+    local tmp_state="$state_file.tmp.$$"
+    jq --arg c "$case_id" --arg s "$session_id" '.session_ids[$c] = $s' "$state_file" > "$tmp_state"
+    command mv "$tmp_state" "$state_file"
+    printf '%s\n' "$session_id"
+    return "$BL_EX_OK"
 }
 
 bl_consult_find_open_case_by_fingerprint() {
