@@ -2,7 +2,7 @@
 # Consumed by pkg_gen.sh to generate RPM spec, DEB debian/, Docker, CI artifacts.
 
 PKG_NAME="blacklight"
-PKG_VERSION="0.1.0"
+PKG_VERSION="0.5.1"
 PKG_RELEASE="1"
 PKG_SUMMARY="blacklight — agent-directed defensive forensics for Linux"
 PKG_DESCRIPTION="blacklight is a single-file bash wrapper directed by a skills-native Managed Agent. It supercharges fifteen years of Linux OSS defensive primitives (iptables, mod_security, ClamAV, LMD, APF, YARA, Apache logs, .htaccess walks, crontab audits) with an always-on curator that persists case state across sim-days. No platform buy-in. No fleet migration."

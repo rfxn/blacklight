@@ -1,3 +1,22 @@
+blacklight (0.5.1-1) unstable; urgency=medium
+
+  * Documentation + exhibit consolidation pass on top of 0.5.0
+  * DESIGN.md §3.4 skill-version pinning at session-create
+  * DESIGN.md §8.8 workspace recovery from lost state.json
+  * DESIGN.md §12.7 primitives deliberately not used (callable_agents, mcp_servers)
+  * docs/managed-agents.md §6 deliberately-not-used framing (mirrors DESIGN §12.7)
+  * README + PRD: Try-it walkthrough, three architecture views, Bash SDK section
+  * README + PRD: docs/demo/ links replaced with tests/live/ (docs/demo/ is operator-local)
+  * FUTURE.md restructured into eight strategic themes with phased delivery
+  * routing-skills/* SKILL.md anti-pattern #6: adversarial-content-handling discipline
+  * routing-skills/*/description.txt voice/tone refresh across six skills
+  * Exhibits hosts 4/5/7: modsec_audit.log + journal.json filled to match EXPECTED.md
+  * Exhibits host-3: empty-by-design README marker
+  * HACKATHON_TIMELINE / pkg.manifest version-stamp drift fixed
+  * Five test Dockerfiles (centos7, rocky8, rocky10, ubuntu2004, ubuntu2404) committed
+
+ -- R-fx Networks <proj@rfxn.com>  Sun, 26 Apr 2026 17:00:00 +0000
+
 blacklight (0.5.0-1) unstable; urgency=medium
 
   * M15 + post-M15 consolidation: live API correctness against managed-agents-2026-04-01

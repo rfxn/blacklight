@@ -2,6 +2,58 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== v0.5.1 release — 2026-04-26 (documentation + exhibit consolidation pass) ===
+
+Documentation + exhibit fill consolidation on top of 0.5.0. No runtime
+behavior changes; assembled bl regenerated only because BL_VERSION bumped.
+Verified: hermetic 348/0 on debian12 (139s, anvil) and rocky9.
+
+[Change] DESIGN.md §3.4 — skill-version pinning at session-create framed as
+      the load-bearing adversarial-content invariant; rebind procedure for
+      active long-lived cases.
+[Change] DESIGN.md §8.8 — recovery procedure for a lost or corrupted
+      state.json (rebind via name-keyed GETs across /v1/agents,
+      /v1/environments, /v1/memory_stores; session_ids + case_files do not
+      recover automatically).
+[Change] DESIGN.md §12.7 — callable_agents and mcp_servers explicitly
+      out-of-scope; rationale for the single-session 1M-context cross-stream
+      correlation as the architectural answer rather than a workaround;
+      helper Messages-API calls are wrapper-side, not callable_agents.
+[New] docs/managed-agents.md §5.5 — primitives deliberately not used,
+      mirroring DESIGN §12.7 in the canonical primitives reference.
+[Change] FUTURE.md — eight strategic themes (T1–T8), phased delivery
+      (P1–P5), per-theme item briefs; out-of-scope and open architectural
+      questions consolidated.
+[Change] README.md — Try-it walkthrough, three architecture views, Bash
+      SDK, Proof block; broken docs/demo/ links replaced with tests/live/
+      pointers; skill-count phrasing aligned with PRD.
+[Change] PRD.md §14 row 5 + §15 — docs/demo/ surfaced as operator-local
+      (gitignored); spec-count realigned to the eight committed docs/.
+[Change] routing-skills/*/SKILL.md — anti-pattern #6 added across five
+      routing skills (authoring-incident-briefs, gating-false-positives,
+      prescribing-defensive-payloads, synthesizing-evidence; curating-cases
+      already covered): adversarial-content handling at each skill's
+      specific surface (brief prose / FP-gate adjudication / rule meta /
+      hypothesis prose).
+[Change] routing-skills/*/description.txt — voice/tone refresh on all six
+      routing skills; paragraph 2 leads with "Activate this skill whenever
+      ..." for sharper routing keywords.
+[New] exhibits/fleet-01/host-{4,5,7}/modsec_audit.log + journal.json —
+      cross-stream evidence kit filled to match EXPECTED.md per-host
+      grading rubric. host-4/7 carry the polyshell URL-evasion + post-
+      staging command-POST + cron-callback chain on shared C2
+      (vagqea4wrlkdg.top); host-5 carries the skimmer family-marker
+      divergence (rule 941997 only, different C2 skimmer-c2.example).
+[New] exhibits/fleet-01/host-3-nginx-clean/README.md — empty-by-design
+      marker; documents the negative-assertion contract and topology role.
+[Change] exhibits/fleet-01/README.md — host-{1..7} stream table.
+[Change] HACKATHON_TIMELINE.md, pkg.manifest — version-stamp drift fixed
+      (HEAD line + PKG_VERSION bumped from stale 0.4.0 / 0.1.0).
+[Change] src/bl.d/00-header.sh — BL_VERSION 0.5.0 → 0.5.1.
+[Change] bl — assembled artifact regenerated.
+[Change] pkg/rpm/blacklight.spec, pkg/deb/debian/changelog — 0.5.1
+      release stanzas.
+
 === v0.5.0 release — 2026-04-26 (M15 + post-M15 consolidation) ===
 
 Live API correctness round 2 + integration-notes formalization.

@@ -2,7 +2,7 @@
 # Customized for single-binary layout: /usr/bin/bl + /var/lib/bl state dirs
 #
 %define name    blacklight
-%define version 0.5.0
+%define version 0.5.1
 %define release 1%{?dist}
 
 Name:           %{name}
@@ -65,6 +65,22 @@ fi
 %doc /usr/share/doc/blacklight/CHANGELOG
 
 %changelog
+* Sun Apr 26 2026 R-fx Networks <proj@rfxn.com> - 0.5.1-1
+- Documentation + exhibit consolidation pass on top of 0.5.0:
+  DESIGN.md gains §3.4 skill-version pinning at session-create, §8.8
+  workspace recovery from lost state.json, §12.7 deliberately-not-used
+  primitives (callable_agents, mcp_servers). README + PRD reframed —
+  Try-it walkthrough, three architecture views, Bash SDK section, broken
+  docs/demo/ links replaced with tests/live/ pointers (docs/demo/ is
+  operator-local). FUTURE.md re-organized into eight strategic themes
+  with phased delivery and item-level technical briefs. Six routing
+  Skills receive an adversarial-content-handling anti-pattern (#6) and
+  description.txt voice/tone refresh. Exhibits hosts 4/5/7 gain
+  modsec_audit.log + journal.json so the cross-stream correlation chain
+  resolves on every staged host; host-3 carries an empty-by-design
+  marker. docs/managed-agents.md gains a §6 framing of the deliberately
+  non-used primitives.
+
 * Sun Apr 26 2026 R-fx Networks <proj@rfxn.com> - 0.5.0-1
 - M15 + post-M15 consolidation: live API correctness against the
   managed-agents-2026-04-01 beta surface and integration-notes formalization.
