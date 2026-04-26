@@ -1,3 +1,18 @@
+blacklight (0.5.2-1) unstable; urgency=medium
+
+  * Operator config tree expansion: preflight loader allowlist 7 → 22 keys
+  * New conf-tunable: log_level, disable_llm, notify_dir, cpanel_dir
+  * New conf-tunable: defend_extra_cdn_asns, defend_fw_allow_broad_ip
+  * New conf-tunable: defend_fp_corpus, defend_asn_cache
+  * New conf-tunable: clean_dryrun_ttl_secs, clean_proc_grace_secs
+  * New conf-tunable: obs_journal_max, lmd_sig_dir, clamav_sig_dir, yara_rules_dir
+  * New conf-tunable: repo_url
+  * files/etc/blacklight.conf.default populated with grouped sections + env-only footer
+  * bl_setup_local_preflight wires _bl_load_blacklight_conf so conf-driven knobs apply to bl setup
+  * Outbox section comment updated — readonly constants, not conf-tunable
+
+ -- Ryan MacDonald <ryan@rfxn.com>  Sun, 26 Apr 2026 13:00:00 +0000
+
 blacklight (0.5.1-1) unstable; urgency=medium
 
   * Documentation + exhibit consolidation pass on top of 0.5.0

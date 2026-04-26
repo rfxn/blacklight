@@ -3,12 +3,28 @@
 # Path: /etc/blacklight/blacklight.conf
 # Format: shell-source-able key="value"; allowlisted keys only
 # Edit via: bl setup --import-from-lmd (auto), or manual edit
+#
+# Conf keys map to BL_<UPPERCASE> env vars at preflight load. Env always wins
+# over conf — set BL_<KEY> in the shell to override a conf value for one run.
+# Unknown keys log a warning + skip; values with shell metacharacters are
+# rejected. Resolution order is documented per section below.
 ##
 
 # --- Unattended mode (substrate hook flow) ---
 # 0 = interactive (default), 1 = unattended (hook-driven, queue cleanup ops, notify)
 # Resolution chain (most-explicit-wins): --unattended → BL_UNATTENDED → this → BL_INVOKED_BY → no-TTY
 unattended_mode="0"
+
+# --- Logging ---
+# Verbosity floor for [bl] DEBUG/INFO/WARN/ERROR lines on stderr.
+# Available: debug, info, warn, error
+#log_level="info"
+
+# --- LLM kill switch ---
+# 1 = bypass all Anthropic API calls; observe-router falls back to deterministic
+# summaries; defend short-circuits the verdict-match step. Useful for cost-control,
+# disconnected operation, and CI runs without ANTHROPIC_API_KEY.
+#disable_llm=""
 
 # --- Notification channels ---
 # Comma-separated list of channels enabled by default. Channels still require
@@ -19,6 +35,10 @@ notify_channels_enabled="slack,syslog"
 # Severity threshold for notify dispatch — channels do not fire below this
 # Available: info, warn, critical
 notify_severity_floor="info"
+
+# Directory where channel token files live (slack.token, smtp.email,
+# telegram.token, discord.webhook). Only override for non-FHS installs.
+#notify_dir="/etc/blacklight/notify.d"
 
 # --- LMD trigger ---
 # Identical-fingerprint dedup window (hours). Within this window, identical
@@ -31,11 +51,84 @@ lmd_conf_path="/usr/local/maldetect/conf.maldet"
 
 # --- cPanel lock-in ---
 # Use cPanel's restartsrv_httpd for graceful restart instead of apachectl graceful
-# Auto-detected if /usr/local/cpanel exists
+# Auto-detected if /usr/local/cpanel exists. Values: auto, force, off
 cpanel_lockin="auto"
 
 # Two-stage rollback timeout — seconds to wait for restartsrv_httpd return
 cpanel_lockin_timeout_seconds="60"
 
+# cPanel install root override — only set on non-default cPanel deployments;
+# auto-detection (presence of /usr/local/cpanel) covers the standard case.
+#cpanel_dir="/usr/local/cpanel"
+
+# --- Defend (firewall + signature gates) ---
+# Space-separated extra CDN ASNs to add to the hardcoded allowlist (Cloudflare,
+# Fastly, Akamai, etc.). Use when defending behind a regional CDN not in the
+# baked-in list. Numeric ASN tokens only ("13335 16509").
+#defend_extra_cdn_asns=""
+
+# Bypass the broad-CIDR floor (IPv4 /16, IPv6 /48) when adding firewall blocks.
+# Default behaviour rejects /15, /14, ... to prevent operator typo blast radius.
+# Set to "yes" to allow broader blocks. Audit before flipping.
+#defend_fw_allow_broad_ip=""
+
+# False-positive corpus directory — defend's signature-add step scans this tree
+# with the candidate signature; any match aborts the add. Populate with sample
+# clean files representative of the protected workload (CMS cores, framework
+# vendor trees) before relying on it.
+#defend_fp_corpus="/var/lib/bl/fp-corpus"
+
+# ASN-lookup cache directory. defend caches whois ASN lookups here to keep
+# repeat resolutions cheap and offline-tolerant.
+#defend_asn_cache="/var/cache/bl/asn"
+
+# --- Clean (remediation) ---
+# Dry-run receipt TTL (seconds). After bl clean prints a dry-run plan, the
+# operator must rerun within this window to convert it to an apply. Older
+# receipts force a fresh dry-run for safety.
+#clean_dryrun_ttl_secs="300"
+
+# SIGTERM → SIGKILL grace period (seconds) when clean terminates a process tree
+# tied to quarantined files. Increase if remediation targets long-shutdown daemons.
+#clean_proc_grace_secs="5"
+
+# --- Observe ---
+# Maximum journal entries collected per observe run. Caps cost on hosts with
+# millions of journal lines (a 500k-entry run took 40+ minutes pre-cap). Warn
+# fires when the cap is hit so the operator knows to widen if needed.
+#obs_journal_max="10000"
+
+# --- Scanner signature directories ---
+# Paths where defend writes custom signatures (custom.hdb / custom.ndb / custom.yar).
+# Only override for non-default scanner layouts.
+#lmd_sig_dir="/usr/local/maldetect/sigs"
+#clamav_sig_dir="/var/lib/clamav"
+#yara_rules_dir="/etc/yara/rules"
+
+# --- Skill source ---
+# Alternate git repo for skill bundle content (bl setup workspace seed).
+# Default fetches from the upstream blacklight repo on GitHub. Override for
+# air-gapped or fork-tracking deployments.
+#repo_url=""
+
 # --- Outbox ---
-# Inherit existing /var/lib/bl/outbox behavior; no new flags
+# Inherit existing /var/lib/bl/outbox behavior; tunables (watermarks, retry,
+# drain batch/deadline) are readonly constants in 27-outbox.sh — change at
+# build time, not via conf.
+
+##
+# Env-only knobs (NOT loadable from this file)
+#
+# These resolve before the conf is read or are set per-invocation by hooks/CLI:
+#
+#   BL_VAR_DIR           state root (default /var/lib/bl) — readonly at source time
+#   BL_BLACKLIGHT_DIR    config root (default /etc/blacklight) — used to find this file
+#   BL_BLACKLIGHT_CONF   override path to this file (test isolation)
+#   BL_HOST_LABEL        host identity for envelopes (auto-detect: hostname -s)
+#   BL_INVOKED_BY        hook/cron caller tag (set by lmd-hook, cron units)
+#   BL_UNATTENDED        env-level override (1=force unattended, 0=force attended)
+#   BL_UNATTENDED_FLAG   --unattended CLI flag (set by 90-main.sh)
+#
+# To override any conf value for a single run, export BL_<KEY-UPPERCASE> in the
+# shell before invoking bl. Example: BL_LOG_LEVEL=debug bl observe ...
+##

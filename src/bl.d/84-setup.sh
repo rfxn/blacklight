@@ -102,7 +102,10 @@ HELP
 
 bl_setup_local_preflight() {
     # Setup bypasses bl_preflight (would 66 on unseeded state). Carry the
-    # same ANTHROPIC_API_KEY + curl + jq + state-dir checks here.
+    # same ANTHROPIC_API_KEY + curl + jq + state-dir checks here. Also load
+    # blacklight.conf so conf-driven knobs (log_level, repo_url, ...) take
+    # effect for setup; loader is fail-soft (logs + skip on parse error).
+    _bl_load_blacklight_conf || true   # || true: malformed conf logs + falls back to defaults; never blocks setup
     if [[ -z "${ANTHROPIC_API_KEY+set}" || -z "$ANTHROPIC_API_KEY" ]]; then
         bl_error_envelope setup "ANTHROPIC_API_KEY not set"
         return "$BL_EX_PREFLIGHT_FAIL"

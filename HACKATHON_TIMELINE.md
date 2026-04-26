@@ -7,7 +7,7 @@ happened off-plan. Detail lives elsewhere: `CHANGELOG` for per-phase notes,
 
 - **Start:** 2026-04-21 19:48 CT (`Initial commit — blacklight hackathon start`)
 - **Submission target:** 2026-04-26 (current state)
-- **HEAD:** main · v0.5.1 · 348/0 hermetic, 4/4 live
+- **HEAD:** main · v0.5.2 · 348/0 hermetic, 4/4 live
 
 ---
 

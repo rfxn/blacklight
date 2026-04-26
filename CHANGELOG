@@ -2,6 +2,53 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== v0.5.2 release — 2026-04-26 (operator config tree expansion) ===
+
+Surfaced fifteen previously-buried operator tunables in the
+/etc/blacklight/blacklight.conf preflight loader. Audit motivation: the
+landed default config exposed only 7 of ~22 runtime-effective BL_* env
+knobs; operator could not configure log verbosity, the LLM kill switch,
+defend's ASN/CDN/CIDR-floor levers, clean's TTL/grace, observe's journal
+cap, scanner sig dirs, or the alt skill repo without setting env vars per
+invocation. No runtime behaviour changes for unconfigured operators —
+every new key is opt-in and defaults exactly to the source-level
+${BL_<KEY>:-default} fallback.
+
+[Change] src/bl.d/30-preflight.sh — _bl_load_blacklight_conf allowlist
+      grows from 7 → 22 keys, grouped by surface (core dispatch / LMD
+      trigger / cPanel lock-in / defend tunables / clean tunables /
+      observe tunables / scanner sig dirs / skill source). Docstring
+      enumerates the full set and explicitly lists env-only knobs
+      (BL_VAR_DIR, BL_BLACKLIGHT_DIR, BL_BLACKLIGHT_CONF, BL_HOST_LABEL,
+      BL_INVOKED_BY, BL_UNATTENDED, BL_UNATTENDED_FLAG) that cannot
+      live in the conf due to bootstrap order or runtime semantics.
+[Fix] src/bl.d/84-setup.sh — bl_setup_local_preflight now invokes
+      _bl_load_blacklight_conf || true so conf-driven knobs (log_level,
+      repo_url) take effect for `bl setup`, which bypasses bl_preflight
+      by design (would 66 on unseeded state). Without this fix, the
+      newly-allowlisted repo_url= would silently no-op for its only
+      consumer.
+[New] files/etc/blacklight.conf.default — populated with grouped
+      sections (Logging, LLM kill switch, Defend, Clean, Observe,
+      Scanner sig dirs, Skill source) plus an env-only-knobs footer
+      block. New keys ship commented-out at their source defaults so
+      installer behaviour is unchanged. Outbox section comment now
+      explicitly states tunables are readonly constants in
+      27-outbox.sh, not conf-tunable.
+[Change] CHANGELOG / pkg/rpm/blacklight.spec / pkg/deb/debian/changelog /
+      pkg.manifest / HACKATHON_TIMELINE.md — version-stamp 0.5.1 → 0.5.2
+      across all sync points.
+
+Verification:
+- bash -n bl + shellcheck -S error: clean
+- make -C tests test-quick (anvil debian12, smoke + CLI surface): 33/33
+- 14-unattended.bats (conf loader + unattended resolution): 12/12
+- 08-setup.bats (setup verb regression after _bl_load_blacklight_conf
+  insertion): 42/42
+- Per-key audit cross-checks every new conf key against a real
+  ${BL_<KEY>:-default} consumer in src/bl.d/; documented defaults match
+  source character-for-character.
+
 === v0.5.1 release — 2026-04-26 (documentation + exhibit consolidation pass) ===
 
 Documentation + exhibit fill consolidation on top of 0.5.0. No runtime

@@ -2,7 +2,7 @@
 # Customized for single-binary layout: /usr/bin/bl + /var/lib/bl state dirs
 #
 %define name    blacklight
-%define version 0.5.1
+%define version 0.5.2
 %define release 1%{?dist}
 
 Name:           %{name}
@@ -65,6 +65,24 @@ fi
 %doc /usr/share/doc/blacklight/CHANGELOG
 
 %changelog
+* Sun Apr 26 2026 R-fx Networks <proj@rfxn.com> - 0.5.2-1
+- Operator config tree expansion (/etc/blacklight/blacklight.conf):
+  preflight loader allowlist grows from 7 → 22 keys. New conf-tunable
+  surfaces: log_level, disable_llm, notify_dir, cpanel_dir, defend
+  tunables (extra_cdn_asns, fw_allow_broad_ip, fp_corpus, asn_cache),
+  clean tunables (dryrun_ttl_secs, proc_grace_secs), obs_journal_max,
+  scanner sig dirs (lmd_sig_dir, clamav_sig_dir, yara_rules_dir),
+  repo_url. Every new key maps 1:1 to a real ${BL_<KEY>:-default}
+  consumer in src/bl.d/; documented defaults match source defaults
+  exactly. files/etc/blacklight.conf.default populated with grouped
+  sections + an env-only knob footer (BL_VAR_DIR / BL_BLACKLIGHT_DIR /
+  BL_HOST_LABEL / BL_INVOKED_BY / BL_UNATTENDED*) that cannot live in
+  the conf due to bootstrap order. bl_setup_local_preflight now also
+  invokes _bl_load_blacklight_conf so conf-driven knobs (log_level,
+  repo_url) take effect for `bl setup`, which bypasses bl_preflight by
+  design. Outbox tunables remain readonly constants — comment in conf
+  updated to state this explicitly rather than implicitly.
+
 * Sun Apr 26 2026 R-fx Networks <proj@rfxn.com> - 0.5.1-1
 - Documentation + exhibit consolidation pass on top of 0.5.0:
   DESIGN.md gains §3.4 skill-version pinning at session-create, §8.8

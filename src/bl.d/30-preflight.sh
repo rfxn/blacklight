@@ -97,10 +97,20 @@ BOOTSTRAP_EOF
 
 # _bl_load_blacklight_conf — parse allowlisted shell-source-able conf, export
 # BL_* env vars. Fail-soft: returns 0 even on parse fail (logs + skip).
-# Allowlist:
-#   unattended_mode notify_channels_enabled notify_severity_floor
-#   lmd_trigger_dedup_window_hours lmd_conf_path
-#   cpanel_lockin cpanel_lockin_timeout_seconds
+# Allowlist (lowercase conf-key → BL_<UPPER> env var):
+#   Core dispatch:    unattended_mode notify_channels_enabled notify_severity_floor
+#                     notify_dir log_level disable_llm
+#   LMD trigger:      lmd_trigger_dedup_window_hours lmd_conf_path
+#   cPanel lock-in:   cpanel_lockin cpanel_lockin_timeout_seconds cpanel_dir
+#   Defend tunables:  defend_extra_cdn_asns defend_fw_allow_broad_ip
+#                     defend_fp_corpus defend_asn_cache
+#   Clean tunables:   clean_dryrun_ttl_secs clean_proc_grace_secs
+#   Observe tunables: obs_journal_max
+#   Scanner sig dirs: lmd_sig_dir clamav_sig_dir yara_rules_dir
+#   Skill source:     repo_url
+# Env-only (cannot live in conf — bootstrap or runtime):
+#   BL_VAR_DIR, BL_BLACKLIGHT_DIR, BL_BLACKLIGHT_CONF (chicken-and-egg with load order)
+#   BL_HOST_LABEL (auto-detect), BL_INVOKED_BY, BL_UNATTENDED, BL_UNATTENDED_FLAG
 _bl_load_blacklight_conf() {
     local conf="${BL_BLACKLIGHT_CONF:-/etc/blacklight/blacklight.conf}"
     [[ -r "$conf" ]] || return "$BL_EX_OK"   # absent conf is normal; defaults apply
@@ -120,8 +130,14 @@ _bl_load_blacklight_conf() {
             value="${value%\'}"; value="${value#\'}"
             # Allowlist key
             case "$key" in
-                unattended_mode|notify_channels_enabled|notify_severity_floor|lmd_trigger_dedup_window_hours|lmd_conf_path|cpanel_lockin|cpanel_lockin_timeout_seconds)
-                    ;;
+                unattended_mode|notify_channels_enabled|notify_severity_floor|notify_dir|log_level|disable_llm) ;;
+                lmd_trigger_dedup_window_hours|lmd_conf_path) ;;
+                cpanel_lockin|cpanel_lockin_timeout_seconds|cpanel_dir) ;;
+                defend_extra_cdn_asns|defend_fw_allow_broad_ip|defend_fp_corpus|defend_asn_cache) ;;
+                clean_dryrun_ttl_secs|clean_proc_grace_secs) ;;
+                obs_journal_max) ;;
+                lmd_sig_dir|clamav_sig_dir|yara_rules_dir) ;;
+                repo_url) ;;
                 *)
                     bl_warn "blacklight.conf: unknown key '$key' (line: $line)"
                     continue
