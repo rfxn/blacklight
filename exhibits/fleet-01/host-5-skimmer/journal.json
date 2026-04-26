@@ -1,0 +1,6 @@
+{"__REALTIME_TIMESTAMP":"1775662931000000","_HOSTNAME":"magento-prod-05","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"4","MESSAGE":"audit: PATH name=\"/var/www/html/pub/media/catalog/product/.cache/skimmer.php\" inode=8675903 pid=4001"}
+{"__REALTIME_TIMESTAMP":"1775663028000000","_HOSTNAME":"magento-prod-05","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"6","MESSAGE":"modsecurity: rule 941997 matched (PHP request under media-cache) pid=4002"}
+{"__REALTIME_TIMESTAMP":"1775663224000000","_HOSTNAME":"magento-prod-05","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"5","MESSAGE":"kernel: TCP: established connection 203.0.113.71 -> magento-prod-05:443 pid=4003"}
+{"__REALTIME_TIMESTAMP":"1775663391000000","_HOSTNAME":"magento-prod-05","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"4","MESSAGE":"audit: PATH name=\"/var/www/html/app/design/frontend/Magento/luma/Magento_Checkout/templates/onepage/success.phtml\" inode=8675940 pid=4004"}
+{"__REALTIME_TIMESTAMP":"1775663517000000","_HOSTNAME":"magento-prod-05","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"5","MESSAGE":"kernel: TCP: established connection magento-prod-05 -> skimmer-c2.example:443 pid=4005"}
+{"__REALTIME_TIMESTAMP":"1775663618000000","_HOSTNAME":"magento-prod-05","_SYSTEMD_UNIT":"apache2.service","PRIORITY":"6","MESSAGE":"modsecurity: rule 941997 matched (PHP request under media-cache) pid=4006"}

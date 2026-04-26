@@ -1,0 +1,36 @@
+--txn-300000-3e7a-A--
+[2026-04-08T15:42:11Z] [client 203.0.113.71] magento-prod-05 ModSecurity-Audit
+--txn-300000-3e7a-B--
+GET /pub/media/catalog/product/.cache/skimmer.php HTTP/1.1
+--txn-300000-3e7a-F--
+HTTP/1.1 200 OK Content-Length: 4012
+--txn-300000-3e7a-H--
+Message: Pattern match "php_in_media_cache" at REQUEST_FILENAME [id "941997"] [msg "PHP request under media-cache (unusual path-class)"] [severity "WARNING"] [tag "application-multi"]
+--txn-300000-3e7a-Z--
+--txn-300001-c9d2-A--
+[2026-04-08T15:43:48Z] [client 203.0.113.71] magento-prod-05 ModSecurity-Audit
+--txn-300001-c9d2-B--
+GET /pub/media/catalog/product/.cache/skimmer.php HTTP/1.1
+--txn-300001-c9d2-F--
+HTTP/1.1 200 OK Content-Length: 4012
+--txn-300001-c9d2-H--
+Message: Pattern match "php_in_media_cache" at REQUEST_FILENAME [id "941997"] [msg "PHP request under media-cache (unusual path-class)"] [severity "WARNING"] [tag "application-multi"]
+--txn-300001-c9d2-Z--
+--txn-300002-71b0-A--
+[2026-04-08T15:45:03Z] [client 203.0.113.71] magento-prod-05 ModSecurity-Audit
+--txn-300002-71b0-B--
+GET /pub/media/catalog/product/.cache/skimmer.php HTTP/1.1
+--txn-300002-71b0-F--
+HTTP/1.1 200 OK Content-Length: 4012
+--txn-300002-71b0-H--
+Message: Pattern match "php_in_media_cache" at REQUEST_FILENAME [id "941997"] [msg "PHP request under media-cache (unusual path-class)"] [severity "WARNING"] [tag "application-multi"]
+--txn-300002-71b0-Z--
+--txn-300003-8af5-A--
+[2026-04-08T15:46:31Z] [client 203.0.113.71] magento-prod-05 ModSecurity-Audit
+--txn-300003-8af5-B--
+GET /pub/media/catalog/product/.cache/skimmer.php HTTP/1.1
+--txn-300003-8af5-F--
+HTTP/1.1 200 OK Content-Length: 4012
+--txn-300003-8af5-H--
+Message: Pattern match "php_in_media_cache" at REQUEST_FILENAME [id "941997"] [msg "PHP request under media-cache (unusual path-class)"] [severity "WARNING"] [tag "application-multi"]
+--txn-300003-8af5-Z--
