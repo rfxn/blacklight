@@ -36,8 +36,8 @@ ${BL_<KEY>:-default} fallback.
       explicitly states tunables are readonly constants in
       27-outbox.sh, not conf-tunable.
 [Change] README.md — visual rearchitecture (787 → 467 lines). Audience
-      broadened off RFXN-only framing; "Who this is for" now leads with
-      defensive-Linux-stack operators and lists RFXN as an anchor case,
+      broadened off rfxn-only framing; "Who this is for" now leads with
+      defensive-Linux-stack operators and lists rfxn as an anchor case,
       not a precondition. 19 H2 sections collapsed to 14; four "Why X"
       sections folded under one "Why this stack" with H3 subsections;
       manual TOC dropped (GitHub auto-generates). Mermaid replaces
@@ -52,6 +52,20 @@ ${BL_<KEY>:-default} fallback.
       contextually: colons for header-style separators, commas for
       inline parentheticals, parens for embedded clauses, periods for
       sentence breaks. No content changes; visual cleanup only.
+[Change] README.md — provenance callout reframed + rfxn lowercased
+      in prose. The "no customer data" callout was leading with
+      disclaimer language; rewritten to lead from author lived
+      experience responding to APSB25-94 and the alarming rate of
+      incidents like it through the last twelve months
+      (unauthenticated RCEs without vendor patches, polyglot
+      webshells, accelerating attacker evasion). Provenance note
+      retained as the tail of the same callout, compressed. Callout
+      type downgraded from IMPORTANT to NOTE since the tone is now
+      contextual framing rather than warning. Separately:
+      uppercase `RFXN` and `R-fx Networks` (in flowing prose
+      contexts) replaced with lowercase `rfxn` per the canonical
+      DESIGN.md / PRD.md voice; formal `R-fx Networks` retained
+      only in the bottom-of-README attribution line.
 [Change] README.md — above-the-fold rework + voice pass.
       Hero block in centered HTML with shields.io color-coordinated
       badges (cyan accent / green success / orange Opus brand /

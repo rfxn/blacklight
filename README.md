@@ -155,8 +155,8 @@ Polyglot signatures had been flagging the artifacts since late February: PHP hid
 
 **Where Claude entered.** Through that window, Claude was central to keeping pace. Every analyst was pasting evidence into chat, getting forensic synthesis back, and applying the result by hand. The lesson by the end of the campaign was not "AI helps with IR." The lesson was: **the agent doesn't belong in a chat window. It belongs in the shell, on the host, holding the case across days and acting on the substrate the defender already runs.** **blacklight is that lesson shipped**: the agent-directed CLI we wished we'd had on day 1.
 
-> [!IMPORTANT]
-> No customer data lives in this repo. The volumes cited are from public field reporting on the campaign. The APSB25-94 reconstruction in [`exhibits/fleet-01/`](exhibits/fleet-01/) is built **only** from the public Adobe advisory, public Sansec analyses, and OWASP CRS / Magento developer documentation.
+> [!NOTE]
+> Authored from the experience of responding to APSB25-94 and the alarming rate of incidents like it through the last twelve months: unauthenticated RCEs landing without vendor patches, polyglot webshells slipping past file-type checks, attackers iterating evasion faster than the patch cycle can keep up. blacklight is the response shape earned across that window, distilled into something other defenders can run from minute one. The corpus and scenario in [`exhibits/fleet-01/`](exhibits/fleet-01/) reconstruct the public portion of APSB25-94 only: public Adobe advisory, public Sansec analyses, OWASP CRS and Magento developer documentation. No customer data, no internal references, no non-public IOCs.
 
 ---
 
@@ -169,9 +169,9 @@ Anyone running a defensive Linux stack (ModSecurity / Apache / iptables / nftabl
 | **L1 SOC analyst** at a managed hosting provider or MSP | `bl trigger <hit>` opens a case from any post-scan hook; the curator drives observation, defense, and cleanup. The L1 confirms tier-gated steps. |
 | **L2 engineer** running open Linux infrastructure | One curator session per case, resumable for 30 days. New evidence attaches via the Files API; the curator extends the hypothesis instead of restarting. |
 | **Hosting product owner / sysadmin on small fleets** | GPL v2, zero license cost, single bash file, `$ANTHROPIC_API_KEY` is the only credential. Operator pays Anthropic API usage; that is the entire cost. |
-| **Defender already running RFXN tools** (LMD/APF/BFD) | First-class trigger adapter for LMD `post_scan_hook`; same install discipline and operator vocabulary as the existing R-fx Networks portfolio. |
+| **Defender already running rfxn tools** (LMD/APF/BFD) | First-class trigger adapter for LMD `post_scan_hook`; same install discipline and operator vocabulary as the existing rfxn portfolio. |
 
-`bl` does not require LMD/APF/BFD. It directs whatever defensive primitives the host already has: Apache + ModSec, iptables, nftables, ClamAV, YARA, cron, journalctl. RFXN is one anchor case, not a precondition.
+`bl` does not require LMD/APF/BFD. It directs whatever defensive primitives the host already has: Apache + ModSec, iptables, nftables, ClamAV, YARA, cron, journalctl. rfxn is one anchor case, not a precondition.
 
 ---
 
@@ -456,7 +456,7 @@ Multi-tenant SaaS variant tracked under T8; the OSS CLI stays GPL v2. Thirty ite
 
 GNU GPL v2. See [`LICENSE`](LICENSE).
 
-Part of the R-fx Networks defensive OSS portfolio, alongside [LMD](https://github.com/rfxn/linux-malware-detect), [APF](https://github.com/rfxn/advanced-policy-firewall), and [BFD](https://github.com/rfxn/brute-force-detection). blacklight is vendor-agnostic about which detection tools sit on top of the Linux substrate; the RFXN family is one anchor case, not a precondition.
+Part of the rfxn defensive OSS portfolio, alongside [LMD](https://github.com/rfxn/linux-malware-detect), [APF](https://github.com/rfxn/advanced-policy-firewall), and [BFD](https://github.com/rfxn/brute-force-detection). blacklight is vendor-agnostic about which detection tools sit on top of the Linux substrate; the rfxn family is one anchor case, not a precondition.
 
 R-fx Networks `<proj@rfxn.com>` · Ryan MacDonald `<ryan@rfxn.com>`.
 
