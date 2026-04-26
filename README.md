@@ -1,17 +1,29 @@
+<div align="center">
+
 # blacklight
 
-> Attackers have agents. Defenders still have grep. **`bl`** is the counter, a portable bash CLI that turns the Linux defensive stack the operator already runs into an agent-directed incident-response surface.
+**Defenders run grep. Attackers run agents. `bl` is the counter.**
 
-[![Version](https://img.shields.io/github/v/tag/rfxn/blacklight?label=version&color=blue&sort=semver)](https://github.com/rfxn/blacklight/tags)
-[![License](https://img.shields.io/github/license/rfxn/blacklight?color=blue)](LICENSE)
-[![Bash 4.1+](https://img.shields.io/badge/bash-4.1%2B-success.svg)](#why-this-stack)
-[![Tests](https://img.shields.io/badge/tests-348%20BATS%20%2F%2017%20files-success.svg)](#proof)
-[![Powered by Claude Opus 4.7](https://img.shields.io/badge/powered%20by-Claude%20Opus%204.7-d97757.svg)](#why-this-stack)
-[![Managed Agents](https://img.shields.io/badge/Anthropic-Managed%20Agents-7f4dff.svg)](#why-this-stack)
+A portable bash CLI that puts an agent on the same Linux defensive stack you already run.  
+**Observe · Decide · Act · At fleet scale.**
+
+<a href="https://blacklight.rfxn.com"><img src="https://img.shields.io/badge/%F0%9F%93%96%20full%20docs-blacklight.rfxn.com-22d3ee?style=for-the-badge&labelColor=09090b" alt="blacklight.rfxn.com"></a>
+
+[![Version](https://img.shields.io/github/v/tag/rfxn/blacklight?label=version&color=22d3ee&labelColor=09090b&sort=semver)](https://github.com/rfxn/blacklight/tags)
+[![License](https://img.shields.io/badge/license-GPL--2.0-22d3ee?labelColor=09090b)](LICENSE)
+[![Bash 4.1+](https://img.shields.io/badge/bash-4.1%2B-4ade80?labelColor=09090b)](#why-this-stack)
+[![Tests](https://img.shields.io/badge/tests-348%20BATS%20%2F%2017%20files-4ade80?labelColor=09090b)](#proof)
+[![Opus 4.7](https://img.shields.io/badge/powered%20by-Opus%204.7-d97757?labelColor=09090b)](#why-this-stack)
+[![Managed Agents](https://img.shields.io/badge/Anthropic-Managed%20Agents-a78bfa?labelColor=09090b)](#why-this-stack)
+
+[Install](#install) · [Try it](#try-it-apsb25-94-in-five-minutes) · [Architecture](#architecture) · [Why this stack](#why-this-stack) · [Safety](#safety-model-five-tiers-eight-mechanics) · [Roadmap](#roadmap)
+
+</div>
 
 > [!IMPORTANT]
 > **v0.5.0 hackathon build, Cerebral Valley "Built with 4.7" April 2026.**
 > Production-shape, not production-tested at fleet scale. External operator beta is roadmap P1.
+> The full docs site at [**blacklight.rfxn.com**](https://blacklight.rfxn.com) is the richer surface: this README, design notes, demo trace, talk material, and operator collateral, all rendered with proper navigation.
 
 ---
 
@@ -19,23 +31,9 @@
 
 At 03:42 UTC on a Saturday, the APSB25-94 advisory drops: Magento stores are actively backdoored via a double-extension webshell hidden in the media cache. Eight hours later the on-call team has run `grep`, `find`, ModSec audit scrapes, ClamAV scans, APF drops, and crontab audits across forty hosts, by hand.
 
-**blacklight collapses that arc into agentic-minutes** on the same Linux substrate the defender already runs. No platform buy-in. No fleet migration. No analyst retraining. A Managed Agent curator holds the case across days; the operator runs the steps it prescribes.
+**blacklight collapses that arc into agentic-minutes** on the same Linux substrate you already run. The agent in the shell, not the chat. A Managed Agent curator holds the case across days; the wrapper observes, gates, and acts on the host. No platform buy-in. No fleet migration. No analyst retraining.
 
-```mermaid
-flowchart LR
-    OP([operator]) -->|bl observe| BL[bl]
-    BL -->|case state| CUR{{curator<br/>Opus 4.7 · 1M ctx<br/>Managed Agent}}
-    CUR -->|tier-gated steps| BL
-    OP -->|bl run --yes| BL
-    BL -->|directs| HOST[(ModSec · APF · LMD<br/>iptables · ClamAV · YARA)]
-
-    classDef op fill:#e6f7ff,stroke:#2c7a7b,stroke-width:2px
-    classDef cur fill:#f5e8ff,stroke:#7f4dff,stroke-width:2px
-    classDef host fill:#fff4e6,stroke:#d97757,stroke-width:2px
-    class OP op
-    class CUR cur
-    class HOST host
-```
+The power is the act, not the chat. `bl defend` pushes a ModSec rule with `apachectl -t` pre-flight and a backup. `bl defend firewall` drops an attacker IP across APF / CSF / iptables / nftables, CDN-safelist aware, with a TTL retire timer. `bl defend sig` appends an FP-gated signature to LMD / ClamAV. `bl clean` quarantines a webshell, removes a poisoned cron, kills a beacon process, with diff and undo. Same operator vocabulary, on the same hosts, now agent-directed at fleet pace.
 
 ---
 
@@ -153,9 +151,9 @@ We ran the response across a managed-Magento hosting fleet of a thousand-plus se
 - A separate upload vector traced back **months before public disclosure**
 - Post-compromise C2 beacons, secondary backdoors, and JavaScript payment skimmers
 
-Polyglot signatures had been flagging the artifacts since late February: PHP hidden inside valid GIF and PNG images, shells on disk that looked harmless to every file-type check. Some layers held. Some didn't. Attackers found evasion paths that bypassed initial WAF mitigations, and we iterated rules through the persistent attack window. We built **50+ assessment checks per store** mid-incident because existing tools didn't give us the coverage the threat demanded. After the industry-wide persistent attack pattern, **attack volume dropped 99.9%**, while the rest of the ecosystem continued to wait for a patch that still does not exist.
+Polyglot signatures had been flagging the artifacts since late February: PHP hidden inside valid GIF and PNG images, shells on disk that looked harmless to every file-type check. Some layers held. Some didn't. Attackers found evasion paths that bypassed initial WAF mitigations, and we iterated rules through the persistent attack window. We built **50+ assessment checks per store** mid-incident because existing tools didn't give us the coverage the threat demanded. After the industry-wide persistent attack pattern, **attack volume dropped 99.9%**, while the rest of the industry continued to wait for a patch that still does not exist.
 
-**Where Claude entered.** Through that window, Claude played a foundational role in helping us gain leverage; every IR analyst was pasting evidence into chat, getting forensic synthesis back, and applying the result by hand. The lesson by the end of the campaign was not "AI helps with IR." The lesson was: **the agent doesn't belong in a chat window. It belongs in the shell, holding the case across days, on the substrate the defender already runs.** **blacklight is that lesson shipped**: the agent-directed CLI we wished we'd had on day 1.
+**Where Claude entered.** Through that window, Claude was central to keeping pace. Every analyst was pasting evidence into chat, getting forensic synthesis back, and applying the result by hand. The lesson by the end of the campaign was not "AI helps with IR." The lesson was: **the agent doesn't belong in a chat window. It belongs in the shell, on the host, holding the case across days and acting on the substrate the defender already runs.** **blacklight is that lesson shipped**: the agent-directed CLI we wished we'd had on day 1.
 
 > [!IMPORTANT]
 > No customer data lives in this repo. The volumes cited are from public field reporting on the campaign. The APSB25-94 reconstruction in [`exhibits/fleet-01/`](exhibits/fleet-01/) is built **only** from the public Adobe advisory, public Sansec analyses, and OWASP CRS / Magento developer documentation.
@@ -169,7 +167,7 @@ Anyone running a defensive Linux stack (ModSecurity / Apache / iptables / nftabl
 | Operator profile | What `bl` gives them |
 |---|---|
 | **L1 SOC analyst** at a managed hosting provider or MSP | `bl trigger <hit>` opens a case from any post-scan hook; the curator drives observation, defense, and cleanup. The L1 confirms tier-gated steps. |
-| **L2 IR engineer** running open Linux infrastructure | One curator session per case, resumable for 30 days. New evidence attaches via the Files API; the curator extends the hypothesis instead of restarting. |
+| **L2 engineer** running open Linux infrastructure | One curator session per case, resumable for 30 days. New evidence attaches via the Files API; the curator extends the hypothesis instead of restarting. |
 | **Hosting product owner / sysadmin on small fleets** | GPL v2, zero license cost, single bash file, `$ANTHROPIC_API_KEY` is the only credential. Operator pays Anthropic API usage; that is the entire cost. |
 | **Defender already running RFXN tools** (LMD/APF/BFD) | First-class trigger adapter for LMD `post_scan_hook`; same install discipline and operator vocabulary as the existing R-fx Networks portfolio. |
 
@@ -431,7 +429,7 @@ Behavioral verification is committed evidence, not a claim. Four artifacts:
 ## Roadmap
 
 - **P1 · stabilization + community release.** Public release under `rfxn/blacklight`, external operator beta, signed releases (GPG), `bl undo` universal action revert.
-- **P2 · detection breadth + ecosystem hooks.** Additional firewall backends, notification channels (Slack/Telegram/Discord/email), source-side log compaction, inline curator tool wiring, threat-intelligence enrichment, YARA-of-known-malware.
+- **P2 · detection breadth + integration hooks.** Additional firewall backends, notification channels (Slack/Telegram/Discord/email), source-side log compaction, inline curator tool wiring, threat-intelligence enrichment, YARA-of-known-malware.
 - **P3 · fleet operation + sophisticated detection.** `bl observe --fleet`, container/Kubernetes awareness, behavioral baselining, forensic capture (memory, timeline, procnet), curator model strategy + air-gapped operation.
 - **P4 · presentation, extensibility, hardening.** Brief HTML/PDF/multi-language rendering, skill marketplace, ARM64/Alpine/BSD parity, redaction + data residency, ledger integrity hardening.
 
