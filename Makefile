@@ -15,8 +15,10 @@
 #   test-rocky9, test-all  delegate likewise
 
 BL_PARTS := $(sort $(wildcard src/bl.d/[0-9]*.sh))
+VENDOR_LIBS := vendor/alert_lib/files/alert_lib.sh vendor/tlog_lib/files/tlog_lib.sh
+VENDOR_PARTS := src/bl.d/05-vendor-alert.sh src/bl.d/06-vendor-tlog.sh
 
-.PHONY: bl bl-check bl-lint test test-rocky9 test-all skills-corpus skills-corpus-clean skills-corpus-check
+.PHONY: bl bl-check bl-lint test test-rocky9 test-all vendor-libs-pull vendor-libs-check skills-corpus skills-corpus-clean skills-corpus-check
 
 bl: scripts/assemble-bl.sh $(BL_PARTS)
 	@test -n "$(BL_PARTS)" || { \
@@ -25,7 +27,48 @@ bl: scripts/assemble-bl.sh $(BL_PARTS)
 	@./scripts/assemble-bl.sh > bl.tmp && mv bl.tmp bl && chmod +x bl
 	@echo "bl: assembled from $(words $(BL_PARTS)) parts"
 
-bl-check: skills-corpus-check
+vendor-libs-pull:
+	@for src in $(VENDOR_LIBS); do \
+	  test -r "$$src" || { echo "vendor-libs-pull: missing $$src — run 'git submodule update --init'" >&2; exit 1; }; \
+	done
+	@for entry in \
+	    "vendor/alert_lib/files/alert_lib.sh:src/bl.d/05-vendor-alert.sh" \
+	    "vendor/tlog_lib/files/tlog_lib.sh:src/bl.d/06-vendor-tlog.sh"; do \
+	  src="$${entry%%:*}"; dst="$${entry##*:}"; \
+	  { printf '# Pinned via git submodule. Regenerate via: make vendor-libs-pull\n'; \
+	    sed '1,/^[^#]/{ /^#!/d; /^#/d; }' "$$src"; \
+	  } > "$$dst"; \
+	  echo "vendor-libs-pull: wrote $$dst"; \
+	done
+
+vendor-libs-check:
+	@if [ ! -e "src/bl.d/05-vendor-alert.sh" ] && [ ! -e "src/bl.d/06-vendor-tlog.sh" ]; then \
+	  echo "vendor-libs-check: vendor parts not yet generated (pre-P3) — skipping drift check"; \
+	  exit 0; \
+	fi; \
+	set -e; \
+	for src in $(VENDOR_LIBS); do \
+	  test -r "$$src" || { echo "vendor-libs-check: missing $$src" >&2; exit 1; }; \
+	done; \
+	tmp_dir=$$(command mktemp -d); \
+	trap "command rm -rf $$tmp_dir" EXIT; \
+	for entry in \
+	    "vendor/alert_lib/files/alert_lib.sh:05-vendor-alert.sh" \
+	    "vendor/tlog_lib/files/tlog_lib.sh:06-vendor-tlog.sh"; do \
+	  src="$${entry%%:*}"; base="$${entry##*:}"; \
+	  { printf '# Pinned via git submodule. Regenerate via: make vendor-libs-pull\n'; \
+	    sed '1,/^[^#]/{ /^#!/d; /^#/d; }' "$$src"; \
+	  } > "$$tmp_dir/$$base"; \
+	done; \
+	for part in $(VENDOR_PARTS); do \
+	  base=$$(basename "$$part"); \
+	  diff -q "$$tmp_dir/$$base" "$$part" >/dev/null 2>&1 || { \
+	    echo "vendor-libs-check: $$part drifted from submodule source — run 'make vendor-libs-pull' and re-commit" >&2; \
+	    exit 1; }; \
+	done; \
+	echo "vendor-libs-check: in sync"
+
+bl-check: vendor-libs-check skills-corpus-check
 	@set -e; \
 	test -f bl || { echo "bl-check: bl missing — run 'make bl'" >&2; exit 1; }; \
 	if [ -z "$(BL_PARTS)" ]; then \

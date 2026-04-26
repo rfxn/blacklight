@@ -1,3 +1,9 @@
 [submodule "tests/infra"]
 	path = tests/infra
 	url = https://github.com/rfxn/batsman.git
+[submodule "vendor/alert_lib"]
+	path = vendor/alert_lib
+	url = https://github.com/rfxn/alert_lib.git
+[submodule "vendor/tlog_lib"]
+	path = vendor/tlog_lib
+	url = https://github.com/rfxn/tlog_lib.git
