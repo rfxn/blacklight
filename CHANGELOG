@@ -4,6 +4,13 @@ https://github.com/rfxn/blacklight
 
 === M15 — API correctness against live Anthropic Managed Agents ===
 
+M15 P8 (2026-04-26)
+  [New] tests/live/setup-live.bats — BL_LIVE=1 gated full-stack smoke test
+        covering setup --sync → --check → consult --new --attach → --reset
+        against the real Anthropic Managed Agents API. Default CI skips cleanly.
+  [New] docs/setup-flow.md §11 — operator runbook for orphan BL_SKILL_ID_*
+        cleanup in .secrets/env (F4).
+
 M15 P7 (2026-04-26)
   [Change] Doc drift sweep: docs/managed-agents.md agent verb table now matches
            live API (POST <id> CAS update, POST archive); sessions field name

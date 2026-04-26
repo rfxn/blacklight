@@ -37,3 +37,9 @@ test-skill-routing-smoke:
 # Usage: BL_EVAL_LIVE=1 ANTHROPIC_API_KEY=... make -C tests test-skill-routing-eval
 test-skill-routing-eval:
 	$(BATSMAN_RUN_TESTS) -- /opt/tests/skill-routing/eval-runner.bats
+
+.PHONY: test-live
+test-live:
+	@echo "M15 P8: BL_LIVE=$${BL_LIVE:-unset} (set BL_LIVE=1 + ANTHROPIC_API_KEY to exercise live API)"
+	BL_LIVE=$${BL_LIVE:-} ANTHROPIC_API_KEY=$${ANTHROPIC_API_KEY:-} \
+	    bats live/setup-live.bats

@@ -412,3 +412,34 @@ Contract updates:
 - Memory-store endpoint changes → also update `docs/case-layout.md` if path contracts shift.
 
 Probe log (§8) is append-only across revisions — future confirmatory probes add §8.5, §8.6, etc., preserving prior findings as dated forensic evidence.
+
+---
+
+## 11. `.secrets/env` operator hygiene (M15 F4)
+
+Pre-M15 operator workspaces accumulated three orphan environment exports
+from the M0 era:
+
+```
+export BL_SKILL_ID_CASE_LIFECYCLE=...
+export BL_SKILL_ID_POLYSHELL=...
+export BL_SKILL_ID_MODSEC_PATTERNS=...
+```
+
+These IDs map to no source-side Skill (M13 retired the names; routing-skills/
+uses entirely different identifiers) and 404 individually on the platform.
+
+After running `bl setup --sync` against a fresh workspace, remove the three
+lines from `.secrets/env`. Keep `BL_CURATOR_AGENT_ID`, `BL_CURATOR_ENV_ID`,
+and `BL_CURATOR_AGENT_VERSION` — refresh them from the new `state.json`:
+
+```bash
+jq -r '.agent | "export BL_CURATOR_AGENT_ID=\"" + .id + "\""' \
+    /var/lib/bl/state/state.json
+jq -r '"export BL_CURATOR_AGENT_VERSION=\"" + (.agent.version | tostring) + "\""' \
+    /var/lib/bl/state/state.json
+jq -r '"export BL_CURATOR_ENV_ID=\"" + .env_id + "\""' \
+    /var/lib/bl/state/state.json
+```
+
+`.secrets/env.example` carries the canonical template.
