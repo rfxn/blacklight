@@ -2,11 +2,15 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
-=== Unreleased — M14 P1: Schema enum extensions ===
+=== Unreleased — M14 substrate-hook (closed-loop response layer) ===
 
 [New] M14 P1 — schemas/ledger-event.json: extend `kind` enum +8 M14 values (lmd_hook_received, trigger_dedup_attached, lmd_hit_degraded, notify_dispatched, notify_failed, cpanel_lockin_invoked, cpanel_lockin_failed, cpanel_lockin_rolled_back)
 [New] M14 P1 — schemas/step.json: extend `verb` enum +3 M14 values (trigger.lmd, setup.install_hook, setup.import_from_lmd)
 [New] M14 P1 — tests/05-consult-run-case.bats: add G17.5 positive-accept tests for new ledger kinds + step verbs; add regression guard for unknown-kind rejection
+[New] M14 P2 — vendor submodules: alert_lib v1.0.6 + tlog_lib v2.0.5; Makefile vendor-libs-pull + vendor-libs-check targets; bl-check extended for vendored slot 05/06
+[Change] M14 P6 — src/bl.d/50-consult.sh — bl_consult_new dual-mode argv (positional preserved; flag-form adds --fingerprint and --dedup-window-hours)
+[New] M14 P6 — bl_consult_new — trigger_dedup_attached ledger event on within-window dedup match
+[Change] M14 P6 — bl regenerated
 
 === M13 — Skills primitive realignment (Path C) — 2026-04-26 ===
 
