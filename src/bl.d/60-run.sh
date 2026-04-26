@@ -38,6 +38,9 @@ bl_run_step() {
         bl_error_envelope run "step-id format invalid (expected [A-Za-z0-9_-]{1,64}): $step_id"
         return "$BL_EX_USAGE"
     fi
+    # test-isolation env hatch — see tests/14-unattended.bats; never set in production
+    # shellcheck disable=SC1090
+    [[ -n "${BL_RUN_PRELOAD:-}" ]] && [[ -r "$BL_RUN_PRELOAD" ]] && source "$BL_RUN_PRELOAD"
     local case_id
     case_id=$(bl_case_current)
     if [[ -z "$case_id" ]]; then
@@ -99,7 +102,31 @@ bl_run_step() {
                 command rm -f "$pending_tmp"
                 return "$BL_EX_TIER_GATE_DENIED"
             fi
-            if [[ "$yes" != "yes" && "$dry_run" != "yes" ]]; then
+            # M14 G5: unattended-mode tier policy
+            if bl_is_unattended; then
+                if [[ "$tier" == "destructive" ]]; then
+                    # Destructive: ALWAYS queue + notify under unattended (even with --yes)
+                    bl_run_queue_unattended "$pending_tmp" "$step_id" "$case_id" "$verb" "$tier"
+                    bl_notify "$case_id" warn \
+                        "Cleanup operation queued: $verb" \
+                        "step_id=$step_id verb=$verb tier=destructive — operator approval required (bl run --batch $step_id --yes)" || true   # || true: notify-fail must not mask the load-bearing queue + decline path
+                    command rm -f "$pending_tmp"
+                    return "$BL_EX_TIER_GATE_DENIED"
+                fi
+                # Suggested under unattended: only defend.modsec auto-applies (preflight gate already passed).
+                # All other suggested verbs (case.close, case.reopen, etc.) queue for operator review.
+                if [[ "$tier" == "suggested" && "$verb" != "defend.modsec" ]]; then
+                    bl_run_queue_unattended "$pending_tmp" "$step_id" "$case_id" "$verb" "$tier"
+                    bl_notify "$case_id" warn \
+                        "Suggested-tier operation queued: $verb" \
+                        "step_id=$step_id verb=$verb — operator approval required" || true   # || true: notify-fail non-blocking
+                    command rm -f "$pending_tmp"
+                    return "$BL_EX_TIER_GATE_DENIED"
+                fi
+                # else: suggested defend.modsec under unattended → fall through to apply (no prompt)
+                bl_debug "unattended: $verb tier=$tier auto-applying (preflight gate passed)"
+            elif [[ "$yes" != "yes" && "$dry_run" != "yes" ]]; then
+                # Existing interactive prompt path
                 if ! bl_run_prompt_operator "$step_id" "$tier" "$diff"; then
                     bl_ledger_append "$case_id" \
                         "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg s "$step_id" \
@@ -204,6 +231,38 @@ bl_run_prompt_operator() {
                 ;;
         esac
     done
+}
+
+# bl_run_queue_unattended <pending-path> <step-id> <case-id> <verb> <tier>
+# — move the pending step body to queued/ subpath in the case memstore for
+# later operator-confirmed batch execution; emit operator_decline ledger event
+# with policy:"unattended" tag to disambiguate from interactive prompt declines.
+bl_run_queue_unattended() {
+    local pending_path="$1" step_id="$2" case_id="$3" verb="$4" tier="$5"
+    local memstore_id
+    memstore_id="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state file absent on first invocation; use canonical default
+
+    # Move pending step → queued path in memstore.
+    # Operator can still run: bl run --batch <step-id> --yes after approval.
+    local body
+    body=$(jq -c '.' "$pending_path") || {
+        bl_warn "queue-unattended: failed to read pending body for $step_id"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    local body_file
+    body_file=$(command mktemp)
+    printf '%s' "$body" > "$body_file"
+    bl_mem_patch "$memstore_id" "bl-case/$case_id/actions/queued/$step_id.json" "$body_file" || \
+        bl_warn "queue-unattended: failed to write queued/$step_id.json for $case_id"
+    command rm -f "$body_file"
+    bl_mem_delete_by_key "$memstore_id" "bl-case/$case_id/actions/pending/$step_id.json" 2>/dev/null || true   # 2>/dev/null + || true: pending entry may be transient; cleanup best-effort
+
+    bl_ledger_append "$case_id" \
+        "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg s "$step_id" --arg v "$verb" --arg t "$tier" \
+            '{ts:$ts, case:$c, kind:"operator_decline", payload:{step_id:$s, verb:$v, tier:$t, policy:"unattended"}}')" || \
+        bl_warn "ledger append failed for unattended queue of $step_id"
+    bl_info "queued $step_id ($verb tier=$tier) for operator review"
+    return "$BL_EX_OK"
 }
 
 bl_run_preflight_tier() {

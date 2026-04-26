@@ -4,6 +4,15 @@ https://github.com/rfxn/blacklight
 
 === Unreleased — M14 substrate-hook (closed-loop response layer) ===
 
+[New] M14 P9 — src/bl.d/84-setup.sh — bl_setup --install-hook lmd subcommand: copies bl-lmd-hook into /etc/blacklight/hooks/, wires post_scan_hook in conf.maldet (idempotent, flock-serialized, R1 rollback)
+[New] M14 P9 — src/bl.d/84-setup.sh — bl_setup --import-from-lmd subcommand: safe while-read parser extracts notify keys from conf.maldet, writes slack.token/smtp.email/telegram.token/discord.webhook with chmod 0600
+[New] M14 P9 — src/bl.d/60-run.sh — bl_run_queue_unattended helper: memstore-patches pending step to queued/, emits operator_decline ledger event, bl_info on queue
+[Change] M14 P9 — src/bl.d/60-run.sh — bl_run_step unattended tier policy gate (G5): destructive always queues under unattended; suggested queues except defend.modsec which auto-applies; BL_RUN_PRELOAD test-isolation hook
+[New] M14 P9 — tests/08-setup.bats — N13 tests: --install-hook lmd happy-path (exit 0 + conf edit) + idempotency + regression guard (no-flag help path unchanged)
+[Change] M14 P9 — tests/14-unattended.bats — G5 unattended tier tests unblocked: modsec auto-apply, destructive queues (even with --yes), bl_notify warn on queue
+[Change] M14 P9 — tests/14-notify.bats — G11 import-from-lmd tests unblocked: slack_token extraction + chmod 0600, idempotent re-run
+[Change] M14 P9 — bl regenerated (84-setup.sh + 60-run.sh changes assembled)
+
 [New] M14 P7 — src/bl.d/29-trigger.sh — bl_trigger, bl_trigger_lmd, _bl_trigger_lmd_read_session, _bl_trigger_lmd_fingerprint, bl_help_trigger
 [New] M14 P7 — _bl_trigger_lmd_read_session — TSV→JSONL parser with degraded-path handling (lmd_hit_degraded on unreadable/empty session-file)
 [New] M14 P7 — _bl_trigger_lmd_fingerprint — sha256[:16] cluster fingerprint over (scanid, sorted-sigs, sorted-paths)

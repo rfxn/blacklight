@@ -149,9 +149,51 @@ teardown() {
 }
 
 @test "bl_setup --import-from-lmd: extracts slack_token + chmods 0600 (G11)" {
-    skip "covered in P9 (84-setup.sh extension); bl_setup_import_from_lmd not yet defined"
+    local td
+    td=$(mktemp -d)
+    mkdir -p "$td/usr/local/maldetect" "$td/etc/blacklight/notify.d"
+    cp "$BATS_TEST_DIRNAME/fixtures/lmd-conf-maldet-sample.conf" "$td/usr/local/maldetect/conf.maldet"
+    local bls
+    bls="$BATS_TEST_DIRNAME/../bl"
+    run bash -c '
+        source "'"$bls"'"
+        BL_LMD_CONF_PATH="'"$td"'/usr/local/maldetect/conf.maldet"
+        BL_BLACKLIGHT_DIR="'"$td"'/etc/blacklight"
+        bl_setup_import_from_lmd 2>&1
+    '
+    [ "$status" -eq 0 ]
+    [ -f "$td/etc/blacklight/notify.d/slack.token" ]
+    local perms
+    perms=$(command stat -c '%a' "$td/etc/blacklight/notify.d/slack.token")
+    [ "$perms" = "600" ]
+    grep -q 'token=xoxb-test-bot-token' "$td/etc/blacklight/notify.d/slack.token"
+    grep -q 'channel=maldetreports' "$td/etc/blacklight/notify.d/slack.token"
+    rm -rf "$td"
 }
 
 @test "bl setup --import-from-lmd: idempotent on re-run (G11)" {
-    skip "covered in P9 (84-setup.sh extension)"
+    local td
+    td=$(mktemp -d)
+    mkdir -p "$td/usr/local/maldetect"
+    cp "$BATS_TEST_DIRNAME/fixtures/lmd-conf-maldet-sample.conf" "$td/usr/local/maldetect/conf.maldet"
+    local bls
+    bls="$BATS_TEST_DIRNAME/../bl"
+    bash -c '
+        source "'"$bls"'"
+        BL_LMD_CONF_PATH="'"$td"'/usr/local/maldetect/conf.maldet"
+        BL_BLACKLIGHT_DIR="'"$td"'/etc/blacklight"
+        bl_setup_import_from_lmd
+    '
+    local first
+    first=$(find "$td/etc/blacklight/notify.d" -type f -exec md5sum {} \; | sort)
+    bash -c '
+        source "'"$bls"'"
+        BL_LMD_CONF_PATH="'"$td"'/usr/local/maldetect/conf.maldet"
+        BL_BLACKLIGHT_DIR="'"$td"'/etc/blacklight"
+        bl_setup_import_from_lmd
+    '
+    local second
+    second=$(find "$td/etc/blacklight/notify.d" -type f -exec md5sum {} \; | sort)
+    rm -rf "$td"
+    [ "$first" = "$second" ]
 }

@@ -49,6 +49,26 @@ bl_setup() {
             bl_setup_check
             return $?
             ;;
+        --install-hook)
+            local hook_source="${1:-}"
+            [[ -z "$hook_source" ]] && { bl_error_envelope setup "missing --install-hook <source>"; return "$BL_EX_USAGE"; }
+            case "$hook_source" in
+                lmd)
+                    bl_setup_local_preflight || return $?
+                    bl_setup_install_hook_lmd
+                    return $?
+                    ;;
+                *)
+                    bl_error_envelope setup "unknown hook source: $hook_source (only 'lmd' supported)"
+                    return "$BL_EX_USAGE"
+                    ;;
+            esac
+            ;;
+        --import-from-lmd)
+            bl_setup_local_preflight || return $?
+            bl_setup_import_from_lmd
+            return $?
+            ;;
         ""|--help)
             bl_setup_help
             return "$BL_EX_OK"
@@ -65,14 +85,18 @@ bl_setup_help() {
 Usage: bl setup [SUBCOMMAND] [OPTIONS]
 
 Subcommands:
-  --sync [--dry-run]   Provision agent + Skills + Files (idempotent default)
-                       --dry-run prints diff without API mutation
-  --reset [--force]    Delete agent + Skills + workspace Files (destructive)
-                       --force skips confirmation prompt
-  --gc                 Delete files_pending_deletion when no live sessions reference
-  --eval [--promote]   Run 50-case live promotion eval; gated --promote bumps versions
-  --check              Print state.json snapshot + per-resource health
-  --help               This message
+  --sync [--dry-run]      Provision agent + Skills + Files (idempotent default)
+                          --dry-run prints diff without API mutation
+  --reset [--force]       Delete agent + Skills + workspace Files (destructive)
+                          --force skips confirmation prompt
+  --gc                    Delete files_pending_deletion when no live sessions reference
+  --eval [--promote]      Run 50-case live promotion eval; gated --promote bumps versions
+  --check                 Print state.json snapshot + per-resource health
+  --install-hook lmd      Install bl-lmd-hook adapter into /etc/blacklight/hooks/
+                          and wire LMD conf.maldet post_scan_hook (idempotent)
+  --import-from-lmd       Parse /usr/local/maldetect/conf.maldet notify keys and write
+                          to /etc/blacklight/notify.d/* with chmod 0600 (idempotent)
+  --help                  This message
 HELP
 }
 
@@ -908,5 +932,172 @@ bl_setup_resolve_source() {
         return "$BL_EX_PREFLIGHT_FAIL"
     fi
     printf '%s' "$cache_dir"
+    return "$BL_EX_OK"
+}
+
+# bl_setup_install_hook_lmd — install bl-lmd-hook adapter into /etc/blacklight/hooks/
+# and wire LMD's post_scan_hook to it. Idempotent.
+bl_setup_install_hook_lmd() {
+    local lmd_conf="${BL_LMD_CONF_PATH:-/usr/local/maldetect/conf.maldet}"
+    # Test isolation hatch: BL_BLACKLIGHT_DIR redirects /etc/blacklight for unit tests.
+    local blacklight_dir="${BL_BLACKLIGHT_DIR:-/etc/blacklight}"
+    local hooks_dir="$blacklight_dir/hooks"
+    local hook_target="$hooks_dir/bl-lmd-hook"
+
+    # Verify LMD installed
+    if [[ ! -d /usr/local/maldetect ]] && [[ "${BL_BLACKLIGHT_DIR:-}" == "" ]]; then
+        bl_error_envelope setup "LMD not detected at /usr/local/maldetect"
+        return "$BL_EX_NOT_FOUND"
+    fi
+    if [[ ! -f "$lmd_conf" ]]; then
+        bl_error_envelope setup "LMD conf not found: $lmd_conf"
+        return "$BL_EX_NOT_FOUND"
+    fi
+
+    # Locate hook source from repo (BL_REPO_ROOT or script dirname)
+    local resolved
+    resolved=$(readlink -f "$0" 2>/dev/null || printf '.')   # readlink may fail under bash -c — fallback to cwd
+    local repo_root="${BL_REPO_ROOT:-$(dirname "$resolved")}"
+    local hook_source="$repo_root/files/hooks/bl-lmd-hook"
+    if [[ ! -r "$hook_source" ]]; then
+        # Retry from cwd (common when sourced via 'source ./bl')
+        hook_source="./files/hooks/bl-lmd-hook"
+    fi
+    if [[ ! -r "$hook_source" ]]; then
+        bl_error_envelope setup "hook source not readable: $hook_source"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    fi
+
+    # Provision hooks dir (idempotent)
+    command mkdir -p "$hooks_dir"
+    command chmod 0755 "$hooks_dir"
+
+    # Copy hook (idempotent — diff first to avoid no-op writes)
+    if [[ -f "$hook_target" ]] && diff -q "$hook_source" "$hook_target" >/dev/null 2>&1; then   # 2>/dev/null: diff chatter irrelevant when only checking rc
+        bl_info "bl-lmd-hook already up to date"
+    else
+        command cp "$hook_source" "$hook_target"
+        command chmod 0755 "$hook_target"
+        bl_info "installed bl-lmd-hook → $hook_target"
+    fi
+
+    # Wire post_scan_hook in conf.maldet (idempotent — flock-serialized)
+    local lock_dir="${BL_VAR_DIR:-/var/lib/bl}/state"
+    command mkdir -p "$lock_dir"
+    local lock_file="$lock_dir/lmd-conf.lock"
+    (
+        flock -x 200
+        if grep -qE '^post_scan_hook=' "$lmd_conf"; then
+            command sed -i.bl-bak -E "s|^post_scan_hook=.*|post_scan_hook=\"$hook_target\"|" "$lmd_conf"
+        else
+            printf 'post_scan_hook="%s"\n' "$hook_target" >> "$lmd_conf"
+        fi
+    ) 200>"$lock_file"
+
+    # Verify edit didn't break shell-source-ability (R1 mitigation)
+    if ! bash -n "$lmd_conf" 2>/dev/null; then   # 2>/dev/null: bash -n stderr is diagnostic noise here; we check rc
+        # Parse fail — restore backup
+        if [[ -f "$lmd_conf.bl-bak" ]]; then
+            command cp "$lmd_conf.bl-bak" "$lmd_conf"
+            bl_error_envelope setup "post_scan_hook edit broke conf.maldet syntax; restored backup"
+            return "$BL_EX_PREFLIGHT_FAIL"
+        fi
+    fi
+    command rm -f "$lmd_conf.bl-bak"
+
+    bl_info "bl-lmd-hook registered in $lmd_conf"
+    return "$BL_EX_OK"
+}
+
+# bl_setup_import_from_lmd — read LMD conf.maldet notify keys, write to
+# /etc/blacklight/notify.d/*. Idempotent. Skips empty values.
+bl_setup_import_from_lmd() {
+    local lmd_conf="${BL_LMD_CONF_PATH:-/usr/local/maldetect/conf.maldet}"
+    # Test isolation hatch (matches bl_setup_install_hook_lmd)
+    local blacklight_dir="${BL_BLACKLIGHT_DIR:-/etc/blacklight}"
+    local notify_dir="$blacklight_dir/notify.d"
+
+    [[ -r "$lmd_conf" ]] || { bl_error_envelope setup "LMD conf not readable: $lmd_conf"; return "$BL_EX_NOT_FOUND"; }
+
+    command mkdir -p "$notify_dir"
+    command chmod 0700 "$notify_dir"
+
+    # Parse LMD conf with safe while-read + regex-match + metacharacter rejection.
+    # Never eval operator-controlled file content (Anti-Pattern #12).
+    local email_addr="" slack_token="" slack_channels=""
+    local telegram_bot_token="" telegram_channel_id="" discord_webhook_url=""
+    local line key value
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        line="${line#"${line%%[![:space:]]*}"}"
+        if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+            # Strip surrounding quotes
+            value="${value%\"}"; value="${value#\"}"
+            value="${value%\'}"; value="${value#\'}"
+            # Reject metacharacters (defense-in-depth even though file is root-owned)
+            if [[ "$value" =~ [\;\|\&\$\(\)\{\}\`\<\>] ]]; then
+                bl_warn "import-from-lmd: $key value rejected (metacharacter)"
+                continue
+            fi
+            case "$key" in
+                email_addr)            email_addr="$value" ;;
+                slack_token)           slack_token="$value" ;;
+                slack_channels)        slack_channels="$value" ;;
+                telegram_bot_token)    telegram_bot_token="$value" ;;
+                telegram_channel_id)   telegram_channel_id="$value" ;;
+                discord_webhook_url)   discord_webhook_url="$value" ;;
+            esac
+        fi
+    done < "$lmd_conf"
+
+    # Email
+    if [[ -n "$email_addr" ]]; then
+        printf 'addr=%s\n' "$email_addr" > "$notify_dir/smtp.email"
+        command chmod 0600 "$notify_dir/smtp.email"
+        bl_info "imported: email_addr → $notify_dir/smtp.email (chmod 600)"
+    else
+        bl_info "not present: email_addr (skipped)"
+    fi
+
+    # Slack — bot mode requires both token AND channel; webhook mode if token looks like URL
+    if [[ -n "$slack_token" ]]; then
+        if [[ "$slack_token" =~ ^https?:// ]]; then
+            # Webhook mode
+            printf 'mode=webhook\nurl=%s\n' "$slack_token" > "$notify_dir/slack.token"
+            bl_info "imported: slack_token (webhook) → $notify_dir/slack.token"
+        elif [[ -n "$slack_channels" ]]; then
+            # Bot mode (token + channel both required)
+            local first_channel="${slack_channels%%,*}"
+            printf 'mode=bot\ntoken=%s\nchannel=%s\n' "$slack_token" "$first_channel" > "$notify_dir/slack.token"
+            bl_info "imported: slack_token + slack_channels=\"$first_channel\" → $notify_dir/slack.token (bot mode)"
+        else
+            bl_info "skipped: slack_token without slack_channels (bot-mode requires channel)"
+        fi
+        [[ -f "$notify_dir/slack.token" ]] && command chmod 0600 "$notify_dir/slack.token"
+    else
+        bl_info "not present: slack_token (skipped)"
+    fi
+
+    # Telegram (bot_token + channel_id both required)
+    if [[ -n "$telegram_bot_token" && -n "$telegram_channel_id" ]]; then
+        printf 'bot_token=%s\nchat_id=%s\n' "$telegram_bot_token" "$telegram_channel_id" > "$notify_dir/telegram.token"
+        command chmod 0600 "$notify_dir/telegram.token"
+        bl_info "imported: telegram_bot_token + telegram_channel_id → $notify_dir/telegram.token"
+    else
+        bl_info "not present: telegram_bot_token / telegram_channel_id (skipped)"
+    fi
+
+    # Discord
+    if [[ -n "$discord_webhook_url" ]]; then
+        printf '%s\n' "$discord_webhook_url" > "$notify_dir/discord.webhook"
+        command chmod 0600 "$notify_dir/discord.webhook"
+        bl_info "imported: discord_webhook_url → $notify_dir/discord.webhook"
+    else
+        bl_info "not present: discord_webhook_url (skipped)"
+    fi
+
+    bl_info "Done. Re-run bl setup --import-from-lmd to refresh."
     return "$BL_EX_OK"
 }

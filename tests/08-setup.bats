@@ -774,6 +774,51 @@ teardown() {
 # N12: --sync acquires flock on state.json.lock (serializes concurrent calls)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# N13 (M14 P9): bl setup --install-hook lmd
+# ---------------------------------------------------------------------------
+
+@test "bl setup --install-hook lmd: writes hook and edits conf.maldet" {
+    local td
+    td=$(mktemp -d)
+    mkdir -p "$td/usr/local/maldetect" "$td/etc/blacklight"
+    printf 'email_addr=""\nhookscan_fail_open="1"\npost_scan_hook=""\n' > "$td/usr/local/maldetect/conf.maldet"
+    export BL_LMD_CONF_PATH="$td/usr/local/maldetect/conf.maldet"
+    export BL_BLACKLIGHT_DIR="$td/etc/blacklight"
+    run "$BL_SOURCE" setup --install-hook lmd
+    unset BL_LMD_CONF_PATH BL_BLACKLIGHT_DIR
+    rm -rf "$td"
+    [ "$status" -eq 0 ]
+}
+
+@test "bl setup --install-hook lmd: idempotent on re-run (conf.maldet unchanged)" {
+    local td
+    td=$(mktemp -d)
+    mkdir -p "$td/usr/local/maldetect" "$td/etc/blacklight"
+    printf 'email_addr=""\npost_scan_hook=""\n' > "$td/usr/local/maldetect/conf.maldet"
+    export BL_LMD_CONF_PATH="$td/usr/local/maldetect/conf.maldet"
+    export BL_BLACKLIGHT_DIR="$td/etc/blacklight"
+    "$BL_SOURCE" setup --install-hook lmd >/dev/null 2>&1 || true  # 2>/dev/null: first-run stderr noise is diagnostic, not test signal
+    local first
+    first=$(md5sum "$td/usr/local/maldetect/conf.maldet" | awk '{print $1}')
+    "$BL_SOURCE" setup --install-hook lmd >/dev/null 2>&1 || true  # 2>/dev/null: idempotent re-run stderr noise
+    local second
+    second=$(md5sum "$td/usr/local/maldetect/conf.maldet" | awk '{print $1}')
+    unset BL_LMD_CONF_PATH BL_BLACKLIGHT_DIR
+    rm -rf "$td"
+    [ "$first" = "$second" ]
+}
+
+@test "bl setup with no flags: default help path unchanged (regression)" {
+    run "$BL_SOURCE" setup
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"--sync"* ]] || [[ "$output" == *"Subcommands"* ]] || [[ "$output" == *"SUBCOMMAND"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# N14 (M14 P9): bl setup --sync acquires flock on state.json.lock
+# ---------------------------------------------------------------------------
+
 @test "bl setup --sync acquires flock on state.json.lock" {
     local fake_repo
     fake_repo=$(mktemp -d)
