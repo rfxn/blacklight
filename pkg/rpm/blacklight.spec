@@ -2,7 +2,7 @@
 # Customized for single-binary layout: /usr/bin/bl + /var/lib/bl state dirs
 #
 %define name    blacklight
-%define version 0.2.0
+%define version 0.3.0
 %define release 1%{?dist}
 
 Name:           %{name}
@@ -65,6 +65,15 @@ fi
 %doc /usr/share/doc/blacklight/CHANGELOG
 
 %changelog
+* Sat Apr 25 2026 R-fx Networks <proj@rfxn.com> - 0.3.0-1
+- M13 Skills primitive realignment (Path C): six routing Skills + 8 workspace corpora
+  via Anthropic Skills + Files APIs; bl-skills memstore retired, bl-case retained for
+  per-case curator working memory; per-case raw evidence migrated to per-source rolling
+  Files uploads driven by threshold/rotate helpers; state migrated to single state.json
+  with first-run per-key-file migration; bl setup verb dispatcher rewritten with
+  --sync/--reset/--gc/--eval/--check; live promotion eval gate (50 cases, BL_EVAL_LIVE=1);
+  curator system prompt §3 rewritten for Path C primitives + new §9 anti-pattern;
+  skills/INDEX.md router retired (routing now via Skill descriptions + harness).
 * Sat Apr 25 2026 R-fx Networks <proj@rfxn.com> - 0.2.0-1
 - M11 posture lift: real three-tier model routing (Opus 4.7 / Sonnet 4.6 / Haiku 4.5),
   bl_poll_pending GET-poll loop, synthesize_defense + reconstruct_intent custom-tool

@@ -1,3 +1,19 @@
+blacklight (0.3.0-1) unstable; urgency=medium
+
+  * M13 Skills primitive realignment (Path C)
+  * Six routing Skills via Anthropic Skills API (description-routed)
+  * 8 workspace corpora via Files API (1 foundations + 6 routing-skill + substrate-context)
+  * bl-skills memstore retired; bl-case retained for per-case curator working memory
+  * Per-case evidence migrated to per-source rolling Files uploads (threshold/rotate)
+  * state.json single-file consolidation with first-run per-key-file migration
+  * bl setup verb dispatcher: --sync / --reset / --gc / --eval / --check
+  * Live promotion eval gate: 50 case fixtures (30 mainline / 15 distractor / 5 ambiguous)
+  * Curator system prompt §3 rewritten for Path C primitives + new §9 anti-pattern
+  * skills/INDEX.md router retired (routing now via Skill descriptions + harness)
+  * Test surface: 31/31 dev-mode test-quick green; new tests/skill-routing/smoke.bats
+
+ -- R-fx Networks <proj@rfxn.com>  Sat, 25 Apr 2026 22:00:00 +0000
+
 blacklight (0.2.0-1) unstable; urgency=medium
 
   * M11 posture lift release
