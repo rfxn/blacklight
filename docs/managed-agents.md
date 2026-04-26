@@ -16,7 +16,7 @@ the `managed-agents-2026-04-01` beta header:
 |-----------|-------------|-------------|
 | **Memory Store** | `/v1/memory_stores` | Mutable agent-written key-value store; 100 KB per file; 30-day `memver_` audit trail |
 | **Files** | `/v1/files` | Read-only binary/text blobs; hot-attachable to sessions; no TTL |
-| **Skills** | `/v1/skills` | Description-routed, lazy-loaded behavior modules; ≤1024-char description; ≤500-line body |
+| **Skills** | `/v1/skills` | Description-routed, lazy-loaded behavior modules; ≤1024-char description; ≤500-line body (workspace allowlist required — see §4) |
 | **Sessions** | `/v1/sessions` | Stateful reasoning context; agent + env + resources (Files + Memory Stores + Skills) |
 
 blacklight uses all four. Each primitive's role is described in §2–§5. Path C mapping is in §11.
@@ -69,6 +69,15 @@ corpora + foundations), and closed-case briefs are all stored as Files. See §11
 Description-routed, lazy-loaded behavior modules authored from operator knowledge.
 
 - **Create:** `POST /v1/skills` `{"name": "<slug>", "description": "<≤1024 chars>", "body": "<≤500 lines>"}`
+
+  > **Path A — workspace allowlist required (as of 2026-04-26 probe):** The Skills
+  > endpoint is registered (`OPTIONS /v1/skills` → `Allow: POST`) but feature-gated per
+  > Anthropic workspace. Workspaces not on the allowlist receive a rejection on POST. The
+  > M15 window confirmed allowlist-required state; Skills CRUD is aspirational for
+  > non-allowlisted workspaces until the gate is lifted. Path C architecture (M13) is
+  > preserved — skill bodies ship as workspace Files at `skills/<name>-corpus.md` for
+  > non-gated workspaces.
+
 - **Version:** `POST /v1/skills/<id>/versions` creates a new immutable version; returns
   `{"version": "<version-string>"}`
 - **List:** `GET /v1/skills` returns `{data: [{id, name, version}]}`
@@ -79,8 +88,10 @@ Description-routed, lazy-loaded behavior modules authored from operator knowledg
   matches the agent's current reasoning need
 - **Description cap:** 1024 characters (hard limit)
 - **Body cap:** 500 lines (recommended; platform may enforce at a higher limit)
-- **Attachment:** skills are attached at session creation via `resources[]` `{"type":"skill","skill_id":"<id>"}`;
-  they cannot be hot-swapped mid-session (unlike Files)
+- **Attachment:** skills attach via `agent.skills[]` (existing `skill_id` refs in the
+  agent record), NOT via `session.resources[].type=skill`. Skills bound to the agent at
+  creation are available automatically in every session; they cannot be hot-swapped
+  mid-session (unlike Files)
 
 **Path C:** 6 routing Skills cover the curator's primary reasoning modes. See §11.
 
@@ -90,7 +101,9 @@ Description-routed, lazy-loaded behavior modules authored from operator knowledg
 
 Stateful reasoning context that ties together agent, environment, and resources.
 
-- **Create:** `POST /v1/sessions` `{"agent_id": "<id>", "environment_id": "<id>", "resources": [...]}`
+- **Create:** `POST /v1/sessions` body: `{agent: <id>, environment_id: <id>, resources: [...]}`
+  (Field name is `agent`, NOT `agent_id` — the live API rejects `agent_id` with
+  `"agent_id: Extra inputs are not permitted. Did you mean 'agent'?"` — 2026-04-26 probe F12.)
 - **Wake:** `POST /v1/sessions/<sid>/events` `{"type": "user.message", "content": "<msg>"}`
 - **Poll:** `GET /v1/sessions/<sid>/events?after=<event-id>` for the SSE stream
 - **Resources add:** `POST /v1/sessions/<sid>/resources` (hot-attach Files mid-session)
@@ -98,7 +111,11 @@ Stateful reasoning context that ties together agent, environment, and resources.
 - **Resume:** sessions are resumable within the 30-day checkpoint window; same `session_id`
   picks up where the last turn ended
 - **Resources at create:** `resources[]` accepts `{type:"memory_store", memory_store_id}`,
-  `{type:"file", file_id}`, `{type:"skill", skill_id}`, `{type:"environment", environment_id}`
+  `{type:"file", file_id}`, `{type:"github_repository", ...}`. Live enum (probed 2026-04-26):
+  `file | github_repository | memory_store`. The entries `skill` and `environment` are NOT
+  valid resource types — Skills attach via `agent.skills[]` at agent-create time, not via
+  session resources; `environment` attaches via `environment_id` at the session level, not
+  inside `resources[]`.
 
 ---
 
@@ -140,6 +157,25 @@ The beta flags cannot be combined with `agent-api-*` or `agent-memory-*` values 
 
 blacklight uses the raw Anthropic REST API via `curl` — no SDK. All endpoints are
 documented at https://docs.anthropic.com/en/api/managed-agents (beta).
+
+**Agent CRUD verbs (probed 2026-04-26):**
+
+| Verb | Endpoint | Notes |
+|------|----------|-------|
+| Create | `POST /v1/agents` | Returns `id`; body MUST NOT include `thinking` or `output_config` |
+| CAS update | `POST /v1/agents/<id>` | Body includes `version: <current>` for optimistic concurrency; 409 on conflict → refetch + retry |
+| Retire (archive) | `POST /v1/agents/<id>/archive` | Soft-delete; DELETE is not supported (405) |
+| Version history | `GET /v1/agents/<id>/versions` | Returns version list |
+
+`PATCH /v1/agents/<id>` and `DELETE /v1/agents/<id>` are NOT supported under
+`managed-agents-2026-04-01` (both return 405).
+
+Agent verb summary (probed 2026-04-26; PATCH and DELETE both return 405):
+
+- create:  POST /v1/agents
+- update (CAS):  POST /v1/agents/<id>
+- retire:  POST /v1/agents/<id>/archive
+- versions:  GET /v1/agents/<id>/versions
 
 Relevant API shapes confirmed against the `managed-agents-2026-04-01` beta:
 
@@ -204,7 +240,7 @@ How blacklight uses each Anthropic primitive in Path C (M13 Skills realignment):
 | **Memory Store** (`bl-case`) | Hypothesis + steps + actions + working memory | `case_memstores._legacy` | Created once at `bl setup`; lives for the workspace lifetime |
 | **Files** (workspace corpus) | Skill corpus files (foundations + 6 corpora + substrate-context) | `files.<slug>.file_id` | Uploaded at `bl setup`; replaced on `bl setup --sync` (old ID → `files_pending_deletion`) |
 | **Files** (per-case evidence) | Raw observation bundles + closed-case briefs | `case_files.<case-id>.<path>.workspace_file_id` | Uploaded at `bl observe` (on rotate); detached at `bl case close`; deleted by `bl setup --gc` |
-| **Skills** (routing) | 6 operator-voice behavior modules description-routed by curator | `agent.skill_versions.<slug>` | Created at `bl setup`; versioned on `bl setup --sync` when body changes |
+| **Skills** (routing) | 6 operator-voice behavior modules description-routed by curator | `agent.skill_versions.<slug>` | Created at `bl setup` (workspace allowlist required for Skills CRUD — see §4); versioned on `bl setup --sync` when body changes; skill bodies fall back to Files corpus on non-gated workspaces |
 | **Sessions** | Per-case curator reasoning context (Opus 4.7, 1M context) | `session_ids.<case-id>` | Created at `bl consult --new`; resumed on `bl consult --attach`; resources detached at `bl case close` |
 
 Cross-references: `DESIGN.md §3.4` (Primitives map), `docs/case-layout.md §11` (evidence path convention), `docs/setup-flow.md §4` (Path C verbs).

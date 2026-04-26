@@ -4,6 +4,17 @@ https://github.com/rfxn/blacklight
 
 === M15 — API correctness against live Anthropic Managed Agents ===
 
+M15 P7 (2026-04-26)
+  [Change] Doc drift sweep: docs/managed-agents.md agent verb table now matches
+           live API (POST <id> CAS update, POST archive); sessions field name
+           corrected agent_id → agent; resources[].type enum corrected to
+           file | github_repository | memory_store; Skills section annotated
+           with Path A workspace-allowlist-pending callout and correct
+           attachment mechanism (agent.skills[], not session.resources[]).
+           docs/setup-flow.md §4.4a annotated feature-gated; §4.7 sessions
+           create cross-reference added. DESIGN.md §12.6 divergence note
+           added covering F6/F9/F12 API surface corrections.
+
 M15 P6 Path A (2026-04-26)
   [Change] Delete dead bl_skills_list helper; M13 Path C architecture preserved
            (workspace allowlist for Skills CRUD arrived in M15 window).

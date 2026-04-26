@@ -179,6 +179,13 @@ carries no global access mode.
 
 ### 4.4a Upload routing Skills — `POST /v1/skills`
 
+> **Path A — feature-gated (aspirational):** The Skills API endpoint is registered
+> (`OPTIONS /v1/skills` → `Allow: POST`) but workspace-allowlisted as of the 2026-04-26
+> probe. Workspaces not on the Anthropic allowlist receive a rejection on `POST /v1/skills`.
+> This section documents the intended call shape for allowlisted workspaces. On non-gated
+> workspaces, skill bodies ship as workspace Files at `skills/<name>-corpus.md` (Path C
+> fallback — see `docs/managed-agents.md §4`).
+
 Six routing Skills. One create call per Skill (or version create on update). Shape:
 
 ```json
@@ -224,6 +231,21 @@ export BL_READY=1
 ```
 
 Operator pastes into their shell init. Future `bl` invocations source the cached state ids from `/var/lib/bl/state/` directly.
+
+### 4.7 Session create (bl consult —— post-setup reference)
+
+Session creation is not part of `bl setup` but is documented here for completeness. The
+`bl consult --new` call shape (probed 2026-04-26 — F12 correction):
+
+```
+POST /v1/sessions
+{agent: <id>, environment_id: <id>, resources: [...]}
+```
+
+Field name is `agent`, NOT `agent_id`. The live API rejects `agent_id` with
+`"agent_id: Extra inputs are not permitted. Did you mean 'agent'?"`.
+`agent: <id>` is the correct key. See `docs/managed-agents.md §5` for the full
+sessions.create shape.
 
 ---
 

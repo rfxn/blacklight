@@ -824,6 +824,24 @@ Both calls use the Messages API (`POST /v1/messages`) — not the Managed Agents
 `BL_DISABLE_LLM=1` bypasses both calls for testing and cost-control (tests export this
 before each session).
 
+### 12.6 Live API divergence (probed 2026-04-26)
+
+Three corrections applied in M15 against the live Anthropic Managed Agents
+API surface (`anthropic-beta: managed-agents-2026-04-01`):
+
+1. **Agent update verb** — `POST /v1/agents/<id>` with CAS `version` field
+   in body, NOT `PATCH /v1/agents/<id>`. PATCH returns 405. Concurrent
+   updates surface as HTTP 409 (`Concurrent modification detected`); client
+   refetches via `GET /v1/agents/<id>` and retries with the new version. (F9)
+2. **Agent retire verb** — `POST /v1/agents/<id>/archive`, NOT
+   `DELETE /v1/agents/<id>`. DELETE returns 405. (F6)
+3. **Sessions.create body field name** — `agent: <id>`, NOT `agent_id: <id>`.
+   The wrong name is rejected with `agent_id: Extra inputs are not
+   permitted. Did you mean 'agent'?`. The response shape is unrelated and
+   may still carry `agent_id`. (F12)
+
+Skills primitive resolution: Path A: workspace-allowlist-pending; M13 Path C three-tier model preserved.
+
 ---
 
 ## 13. Security model
