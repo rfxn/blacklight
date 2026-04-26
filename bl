@@ -7463,17 +7463,309 @@ bl_run_preflight_tier() {
 }
 
 bl_run_dispatch_verb() {
-    # bl_run_dispatch_verb <verb> <args-json> — dispatches to bl_<ns>_<action>
+    # bl_run_dispatch_verb <verb> <args-json> — dispatches to bl_<ns>_<action>.
+    # M16 P5: prefer <handler>_from_args adapter when present. The adapter
+    # translates curator-authored {key,value}[] args to the collector's
+    # native flag form (--key value), splits comma-separated multi-values,
+    # converts relative timespecs ("72h") to ISO timestamps, and drops
+    # unknown keys with a warning. Without the adapter, the legacy
+    # passthrough hands the args_json blob to a collector that parses $1
+    # as a single flag — guaranteed BL_EX_USAGE on every curator-prescribed
+    # step.
     local verb="$1"
     local args_json="$2"
-    local func_name
+    local func_name adapter
     func_name="bl_$(printf '%s' "$verb" | tr '.' '_')"
+    adapter="${func_name}_from_args"
+    if declare -f "$adapter" >/dev/null 2>&1; then
+        "$adapter" "$args_json"
+        return $?
+    fi
     if ! declare -f "$func_name" >/dev/null 2>&1; then   # handler not landed yet (M4/M6/M7 pre-merge)
         bl_error_envelope run "$verb handler not yet landed" "(see M4 for observe.*, M6 for defend.*, M7 for clean.*)"
         return "$BL_EX_USAGE"
     fi
     "$func_name" "$args_json"
     return $?
+}
+
+# ----------------------------------------------------------------------------
+# Args-translation helpers — used by every observe.<verb>_from_args adapter.
+# M16 P5.
+# ----------------------------------------------------------------------------
+
+bl_run_args_get() {
+    # bl_run_args_get <args-json> <key> — prints value to stdout (empty on miss).
+    local args_json="$1" key="$2"
+    printf '%s' "$args_json" | jq -r --arg k "$key" '.[] | select(.key == $k) | .value' | head -1
+}
+
+bl_run_args_keys() {
+    # bl_run_args_keys <args-json> — prints one key per line.
+    printf '%s' "$1" | jq -r '.[].key'
+}
+
+bl_run_args_warn_unknown() {
+    # bl_run_args_warn_unknown <args-json> <verb> <known-keys-space-separated>
+    # Emits one bl_warn line per unknown key. Non-fatal.
+    local args_json="$1" verb="$2" known="$3"
+    local key
+    while IFS= read -r key; do
+        [[ -z "$key" ]] && continue
+        case " $known " in
+            *" $key "*) : ;;
+            *) bl_warn "$verb: unknown adapter arg '$key' (dropped — collector does not honor it)" ;;
+        esac
+    done < <(bl_run_args_keys "$args_json")
+}
+
+bl_run_args_relative_to_iso() {
+    # bl_run_args_relative_to_iso <spec> — "72h"|"30m"|"2d"|"45s" → ISO-8601 UTC
+    # timestamp <spec> ago. ISO input is passed through unchanged.
+    local spec="$1"
+    if [[ "$spec" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
+        printf '%s' "$spec"   # already ISO; pass through
+        return 0
+    fi
+    if [[ "$spec" =~ ^([0-9]+)([hmds])$ ]]; then
+        local n="${BASH_REMATCH[1]}" u="${BASH_REMATCH[2]}"
+        local secs
+        case "$u" in
+            h) secs=$((n * 3600))   ;;
+            m) secs=$((n * 60))     ;;
+            d) secs=$((n * 86400))  ;;
+            s) secs="$n"            ;;
+        esac
+        local now_epoch then_epoch
+        now_epoch=$(date -u +%s)
+        then_epoch=$((now_epoch - secs))
+        date -u -d "@$then_epoch" +'%Y-%m-%dT%H:%M:%SZ'
+        return 0
+    fi
+    # Unrecognized — pass through verbatim and let the collector reject it.
+    printf '%s' "$spec"
+}
+
+# ----------------------------------------------------------------------------
+# Per-verb adapters — bl_observe_<v>_from_args. Each adapter:
+#   1. Extracts curator-emitted args (semantic key names).
+#   2. Maps them to collector-native flag names.
+#   3. Fans out comma-separated multi-values where the collector takes single.
+#   4. Drops unknown keys with bl_warn (non-fatal).
+#   5. Calls the underlying collector once per axis-value and returns first non-zero rc.
+# Curator-vocabulary key set is observed from CASE-2026-0022 emissions; future
+# curator versions may emit additional keys — extend the warn-unknown list per
+# verb when adding.
+# ----------------------------------------------------------------------------
+
+bl_observe_file_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.file" "path attribution_from"
+    local path attr
+    path=$(bl_run_args_get "$args_json" "path")
+    attr=$(bl_run_args_get "$args_json" "attribution_from")
+    [[ -z "$path" ]] && { bl_error_envelope run "observe.file: missing 'path' arg"; return "$BL_EX_USAGE"; }
+    if [[ -n "$attr" ]]; then
+        bl_observe_file --attribution-from "$attr" "$path"
+    else
+        bl_observe_file "$path"
+    fi
+}
+
+bl_observe_log_apache_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.log_apache" "around path since window scope filters summarize site"
+    local around window site since
+    around=$(bl_run_args_get "$args_json" "around")
+    [[ -z "$around" ]] && around=$(bl_run_args_get "$args_json" "path")
+    window=$(bl_run_args_get "$args_json" "window")
+    [[ -z "$window" ]] && window=$(bl_run_args_get "$args_json" "since")   # curator commonly says "since=72h"
+    site=$(bl_run_args_get "$args_json" "site")
+    if [[ -z "$around" ]]; then
+        bl_error_envelope run "observe.log_apache: missing 'around' or 'path' arg (collector requires --around <log-path>)"
+        return "$BL_EX_USAGE"
+    fi
+    local cmd=( bl_observe_log_apache --around "$around" )
+    [[ -n "$window" ]] && cmd+=( --window "$window" )
+    [[ -n "$site" ]]   && cmd+=( --site "$site" )
+    "${cmd[@]}"
+}
+
+bl_observe_log_modsec_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.log_modsec" "around path window since txn rule scope summarize"
+    local around window txn rule
+    around=$(bl_run_args_get "$args_json" "around")
+    [[ -z "$around" ]] && around=$(bl_run_args_get "$args_json" "path")
+    window=$(bl_run_args_get "$args_json" "window")
+    [[ -z "$window" ]] && window=$(bl_run_args_get "$args_json" "since")
+    txn=$(bl_run_args_get "$args_json" "txn")
+    rule=$(bl_run_args_get "$args_json" "rule")
+    if [[ -z "$around" ]]; then
+        bl_error_envelope run "observe.log_modsec: missing 'around' or 'path' arg"
+        return "$BL_EX_USAGE"
+    fi
+    local cmd=( bl_observe_log_modsec --around "$around" )
+    [[ -n "$window" ]] && cmd+=( --window "$window" )
+    [[ -n "$txn" ]]    && cmd+=( --txn "$txn" )
+    [[ -n "$rule" ]]   && cmd+=( --rule "$rule" )
+    "${cmd[@]}"
+}
+
+bl_observe_log_journal_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.log_journal" "since grep unit"
+    local since grep_pat
+    since=$(bl_run_args_get "$args_json" "since")
+    grep_pat=$(bl_run_args_get "$args_json" "grep")
+    # curator's "since=72h" relative form → collector accepts both ISO and relative; pass through
+    local cmd=( bl_observe_log_journal )
+    [[ -n "$since" ]]    && cmd+=( --since "$since" )
+    [[ -n "$grep_pat" ]] && cmd+=( --grep "$grep_pat" )
+    "${cmd[@]}"
+}
+
+bl_observe_cron_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.cron" "scope user system from_file from-file include_anacron"
+    local scope user from_file
+    scope=$(bl_run_args_get "$args_json" "scope")
+    user=$(bl_run_args_get "$args_json" "user")
+    from_file=$(bl_run_args_get "$args_json" "from_file")
+    [[ -z "$from_file" ]] && from_file=$(bl_run_args_get "$args_json" "from-file")
+    if [[ -n "$from_file" ]]; then
+        bl_observe_cron --from-file "$from_file"
+        return $?
+    fi
+    # scope handling: "system+per-user", "system", "per-user", "user"
+    local rc=0 first_rc=0
+    case "$scope" in
+        *system*|*"per-user"*|*user*|"")
+            if [[ "$scope" == *system* || -z "$scope" ]]; then
+                bl_observe_cron --system || { rc=$?; (( first_rc == 0 )) && first_rc=$rc; }
+            fi
+            if [[ -n "$user" ]]; then
+                bl_observe_cron --user "$user" || { rc=$?; (( first_rc == 0 )) && first_rc=$rc; }
+            fi
+            ;;
+    esac
+    return "$first_rc"
+}
+
+bl_observe_proc_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.proc" "user verify_argv verify-argv"
+    local user verify
+    user=$(bl_run_args_get "$args_json" "user")
+    verify=$(bl_run_args_get "$args_json" "verify_argv")
+    [[ -z "$verify" ]] && verify=$(bl_run_args_get "$args_json" "verify-argv")
+    [[ -z "$user" ]] && { bl_error_envelope run "observe.proc: missing 'user' arg"; return "$BL_EX_USAGE"; }
+    if [[ "$verify" == "true" || "$verify" == "yes" || "$verify" == "1" ]]; then
+        bl_observe_proc --user "$user" --verify-argv
+    else
+        bl_observe_proc --user "$user"
+    fi
+}
+
+bl_observe_htaccess_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.htaccess" "root roots dir recursive include_disabled"
+    local roots recursive
+    roots=$(bl_run_args_get "$args_json" "roots")
+    [[ -z "$roots" ]] && roots=$(bl_run_args_get "$args_json" "root")
+    [[ -z "$roots" ]] && roots=$(bl_run_args_get "$args_json" "dir")
+    recursive=$(bl_run_args_get "$args_json" "recursive")
+    [[ -z "$roots" ]] && { bl_error_envelope run "observe.htaccess: missing 'root' or 'roots' arg"; return "$BL_EX_USAGE"; }
+    local first_rc=0 root rc
+    while IFS= read -r root; do
+        [[ -z "$root" ]] && continue
+        if [[ "$recursive" == "true" || "$recursive" == "yes" || "$recursive" == "1" ]]; then
+            bl_observe_htaccess --recursive "$root" || { rc=$?; (( first_rc == 0 )) && first_rc=$rc; }
+        else
+            bl_observe_htaccess "$root" || { rc=$?; (( first_rc == 0 )) && first_rc=$rc; }
+        fi
+    done < <(printf '%s\n' "$roots" | tr ',' '\n')
+    return "$first_rc"
+}
+
+bl_observe_fs_mtime_cluster_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.fs_mtime_cluster" "path under root window cluster_window_secs ext name_filter"
+    local path window ext
+    path=$(bl_run_args_get "$args_json" "path")
+    [[ -z "$path" ]] && path=$(bl_run_args_get "$args_json" "under")
+    [[ -z "$path" ]] && path=$(bl_run_args_get "$args_json" "root")
+    window=$(bl_run_args_get "$args_json" "window")
+    [[ -z "$window" ]] && window=$(bl_run_args_get "$args_json" "cluster_window_secs")
+    ext=$(bl_run_args_get "$args_json" "ext")
+    [[ -z "$ext" ]] && ext=$(bl_run_args_get "$args_json" "name_filter")
+    [[ -z "$path" ]] && { bl_error_envelope run "observe.fs_mtime_cluster: missing 'path' or 'under'"; return "$BL_EX_USAGE"; }
+    # First-extension only: collector takes single --ext. Drop comma-tail with warn.
+    if [[ "$ext" == *,* ]]; then
+        bl_warn "observe.fs_mtime_cluster: collector takes single --ext; using first of comma-list ('${ext%%,*}')"
+        ext="${ext%%,*}"
+    fi
+    # Strip leading "*." glob prefix — collector takes bare extension
+    ext="${ext#\*.}"
+    local cmd=( bl_observe_fs_mtime_cluster )
+    [[ -n "$window" ]] && cmd+=( --window "$window" )
+    [[ -n "$ext" ]]    && cmd+=( --ext "$ext" )
+    cmd+=( "$path" )
+    "${cmd[@]}"
+}
+
+bl_observe_fs_mtime_since_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.fs_mtime_since" "since under roots root ext name_filter include_hidden"
+    local since roots ext
+    since=$(bl_run_args_get "$args_json" "since")
+    roots=$(bl_run_args_get "$args_json" "roots")
+    [[ -z "$roots" ]] && roots=$(bl_run_args_get "$args_json" "under")
+    [[ -z "$roots" ]] && roots=$(bl_run_args_get "$args_json" "root")
+    ext=$(bl_run_args_get "$args_json" "ext")
+    [[ -z "$ext" ]] && ext=$(bl_run_args_get "$args_json" "name_filter")
+    [[ -z "$since" ]] && { bl_error_envelope run "observe.fs_mtime_since: missing 'since'"; return "$BL_EX_USAGE"; }
+    [[ -z "$roots" ]] && { bl_error_envelope run "observe.fs_mtime_since: missing 'under' or 'roots'"; return "$BL_EX_USAGE"; }
+    # Convert curator-relative ("72h") → ISO; collector accepts both forms but
+    # being explicit avoids any future collector tightening.
+    since=$(bl_run_args_relative_to_iso "$since")
+    if [[ "$ext" == *,* ]]; then
+        bl_warn "observe.fs_mtime_since: collector takes single --ext; using first of comma-list ('${ext%%,*}')"
+        ext="${ext%%,*}"
+    fi
+    ext="${ext#\*.}"
+    local first_rc=0 root rc
+    while IFS= read -r root; do
+        [[ -z "$root" ]] && continue
+        local cmd=( bl_observe_fs_mtime_since --since "$since" --under "$root" )
+        [[ -n "$ext" ]] && cmd+=( --ext "$ext" )
+        "${cmd[@]}" || { rc=$?; (( first_rc == 0 )) && first_rc=$rc; }
+    done < <(printf '%s\n' "$roots" | tr ',' '\n')
+    return "$first_rc"
+}
+
+bl_observe_firewall_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.firewall" "backend"
+    local backend
+    backend=$(bl_run_args_get "$args_json" "backend")
+    if [[ -n "$backend" ]]; then
+        bl_observe_firewall --backend "$backend"
+    else
+        bl_observe_firewall
+    fi
+}
+
+bl_observe_sigs_from_args() {
+    local args_json="$1"
+    bl_run_args_warn_unknown "$args_json" "observe.sigs" "scanner root signature_db"
+    local scanner
+    scanner=$(bl_run_args_get "$args_json" "scanner")
+    if [[ -n "$scanner" ]]; then
+        bl_observe_sigs --scanner "$scanner"
+    else
+        bl_observe_sigs
+    fi
 }
 
 bl_run_writeback_result() {

@@ -2,6 +2,74 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== M16 P5 — 2026-04-26 (args translator + per-verb observe adapters) ===
+
+Closes the curator-prescribed-step → bl-collector contract drift surfaced in
+the M16 end-to-end run. Pre-P5: bl_run_dispatch_verb passed the curator's
+{key,value}[] args JSON blob as $1 to the collector, which parses $1 as a
+single flag — every curator-prescribed step landed in BL_EX_USAGE 64. The
+manual end-to-end run on CASE-2026-0022 worked around this by invoking
+`bl observe` directly. P5 closes the loop so `bl run <step-id>` against a
+bridge-enriched pending entry actually executes the prescribed observe verb.
+
+[New] src/bl.d/60-run.sh — bl_run_dispatch_verb now prefers <handler>_from_args
+      adapter when defined; falls through to legacy passthrough otherwise.
+      The fall-through preserves existing tests that mock collectors with
+      raw JSON input (no behavioral regression).
+[New] src/bl.d/60-run.sh — args-translation helpers:
+      - bl_run_args_get <args-json> <key> — extract single value
+      - bl_run_args_keys <args-json> — enumerate keys
+      - bl_run_args_warn_unknown <args-json> <verb> <known-keys> — bl_warn
+        for each curator-emitted key not in the verb's known set
+      - bl_run_args_relative_to_iso <spec> — "72h"/"30m"/"2d"/"45s" → ISO-8601
+        UTC timestamp; ISO inputs pass through unchanged
+[New] src/bl.d/60-run.sh — per-verb adapters for every observe.* verb in
+      schemas/step.json properties.verb.enum:
+        bl_observe_file_from_args
+        bl_observe_log_apache_from_args
+        bl_observe_log_modsec_from_args
+        bl_observe_log_journal_from_args
+        bl_observe_cron_from_args
+        bl_observe_proc_from_args
+        bl_observe_htaccess_from_args
+        bl_observe_fs_mtime_cluster_from_args
+        bl_observe_fs_mtime_since_from_args
+        bl_observe_firewall_from_args
+        bl_observe_sigs_from_args
+      Each adapter:
+        - Translates curator semantic key names to collector flags
+          (e.g., 'roots' → '--under', 'around'/'path' → '--around')
+        - Fans out comma-separated multi-values across multiple collector
+          calls (e.g., roots="/var/www,/home" → 2 fs_mtime_since invocations)
+        - Strips leading "*." glob prefix from ext patterns
+        - Drops unknown keys with bl_warn (non-fatal)
+        - Returns first non-zero rc on multi-call dispatch
+      defend.* and clean.* adapters are NOT in scope (those tiers carry
+      preflight gates and operator prompts; deferred to a follow-up phase).
+[New] tests/13-args-adapters.bats — 27 unit tests covering every helper plus
+      every adapter, including:
+        - dispatcher routing (adapter present vs fall-through)
+        - relative-time conversion (72h → ISO)
+        - comma-list fan-out (roots, htaccess)
+        - ext glob-prefix stripping (*.php → php)
+        - missing-required-arg returns 64
+        - unknown keys logged but non-fatal
+        - cron scope splitting (system+per-user → 2 calls)
+        - cron from_file bypasses live-system flags
+        - proc verify_argv flag toggle
+      Stubs each underlying collector to capture invocation argv; the
+      adapter's translation is what's tested, not the collector itself
+      (those live in 04-observe.bats).
+
+Tests: full debian12 suite 398/398 (was 371 in P4 followup; 27 new P5 tests).
+
+Phase 5 — and PLAN-M16-collectors-bridge.md — complete. The end-to-end loop
+runs cleanly: curator emits report_step → bridge syncs to memstore pending/
+with custom_tool_use_id → operator runs `bl run <step-id>` → adapter
+translates args → collector executes → writeback emits user.custom_tool_result
+unblocking curator's next turn. The CASE-2026-0022 manual jq/curl glue from
+the M16 demo run is now obsolete.
+
 === M16 P4 followup — 2026-04-26 (sentinel-review fixups) ===
 
 Adversarial post-impl review of M16 P1-P4 surfaced 3 MAJOR findings (2 with
