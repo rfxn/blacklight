@@ -4,6 +4,8 @@ https://github.com/rfxn/blacklight
 
 === M13 — Skills primitive realignment (Path C) — 2026-04-26 ===
 
+[Change] Synth tooling consolidated under scripts/dev/ — tools/dev/synth-corpus.sh moved to scripts/dev/ alongside synthesize-fixture-logs.sh; tools/ removed; .gitignore stops classifying scripts/dev/ as operator-local (judges need synth-corpus.sh for exhibits/fleet-01/large-corpus/ regeneration); inbound refs updated (README, exhibits/fleet-01/README, tests/04-observe-scale.bats, tests/Dockerfile, tests/live/{README,trace-runner.sh})
+
 [New] M13 — Skills API + Files API + state.json consolidation
 - Routing Skills (description-routed): synthesizing-evidence, prescribing-defensive-payloads, curating-cases, gating-false-positives, extracting-iocs, authoring-incident-briefs
 - Workspace Files: 8 generated corpora (foundations + 6 routing-skill corpora + substrate-context); per-case raw + summary mounts

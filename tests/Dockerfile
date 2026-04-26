@@ -43,7 +43,6 @@ COPY scripts/ /opt/scripts/
 COPY skills-corpus/ /opt/skills-corpus/
 COPY routing-skills/ /opt/routing-skills/
 COPY Makefile /opt/Makefile
-COPY tools/ /opt/tools/
-RUN chmod +x /opt/bl /opt/tools/dev/synth-corpus.sh
+RUN chmod +x /opt/bl /opt/scripts/dev/synth-corpus.sh /opt/scripts/dev/synthesize-fixture-logs.sh
 
 WORKDIR /opt/tests

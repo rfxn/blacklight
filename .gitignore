@@ -43,13 +43,11 @@ Thumbs.db
 #   docs/internal/  — PLAN.md, PIVOT-v2.md, install-validation, distilled API refs
 #   docs/specs/     — per-milestone implementation specs
 #   docs/plans/     — forward-looking planning notes
-#   scripts/dev/    — build/synthesis helpers (fixture regenerators, etc.)
-#   tools/dev/      — corpus orchestrators, large-scale fixture builders
 #   pkg/test/       — packaging-pipeline test scaffolding
+# Note: scripts/dev/ is committed (deterministic fixture/corpus synthesis is
+# load-bearing for judges regenerating exhibits/fleet-01/) — not classified here.
 docs/demo/
 docs/internal/
 docs/specs/
 docs/plans/
-scripts/dev/
-tools/dev/
 pkg/test/

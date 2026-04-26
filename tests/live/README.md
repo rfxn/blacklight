@@ -19,7 +19,7 @@ committed evidence.
 
 ```bash
 source .secrets/env                                # provides ANTHROPIC_API_KEY
-tools/dev/synth-corpus.sh --seed 42                    # if exhibits/fleet-01/large-corpus/ missing
+scripts/dev/synth-corpus.sh --seed 42                    # if exhibits/fleet-01/large-corpus/ missing
 make live-trace                                    # full end-to-end run, ~3-5 min
 make live-trace-grade EVIDENCE=tests/live/evidence/live-trace-<TS>.md
 ```
@@ -52,7 +52,7 @@ Roughly $5-15 per run. The harness aborts at $50 and warns at $25.
 ## Failure modes
 
 - **No API key:** harness exits 65 with a clear message. Fix: source `.secrets/env`.
-- **Corpus missing:** exits 65. Fix: run `tools/dev/synth-corpus.sh`.
+- **Corpus missing:** exits 65. Fix: run `scripts/dev/synth-corpus.sh`.
 - **gawk missing:** exits 65. Fix: install gawk (required for cost-cap arithmetic).
 - **Hypothesis timeout (120s):** typically a curator-side issue (prompt too thin,
   bundle malformed, model overload). Re-run; if persistent, iterate `prompts/curator-agent.md`.

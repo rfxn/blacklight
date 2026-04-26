@@ -48,7 +48,7 @@ Regenerate only via their own synthesis scripts if needed.
 ## Regenerate large-corpus
 
 ```bash
-tools/dev/synth-corpus.sh --seed 42 --out exhibits/fleet-01/large-corpus
+scripts/dev/synth-corpus.sh --seed 42 --out exhibits/fleet-01/large-corpus
 ```
 
 Output is byte-deterministic — same seed produces the same bundle.

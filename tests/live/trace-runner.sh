@@ -60,7 +60,7 @@ fi
 
 # Preflight: corpus required (Phase 2 must have run)
 if [[ ! -d exhibits/fleet-01/large-corpus ]] || [[ ! -s exhibits/fleet-01/large-corpus/apache.access.log ]]; then
-    printf 'trace-runner: exhibits/fleet-01/large-corpus/ missing or empty — run tools/dev/synth-corpus.sh first\n' >&2
+    printf 'trace-runner: exhibits/fleet-01/large-corpus/ missing or empty — run scripts/dev/synth-corpus.sh first\n' >&2
     exit 65
 fi
 

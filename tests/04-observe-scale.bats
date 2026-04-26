@@ -26,7 +26,7 @@ teardown() {
 @test "synth-corpus emits deterministic 300k-400k token bundle" {
     local out
     out=$(mktemp -d)
-    run "$BL_REPO_ROOT/tools/dev/synth-corpus.sh" --seed 42 --out "$out"
+    run "$BL_REPO_ROOT/scripts/dev/synth-corpus.sh" --seed 42 --out "$out"
     [ "$status" -eq 0 ]
     # token band check: 1.2M-1.7M chars at ~4 chars/token = 300k-425k tokens
     local total
@@ -40,8 +40,8 @@ teardown() {
     local out1 out2
     out1=$(mktemp -d)
     out2=$(mktemp -d)
-    "$BL_REPO_ROOT/tools/dev/synth-corpus.sh" --seed 42 --out "$out1" >/dev/null
-    "$BL_REPO_ROOT/tools/dev/synth-corpus.sh" --seed 42 --out "$out2" >/dev/null
+    "$BL_REPO_ROOT/scripts/dev/synth-corpus.sh" --seed 42 --out "$out1" >/dev/null
+    "$BL_REPO_ROOT/scripts/dev/synth-corpus.sh" --seed 42 --out "$out2" >/dev/null
     local sha1 sha2
     sha1=$(sha256sum "$out1/apache.access.log" | awk '{print $1}')
     sha2=$(sha256sum "$out2/apache.access.log" | awk '{print $1}')
@@ -52,7 +52,7 @@ teardown() {
 @test "synth-corpus has zero operator-local-token leakage" {
     local out
     out=$(mktemp -d)
-    "$BL_REPO_ROOT/tools/dev/synth-corpus.sh" --seed 42 --out "$out" >/dev/null
+    "$BL_REPO_ROOT/scripts/dev/synth-corpus.sh" --seed 42 --out "$out" >/dev/null
     # grep returns 1 on no-match — that is the success path for this gate
     run grep -rE '(rfxn|liquidweb|sigforge|polyshell|customer)' "$out"
     [ "$status" -ne 0 ]
