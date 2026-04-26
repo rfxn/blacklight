@@ -25,4 +25,9 @@ _bl-drift-check:
 # Promote to `make test` (debian12) + `make test-rocky9` before commit when the
 # dev-mode banner is removed.
 test-quick:
-	$(BATSMAN_RUN_TESTS) -- /opt/tests/00-smoke.bats /opt/tests/01-cli-surface.bats
+	$(BATSMAN_RUN_TESTS) -- /opt/tests/00-smoke.bats /opt/tests/01-cli-surface.bats /opt/tests/skill-routing/smoke.bats
+
+# M13 P4: standalone target — run routing-Skill structural tests only.
+# Use during inner-loop iteration on routing-skills/ content.
+test-skill-routing-smoke:
+	$(BATSMAN_RUN_TESTS) -- /opt/tests/skill-routing/smoke.bats

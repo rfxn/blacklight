@@ -1,0 +1,7 @@
+Incident-commander brief author — renders a structured close-out narrative for the hosting-provider or MSP: timeline, kill-chain stanzas, remediation ledger, open risk assessment. Substrate-aware framing for shared-hosting context when requested.
+
+Use when the curator is closing a case and must produce a human-readable brief: final timeline synthesis, the kill-chain narrative (intrusion-vector through exfil), a summary of applied defensive actions with rollback status, and open risks for the operator. The output uploads via the Files API and is referenced in the case INDEX.
+
+Prefer curating-cases when the goal is a lifecycle transition, not a brief. Prefer synthesizing-evidence when the investigation is still open and requires cross-stream correlation.
+
+Examples: "Close-out brief for CASE-0042: 3-day timeline, eval-obfuscation vector, Magento checkout-flow impact, three applied ModSec rules, no lateral observed" / "Shared-hosting brief: translate technical indicators into tenant-facing remediation steps."

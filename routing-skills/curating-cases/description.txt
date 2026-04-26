@@ -1,0 +1,7 @@
+Case lifecycle manager — owns the open/close/reopen/hold state machine, INDEX row maintenance, and agentic-minutes format (status + next-step + ask) for a blacklight investigation.
+
+Use when the curator must execute a lifecycle transition: open a new case and write the INDEX row, close a case after all open-questions are resolved, reopen a closed case on new evidence, or emit an agentic-minutes block summarizing current status, the next planned step, and a single blocking question for the operator.
+
+Prefer synthesizing-evidence when the need is cross-stream correlation, not lifecycle management. Prefer authoring-incident-briefs when the goal is a final narrative brief, not a state transition.
+
+Examples: "Open CASE-0042, initialize hypothesis.md and open-questions.md, write the INDEX row" / "Close CASE-0042: confirm open-questions.md is empty, write closed.md with the timeline" / "Emit agentic-minutes: status=active, next=run observe.log_apache, ask=confirm retention window."

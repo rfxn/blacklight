@@ -1,0 +1,7 @@
+Cross-stream evidence correlator — synthesizes Apache logs, ModSec deny-events, journalctl, filesystem state, and process snapshots into a single intrusion narrative.
+
+Use when the curator must correlate signals across two or more evidence streams; reconstruct an intrusion timeline; rank competing hypotheses; or when evidence shows substrate-class signals — CVE/advisory IDs (APSB25-94), Magento markers (vendor/magento, app/etc/), or pre-systemd host signatures (CentOS 6, /sbin/init, no /usr/bin coreutils).
+
+Prefer prescribing-defensive-payloads when the request is to AUTHOR a ModSec/APF/YARA rule; prefer extracting-iocs when the request is purely to NORMALIZE IOC strings without correlating across streams.
+
+Examples: "Apache 200s + ModSec deny on /admin + journalctl auth-fail spike at 03:14 — same actor?" / "Magento PHP drop via vendor/magento/framework" / "CentOS 6 host: crontab mod + /etc/init.d new entry."
