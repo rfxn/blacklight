@@ -480,6 +480,25 @@ bl_defend_firewall() {
         backend=$(_bl_defend_firewall_detect_backend) || return $?
     fi
 
+    # Private-IP refusal — RFC1918 (10/8, 172.16-31/12, 192.168/16),
+    # loopback (127/8), and link-local (169.254/16) are operationally
+    # internal; a defend.firewall against one is almost always an
+    # operator typo or curator hallucination. Blocking 192.168.1.1 or
+    # 10.0.0.0/x can sever internal traffic. Refuse by default; allow
+    # override via BL_DEFEND_FW_ALLOW_PRIVATE=yes (mirrors the
+    # BL_DEFEND_FW_ALLOW_BROAD_IP convention in _bl_defend_firewall_validate_ip).
+    if _bl_defend_firewall_is_private_ip "$ip" \
+       && [[ "${BL_DEFEND_FW_ALLOW_PRIVATE:-}" != "yes" ]]; then
+        bl_error_envelope defend \
+            "refusing private/loopback/link-local: $ip" \
+            "(set BL_DEFEND_FW_ALLOW_PRIVATE=yes to override)"
+        # shellcheck disable=SC2016  # $i is a jq --arg variable name, not a shell variable
+        _bl_defend_ledger_emit "$case_id" "defend_refused" \
+            '{verb:"defend.firewall", ip:$i, reason:"private_ip"}' \
+            --arg i "$ip"
+        return "$BL_EX_TIER_GATE_DENIED"
+    fi
+
     # CDN safe-list check BEFORE apply: refusal is not an "applied action",
     # so it does NOT write to ledger as defend_applied. It writes defend_refused.
     local safelist_rc=0

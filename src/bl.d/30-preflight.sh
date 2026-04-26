@@ -319,7 +319,9 @@ modsec       Apply a ModSec rule file (or remove by rule-id with --remove).
              --remove is destructive and requires --yes.
 firewall     Block a single IP via the auto-detected backend. CDN-ASN
              safelist refuses Cloudflare/Fastly/Akamai/CloudFront
-             addresses. Default retire window 30d.
+             addresses. RFC1918/loopback/link-local refused by default
+             — set BL_DEFEND_FW_ALLOW_PRIVATE=yes to override. Default
+             retire window 30d.
 sig          Append a scanner signature after corpus FP-gate +
              (when borderline) Haiku adjudication. BL_DISABLE_LLM=1
              fails closed.

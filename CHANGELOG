@@ -2,6 +2,46 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== bl_defend_firewall: refuse private/loopback/link-local by default — 2026-04-26 (Tier-2C) ===
+
+bl defend firewall <ip> applied a deny rule against any syntactically
+valid IP regardless of whether the address was internal. The existing
+_bl_defend_firewall_is_private_ip helper was wired only as a CDN-safelist
+short-circuit (private IPs skipped the ASN lookup, then proceeded to
+apply). End-to-end exercise reproduced the footgun: 'bl defend firewall
+192.168.1.1' added the address to apf without any prompt. Operationally
+unsafe — typo or curator hallucination against an internal range can
+sever internal traffic.
+
+[Fix] src/bl.d/82-defend.sh — bl_defend_firewall adds an explicit
+      refusal gate after IP validation: if _bl_defend_firewall_is_private_ip
+      matches and BL_DEFEND_FW_ALLOW_PRIVATE != "yes", emit defend_refused
+      ledger entry (reason=private_ip) and return BL_EX_TIER_GATE_DENIED
+      (68). Mirrors the BL_DEFEND_FW_ALLOW_BROAD_IP convention already
+      established in _bl_defend_firewall_validate_ip (broad-mask floor).
+      Refusal covers RFC1918 (10/8, 172.16-31/12, 192.168/16), loopback
+      (127/8), and link-local (169.254/16). Existing CDN-safelist early-
+      exit on private IPs remains in place — under the override path,
+      apply still benefits from skipping ASN lookup.
+[Fix] src/bl.d/30-preflight.sh — bl_help_defend firewall block notes
+      the new refusal + override env var; complements the broader help-
+      alignment commit landed earlier today.
+[New] tests/06-defend.bats — three regression tests:
+      - 'refuses RFC1918 / loopback / link-local by default': iterates
+         five IPs across all five private/loopback/link-local prefixes,
+         asserts exit 68 and refusal message;
+      - 'accepts private IP with BL_DEFEND_FW_ALLOW_PRIVATE override':
+         override path applies cleanly via stub backend (exit 0);
+      - 'private-IP refusal emits defend_refused ledger entry': verifies
+         no apply call landed (stub log empty) AND ledger has a single
+         defend_refused entry for the IP with reason=private_ip.
+[Change] bl — regenerated from 27 parts via 'make bl'.
+
+Verification: bash -n + shellcheck clean; tests/06-defend.bats full
+run green (26/26 including the 3 new regression cases #15/16/17);
+04-observe + 00-smoke + 01-cli-surface cross-suite sweep green
+(104/104).
+
 === schemas/evidence-envelope: substrate.category source row — 2026-04-26 (Tier-2B) ===
 
 `bl observe substrate` has emitted `substrate.category` records since M4

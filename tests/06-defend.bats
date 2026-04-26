@@ -217,6 +217,61 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "bl defend firewall refuses RFC1918 / loopback / link-local by default" {
+    # Regression: bl defend firewall <private-ip> previously short-circuited
+    # the CDN safelist (private IP skipped ASN check) and proceeded to apply.
+    # An operator typo against an internal IP could sever internal traffic.
+    # Refusal lands in defend_refused ledger entries with reason=private_ip.
+    cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/iptables"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    local ip
+    for ip in 10.0.0.1 172.16.5.1 192.168.1.1 127.0.0.1 169.254.169.254; do
+        run "$BL_SOURCE" defend firewall "$ip" --backend iptables --reason "rfc1918-typo"
+        [ "$status" -eq 68 ]   # BL_EX_TIER_GATE_DENIED
+        printf '%s\n' "$output" | grep -q "refusing private/loopback/link-local: $ip"
+        printf '%s\n' "$output" | grep -q "BL_DEFEND_FW_ALLOW_PRIVATE=yes"
+    done
+}
+
+@test "bl defend firewall accepts private IP with BL_DEFEND_FW_ALLOW_PRIVATE override" {
+    # Override path: operator explicitly opts in to blocking an internal
+    # range (e.g., quarantining a compromised internal host). Refusal
+    # gate skipped; CDN safelist still runs (private-IP early-exit) so
+    # apply proceeds.
+    cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/iptables"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    BL_DEFEND_FW_ALLOW_PRIVATE=yes run "$BL_SOURCE" defend firewall "192.168.42.99" --backend iptables --reason "internal-ioc"
+    [ "$status" -eq 0 ]
+}
+
+@test "bl defend firewall private-IP refusal emits defend_refused ledger entry" {
+    cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'
+#!/bin/bash
+printf 'UNEXPECTED: %s\n' "$*" >> "$BL_VAR_DIR/iptables.log"
+exit 0
+EOF
+    chmod +x "$BL_DEFEND_SCANNER_BIN/iptables"
+    export PATH="$BL_DEFEND_SCANNER_BIN:$PATH"
+    run "$BL_SOURCE" defend firewall "10.10.10.10" --backend iptables --reason "test"
+    [ "$status" -eq 68 ]
+    # Apply must not have been invoked.
+    [ ! -s "$BL_VAR_DIR/iptables.log" ]
+    # Ledger captures the refusal with reason=private_ip.
+    local ledger="$BL_VAR_DIR/ledger/CASE-2026-0042.jsonl"
+    [ -r "$ledger" ]
+    local refused
+    refused=$(jq -c 'select(.kind=="defend_refused" and .payload.verb=="defend.firewall" and .payload.ip=="10.10.10.10" and .payload.reason=="private_ip")' "$ledger")
+    [ -n "$refused" ]
+}
+
 @test "bl defend firewall emits schema-conforming ledger entry on success" {
     # Use --backend iptables to bypass auto-detection (system may have nft).
     cat > "$BL_DEFEND_SCANNER_BIN/iptables" <<'EOF'
