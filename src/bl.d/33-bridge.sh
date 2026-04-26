@@ -35,6 +35,13 @@ bl_bridge_post_step() {
     # retains the OLD body — that is the wrong semantic for a bridge whose job
     # is to keep memstore in sync with the latest session-event truth.
     # Sentinel finding M16 P3 #5.
+    #
+    # Skip when results/<step_id>.json already exists — the operator already
+    # ran `bl run <step-id>` for this step and writeback persisted a result;
+    # re-creating pending here would (a) reissue a step that's complete, and
+    # (b) trigger a writeback HTTP 400 because the curator's session has
+    # already received user.custom_tool_result for that custom_tool_use_id.
+    # Sentinel finding M16 P5 #2.3.
     local case_id="$1"
     local step_body="$2"
     local step_id
@@ -48,6 +55,12 @@ bl_bridge_post_step() {
     # closes the bridge-side path so polluted entries never land in memstore. Sentinel #8.
     if ! [[ "$step_id" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
         bl_warn "bridge: skipping event with malformed step_id: $step_id"
+        return "$BL_EX_OK"
+    fi
+    # Skip if step has already been run (results/<step-id>.json exists).
+    local results_key="bl-case/$case_id/results/$step_id.json"
+    if bl_mem_get "${BL_MEMSTORE_CASE_ID}" "$results_key" >/dev/null 2>&1; then   # 2>/dev/null: bl_mem_get's "not found" stderr is the success-skip signal here
+        bl_debug "bridge: step $step_id already has results/ — skipping pending re-creation"
         return "$BL_EX_OK"
     fi
     local key="bl-case/$case_id/pending/$step_id.json"

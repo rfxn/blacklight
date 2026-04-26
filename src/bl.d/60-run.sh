@@ -185,7 +185,20 @@ bl_run_step() {
             jq -n --arg t "$summary_text" \
                 '{events:[{type:"user.message", content:[{type:"text", text:$t}]}]}' > "$body_file"
         fi
-        bl_api_call POST "/v1/sessions/$session_id/events" "$body_file" >/dev/null || true   # non-fatal; ledger has the event
+        local writeback_rc=0
+        bl_api_call POST "/v1/sessions/$session_id/events" "$body_file" >/dev/null || writeback_rc=$?
+        if (( writeback_rc != 0 )); then
+            # Most common failure mode here is HTTP 400 'only user.tool_confirmation,
+            # user.custom_tool_result, or user.interrupt may be sent' — fires when the
+            # bridge re-creates a pending step that was already responded-to (curator
+            # session is past that tool_use_id). Without an explicit ledger event
+            # the operator has no signal that the curator session diverged from the
+            # local step state. Sentinel finding M16 P5 #3.3.
+            bl_ledger_append "$case_id" \
+                "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg s "$step_id" --argjson rc "$writeback_rc" \
+                    '{ts:$ts, case:$c, kind:"writeback_session_failed", payload:{step_id:$s, rc:$rc}}')" \
+                || bl_warn "ledger append failed for writeback_session_failed event"
+        fi
         command rm -f "$body_file"
     fi
     command rm -f "$pending_tmp"
@@ -358,15 +371,16 @@ bl_run_args_keys() {
 
 bl_run_args_warn_unknown() {
     # bl_run_args_warn_unknown <args-json> <verb> <known-keys-space-separated>
-    # Emits one bl_warn line per unknown key. Non-fatal.
+    # Emits one bl_warn line per unknown key. Non-fatal. Uses [[ literal
+    # substring ]] not case-glob to avoid pattern confusables when curator
+    # emits keys like "path*" or "[abc]". Sentinel finding M16 P5 #1.3.
     local args_json="$1" verb="$2" known="$3"
     local key
     while IFS= read -r key; do
         [[ -z "$key" ]] && continue
-        case " $known " in
-            *" $key "*) : ;;
-            *) bl_warn "$verb: unknown adapter arg '$key' (dropped — collector does not honor it)" ;;
-        esac
+        if [[ " $known " != *" $key "* ]]; then
+            bl_warn "$verb: unknown adapter arg '$key' (dropped — collector does not honor it)"
+        fi
     done < <(bl_run_args_keys "$args_json")
 }
 
@@ -390,7 +404,11 @@ bl_run_args_relative_to_iso() {
         local now_epoch then_epoch
         now_epoch=$(date -u +%s)
         then_epoch=$((now_epoch - secs))
-        date -u -d "@$then_epoch" +'%Y-%m-%dT%H:%M:%SZ'
+        # GNU/BSD portable epoch→ISO: GNU `date -d "@N"` first, BSD `date -r N` fallback.
+        # The project's portability discipline (CLAUDE.md FreeBSD partial-target) requires
+        # BSD-paired calls anywhere `date -d` appears. Sentinel finding M16 P5 #2.1.
+        date -u -d "@$then_epoch" +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+            || date -u -r "$then_epoch" +'%Y-%m-%dT%H:%M:%SZ'
         return 0
     fi
     # Unrecognized — pass through verbatim and let the collector reject it.
@@ -411,7 +429,10 @@ bl_run_args_relative_to_iso() {
 
 bl_observe_file_from_args() {
     local args_json="$1"
-    bl_run_args_warn_unknown "$args_json" "observe.file" "path attribution_from"
+    # Curator-observed semantic keys (CASE-2026-0022 turn 2 emissions): sha256_check,
+    # size_threshold. The collector ignores these (no native flag); they're listed in
+    # known-keys so we suppress the warn-noise for already-recognized curator vocabulary.
+    bl_run_args_warn_unknown "$args_json" "observe.file" "path attribution_from sha256_check size_threshold"
     local path attr
     path=$(bl_run_args_get "$args_json" "path")
     attr=$(bl_run_args_get "$args_json" "attribution_from")
@@ -444,7 +465,7 @@ bl_observe_log_apache_from_args() {
 
 bl_observe_log_modsec_from_args() {
     local args_json="$1"
-    bl_run_args_warn_unknown "$args_json" "observe.log_modsec" "around path window since txn rule scope summarize"
+    bl_run_args_warn_unknown "$args_json" "observe.log_modsec" "around path window since txn rule scope summarize filters"
     local around window txn rule
     around=$(bl_run_args_get "$args_json" "around")
     [[ -z "$around" ]] && around=$(bl_run_args_get "$args_json" "path")
@@ -528,7 +549,12 @@ bl_observe_htaccess_from_args() {
     recursive=$(bl_run_args_get "$args_json" "recursive")
     [[ -z "$roots" ]] && { bl_error_envelope run "observe.htaccess: missing 'root' or 'roots' arg"; return "$BL_EX_USAGE"; }
     local first_rc=0 root rc
+    # Trim leading/trailing whitespace per fan-out element so curator emissions
+    # like `roots="/var/www, /home/x"` don't pass " /home/x" to the collector.
+    # Sentinel finding M16 P5 #2.4.
     while IFS= read -r root; do
+        root="${root#"${root%%[![:space:]]*}"}"
+        root="${root%"${root##*[![:space:]]}"}"
         [[ -z "$root" ]] && continue
         if [[ "$recursive" == "true" || "$recursive" == "yes" || "$recursive" == "1" ]]; then
             bl_observe_htaccess --recursive "$root" || { rc=$?; (( first_rc == 0 )) && first_rc=$rc; }
@@ -586,7 +612,10 @@ bl_observe_fs_mtime_since_from_args() {
     fi
     ext="${ext#\*.}"
     local first_rc=0 root rc
+    # Trim leading/trailing whitespace per fan-out element. Sentinel #2.4.
     while IFS= read -r root; do
+        root="${root#"${root%%[![:space:]]*}"}"
+        root="${root%"${root##*[![:space:]]}"}"
         [[ -z "$root" ]] && continue
         local cmd=( bl_observe_fs_mtime_since --since "$since" --under "$root" )
         [[ -n "$ext" ]] && cmd+=( --ext "$ext" )
@@ -597,7 +626,7 @@ bl_observe_fs_mtime_since_from_args() {
 
 bl_observe_firewall_from_args() {
     local args_json="$1"
-    bl_run_args_warn_unknown "$args_json" "observe.firewall" "backend"
+    bl_run_args_warn_unknown "$args_json" "observe.firewall" "backend breakdown_by"
     local backend
     backend=$(bl_run_args_get "$args_json" "backend")
     if [[ -n "$backend" ]]; then

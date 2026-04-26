@@ -21,7 +21,7 @@ A portable bash CLI that puts an agent on the same Linux defensive stack you alr
 </div>
 
 > [!IMPORTANT]
-> **v0.5.2 hackathon build, Cerebral Valley "Built with 4.7" April 2026.**
+> **v0.6.0 hackathon build, Cerebral Valley "Built with 4.7" April 2026.**
 > Production-shape, not production-tested at fleet scale. External operator beta is roadmap P1.
 > The full docs site at [**blacklight.rfxn.com**](https://blacklight.rfxn.com) is the richer surface: this README, design notes, demo trace, talk material, and operator collateral, all rendered with proper navigation.
 
@@ -111,7 +111,7 @@ A judge or operator can verify install + smoke + version in under 60 seconds wit
 ```bash
 git clone https://github.com/rfxn/blacklight && cd blacklight
 make bl                                       # assemble bl from src/bl.d/NN-*.sh
-./bl --version                                # → bl 0.5.2
+./bl --version                                # → bl 0.6.0
 ./bl --help                                   # nine-namespace surface
 make -C tests test-quick                      # 00-smoke + 01-cli-surface (~70s)
 ls schemas/ skills/ routing-skills/ skills-corpus/   # 6 skill primitives + 8 corpora
@@ -415,7 +415,7 @@ Explicit non-goals. Not in this version, not in any version:
 - **Not an EDR.** No kernel sensor, no endpoint telemetry agent, no platform to roll out fleetwide.
 - **Not a SIEM.** No log-aggregation substrate; `bl observe` consumes existing logs in place.
 - **Not a daemon.** `bl` is invoked once per operator thought and exits. State lives in `/var/lib/bl/` and the Anthropic-hosted session.
-- **Not a fleet manager.** v0.5.2 is single-host. Fleet propagation rides the customer's existing Puppet/Ansible/Salt/Chef.
+- **Not a fleet manager.** v0.6.0 is single-host. Fleet propagation rides the customer's existing Puppet/Ansible/Salt/Chef.
 - **Not multi-tenant SaaS.** The Anthropic workspace is operator-provisioned and operator-owned. Per-tenant isolation is platform-native.
 - **Not a replacement for ModSec/APF/LMD/ClamAV/YARA.** `bl` directs them: supercharge, not rearchitect.
 - **Not Python.** Zero language runtime on the host. `bl` is bash; the agent runs in Anthropic's sandbox.

@@ -1,3 +1,16 @@
+blacklight (0.6.0-1) unstable; urgency=medium
+
+  * M16 collectors + bridge milestone (curator end-to-end loop)
+  * P1: modsec parser fix + canonical 8-hex corpus alignment
+  * P2: bl observe cron --from-file fixture-mode adapter
+  * P3: session-event → memstore-pending bridge (closes M12.5 gap)
+  * P4: writeback emits user.custom_tool_result for bridge-enriched steps
+  * P5: args translator + per-verb observe adapters (11 verbs)
+  * Sentinel-review fixups across P1-P4 and final P5 pass
+  * Full debian12 suite 398/398 across milestone
+
+ -- Ryan MacDonald <ryan@rfxn.com>  Sun, 26 Apr 2026 20:30:00 +0000
+
 blacklight (0.5.2-1) unstable; urgency=medium
 
   * Operator config tree expansion: preflight loader allowlist 7 → 22 keys

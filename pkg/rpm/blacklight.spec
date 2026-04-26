@@ -2,7 +2,7 @@
 # Customized for single-binary layout: /usr/bin/bl + /var/lib/bl state dirs
 #
 %define name    blacklight
-%define version 0.5.2
+%define version 0.6.0
 %define release 1%{?dist}
 
 Name:           %{name}
@@ -65,6 +65,14 @@ fi
 %doc /usr/share/doc/blacklight/CHANGELOG
 
 %changelog
+* Sun Apr 26 2026 R-fx Networks <proj@rfxn.com> - 0.6.0-1
+- M16 collectors + bridge milestone: modsec parser fix + canonical 8-hex
+  corpus alignment; bl observe cron --from-file fixture-mode adapter;
+  session-event → memstore-pending bridge (closes M12.5 gap); writeback
+  emits user.custom_tool_result for bridge-enriched steps; args translator
+  + per-verb observe adapters (11 verbs). Curator end-to-end loop runs
+  cleanly; full debian12 suite 398/398 across milestone.
+
 * Sun Apr 26 2026 R-fx Networks <proj@rfxn.com> - 0.5.2-1
 - Operator config tree expansion (/etc/blacklight/blacklight.conf):
   preflight loader allowlist grows from 7 → 22 keys. New conf-tunable

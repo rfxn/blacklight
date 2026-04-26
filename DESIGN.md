@@ -1,6 +1,6 @@
 # blacklight — design spec
 
-*Targeted release: 0.5.2 — bumps at release tag.*
+*Targeted release: 0.6.0 — bumps at release tag.*
 *Companion to `PRD.md` (executive frame, problem, users, roadmap, competitive positioning). This document is the implementation-facing spec.*
 
 > **Note on Skills primitive references.** Throughout this document, "description-routed Skills primitives" describes the architectural design and the runtime path when the workspace is allowlisted for `/v1/skills`. In the submitted-build runtime, Anthropic's Skills endpoint is allowlist-gated for this workspace (HTTP 404), so routing-skill bundles upload through the Files surface instead. The architectural shape is preserved; the upgrade path is zero-code-change once allowlist propagates. See `ANTHROPIC-API-NOTES.md` for the gated-runtime detail.

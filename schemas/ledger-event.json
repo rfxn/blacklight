@@ -17,7 +17,7 @@
       "defend_sig_rejected",
       "outbox_drain", "outbox_retry", "outbox_quarantine",
       "backpressure_reject", "fence_collision_deny",
-      "result_schema_reject",
+      "result_schema_reject", "writeback_session_failed",
       "lmd_hook_received", "trigger_dedup_attached", "lmd_hit_degraded",
       "notify_dispatched", "notify_failed",
       "cpanel_lockin_invoked", "cpanel_lockin_failed", "cpanel_lockin_rolled_back"

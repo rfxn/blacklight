@@ -51,6 +51,9 @@ invoke_bridge() {
 
 @test "bridge: pulls 3 report_step events from session, posts to memstore pending/" {
     bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-3-report-steps.json' 200
+    # Sentinel P5 #2.3: bridge now checks results/<step-id>.json before posting; route returns
+    # empty list so bl_mem_get treats results as not-found and the bridge proceeds with the POST.
+    bl_curator_mock_add_route 'memories\?path_prefix=%2Fbl-case%2F.*%2Fresults%2F' 'memstore-pending-poll-empty.json' 200
     bl_curator_mock_add_route 'POST .*/v1/memory_stores/.*/memories' 'memstore-bridge-step-post-ok.json' 200
     BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/mock-requests.log"
     export BL_MOCK_REQUEST_LOG
@@ -65,6 +68,7 @@ invoke_bridge() {
 
 @test "bridge: enriches each step body with custom_tool_use_id from event id" {
     bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-3-report-steps.json' 200
+    bl_curator_mock_add_route 'memories\?path_prefix=%2Fbl-case%2F.*%2Fresults%2F' 'memstore-pending-poll-empty.json' 200
     bl_curator_mock_add_route 'POST .*/v1/memory_stores/.*/memories' 'memstore-bridge-step-post-ok.json' 200
     BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/mock-requests.log"
     export BL_MOCK_REQUEST_LOG
@@ -80,6 +84,7 @@ invoke_bridge() {
 
 @test "bridge: saves next_page cursor to state.json.session_cursors[case-id]" {
     bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-3-report-steps.json' 200
+    bl_curator_mock_add_route 'memories\?path_prefix=%2Fbl-case%2F.*%2Fresults%2F' 'memstore-pending-poll-empty.json' 200
     bl_curator_mock_add_route 'POST .*/v1/memory_stores/.*/memories' 'memstore-bridge-step-post-ok.json' 200
     run invoke_bridge CASE-2026-0042
     [ "$status" -eq 0 ]
@@ -100,6 +105,7 @@ invoke_bridge() {
 
 @test "bridge: 409 on memstore POST is treated as success (idempotent re-run)" {
     bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-3-report-steps.json' 200
+    bl_curator_mock_add_route 'memories\?path_prefix=%2Fbl-case%2F.*%2Fresults%2F' 'memstore-pending-poll-empty.json' 200
     # 409 conflict on every memstore POST (already-exists)
     bl_curator_mock_add_route 'POST .*/v1/memory_stores/.*/memories' 'memstore-bridge-step-post-ok.json' 409
     run invoke_bridge CASE-2026-0042
@@ -179,6 +185,7 @@ invoke_bridge() {
 
 @test "bridge: malformed step_id is skipped, not posted (sentinel #8)" {
     bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-malformed-step-id.json' 200
+    bl_curator_mock_add_route 'memories\?path_prefix=%2Fbl-case%2F.*%2Fresults%2F' 'memstore-pending-poll-empty.json' 200
     bl_curator_mock_add_route 'POST .*/v1/memory_stores/.*/memories' 'memstore-bridge-step-post-ok.json' 200
     BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/mock-requests.log"
     export BL_MOCK_REQUEST_LOG
@@ -192,8 +199,29 @@ invoke_bridge() {
     [ "$post_count" -eq 0 ]
 }
 
+@test "bridge: skips pending re-creation when results/<step-id>.json exists (sentinel P5 #2.3)" {
+    bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-3-report-steps.json' 200
+    # Mock GETs on results/<step-id>.json — return 200 (already has results) for s-0001 and s-0002,
+    # 404 for s-0003. Bridge should skip s-0001 + s-0002, only post s-0003.
+    bl_curator_mock_add_route 'memories\?path_prefix=%2Fbl-case%2FCASE-2026-0042%2Fresults%2Fs-0001' 'memstore-step-with-tool-use-id.json' 200
+    bl_curator_mock_add_route 'memories\?path_prefix=%2Fbl-case%2FCASE-2026-0042%2Fresults%2Fs-0002' 'memstore-step-with-tool-use-id.json' 200
+    bl_curator_mock_add_route 'memories\?path_prefix=%2Fbl-case%2FCASE-2026-0042%2Fresults%2Fs-0003' 'memstore-pending-poll-empty.json' 200
+    bl_curator_mock_add_route 'POST .*/v1/memory_stores/.*/memories' 'memstore-bridge-step-post-ok.json' 200
+    BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/mock-requests.log"
+    export BL_MOCK_REQUEST_LOG
+    run invoke_bridge CASE-2026-0042
+    [ "$status" -eq 0 ]
+    # Only s-0003 should reach a memstore POST (the others were skipped after results/ check).
+    # Pending-path mem_post for s-0001 and s-0002 must NOT appear in the request log.
+    ! grep -F 'pending/s-0001.json' "$BL_MOCK_REQUEST_LOG"
+    ! grep -F 'pending/s-0002.json' "$BL_MOCK_REQUEST_LOG"
+    grep -F 'pending/s-0003.json' "$BL_MOCK_REQUEST_LOG"
+}
+
 @test "bridge: last-write-wins via bl_mem_patch (sentinel #5)" {
     bl_curator_mock_add_route 'GET .*/v1/sessions/sesn_test_bridge/events' 'sessions-events-bridge-3-report-steps.json' 200
+    # results/ check returns empty so the bridge proceeds with the patch path
+    bl_curator_mock_add_route 'memories\?path_prefix=%2Fbl-case%2F.*%2Fresults%2F' 'memstore-pending-poll-empty.json' 200
     # bl_mem_patch issues GET (lookup) + DELETE + POST per key. Mock all three.
     bl_curator_mock_add_route 'GET .*/v1/memory_stores/.*/memories\?path_prefix' 'memstore-pending-poll-empty.json' 200
     bl_curator_mock_add_route 'DELETE .*/v1/memory_stores/.*/memories/' 'memstore-bridge-step-post-ok.json' 200
