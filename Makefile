@@ -16,7 +16,7 @@
 
 BL_PARTS := $(sort $(wildcard src/bl.d/[0-9]*.sh))
 
-.PHONY: bl bl-check bl-lint test test-rocky9 test-all
+.PHONY: bl bl-check bl-lint test test-rocky9 test-all skills-corpus skills-corpus-clean skills-corpus-check
 
 bl: scripts/assemble-bl.sh $(BL_PARTS)
 	@test -n "$(BL_PARTS)" || { \
@@ -25,7 +25,7 @@ bl: scripts/assemble-bl.sh $(BL_PARTS)
 	@./scripts/assemble-bl.sh > bl.tmp && mv bl.tmp bl && chmod +x bl
 	@echo "bl: assembled from $(words $(BL_PARTS)) parts"
 
-bl-check:
+bl-check: skills-corpus-check
 	@set -e; \
 	test -f bl || { echo "bl-check: bl missing — run 'make bl'" >&2; exit 1; }; \
 	if [ -z "$(BL_PARTS)" ]; then \
@@ -44,6 +44,27 @@ bl-lint:
 	  echo "bl-lint: shellcheck missing — install ShellCheck to lint" >&2; exit 1; }
 	@shellcheck bl
 	@echo "bl-lint: clean"
+
+skills-corpus:
+	@./scripts/build-skills-corpus.sh
+
+skills-corpus-clean:
+	@rm -f skills-corpus/*.md
+	@echo "skills-corpus-clean: removed skills-corpus/*.md"
+
+skills-corpus-check:
+	@set -e; \
+	test -d skills-corpus || { echo "skills-corpus-check: skills-corpus/ missing — run 'make skills-corpus'" >&2; exit 1; }; \
+	tmp_dir=$$(mktemp -d); \
+	CORPUS_DIR=$$tmp_dir ./scripts/build-skills-corpus.sh >/dev/null; \
+	for f in $$tmp_dir/*.md; do \
+	  diff -q "$$f" "skills-corpus/$$(basename $$f)" >/dev/null 2>&1 || { \
+	    echo "skills-corpus-check: drift in $$(basename $$f) — run 'make skills-corpus' and re-commit" >&2; \
+	    rm -rf "$$tmp_dir"; \
+	    exit 1; }; \
+	done; \
+	rm -rf "$$tmp_dir"; \
+	echo "skills-corpus-check: in sync"
 
 test test-rocky9 test-all:
 	@$(MAKE) -C tests $@

@@ -40,6 +40,8 @@ COPY prompts/ /opt/prompts/
 COPY case-templates/ /opt/case-templates/
 COPY skills/ /opt/skills/
 COPY scripts/ /opt/scripts/
+COPY skills-corpus/ /opt/skills-corpus/
+COPY Makefile /opt/Makefile
 COPY tools/ /opt/tools/
 RUN chmod +x /opt/bl /opt/tools/dev/synth-corpus.sh
 
