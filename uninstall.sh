@@ -18,13 +18,15 @@ set -euo pipefail
 BL_PREFIX="${BL_PREFIX:-}"
 BL_BIN="${BL_PREFIX}/usr/local/bin/bl"
 BL_STATE_DIR="${BL_PREFIX}/var/lib/bl"
+BL_CONF_DIR="${BL_PREFIX}/etc/blacklight"
+BL_LMD_CONF="${BL_LMD_CONF_PATH:-/usr/local/maldetect/conf.maldet}"
 MODE="interactive"
 
 while (( $# > 0 )); do
     case "$1" in
         --yes) MODE="yes"; shift ;;
         --keep-state) MODE="keep"; shift ;;
-        --prefix) BL_PREFIX="$2"; BL_BIN="${BL_PREFIX}/usr/local/bin/bl"; BL_STATE_DIR="${BL_PREFIX}/var/lib/bl"; shift 2 ;;
+        --prefix) BL_PREFIX="$2"; BL_BIN="${BL_PREFIX}/usr/local/bin/bl"; BL_STATE_DIR="${BL_PREFIX}/var/lib/bl"; BL_CONF_DIR="${BL_PREFIX}/etc/blacklight"; shift 2 ;;
         -h|--help) sed -n '2,/^set -euo/{/^set -euo/d;p}' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) printf 'uninstall.sh: unknown flag: %s\n' "$1" >&2; exit 1 ;;
     esac
@@ -39,12 +41,55 @@ _warn() { printf 'uninstall.sh: %s\n' "$*" >&2; }
 # Without this, the Anthropic workspace retains the bl-curator agent + uploaded Files.
 # uninstall.sh removes only the local binary and local state directory.
 
+# --- Remove post_scan_hook wired by `bl setup --install-hook lmd` ---
+if [[ -f "$BL_LMD_CONF" ]]; then
+    if grep -qE '^post_scan_hook=.*bl-lmd-hook' "$BL_LMD_CONF" 2>/dev/null; then   # 2>/dev/null: grep chatter irrelevant; checking exit code only
+        _info "removing post_scan_hook from $BL_LMD_CONF"
+        command sed -i.bl-uninstall-bak -E '/^post_scan_hook=.*bl-lmd-hook/d' "$BL_LMD_CONF"
+        command rm -f "$BL_LMD_CONF.bl-uninstall-bak"
+        _info "post_scan_hook removed"
+    fi
+fi
+
 # --- Binary removal ---
 if [[ -f "$BL_BIN" ]]; then
     _info "removing $BL_BIN"
     command rm -f "$BL_BIN"
 else
     _info "no binary at $BL_BIN — skipping"
+fi
+
+# --- /etc/blacklight/ removal prompt ---
+if [[ -d "$BL_CONF_DIR" ]]; then
+    conf_confirm="n"
+    case "$MODE" in
+        yes)
+            conf_confirm="y"
+            ;;
+        keep)
+            _info "preserving $BL_CONF_DIR (--keep-state)"
+            ;;
+        interactive)
+            if [[ -t 0 ]]; then
+                printf 'Remove blacklight config tree at %s (hooks, notify tokens)? [y/N] ' "$BL_CONF_DIR"
+                read -r conf_confirm
+            else
+                _info "non-interactive invocation — preserving $BL_CONF_DIR"
+                _info "re-run with --yes to remove, or --keep-state to silence this message"
+            fi
+            ;;
+    esac
+    case "$conf_confirm" in
+        y|Y|yes|YES)
+            _info "removing $BL_CONF_DIR"
+            command rm -rf "$BL_CONF_DIR"
+            ;;
+        *)
+            if [[ "$MODE" != "keep" ]]; then
+                _info "config tree preserved at $BL_CONF_DIR"
+            fi
+            ;;
+    esac
 fi
 
 # --- State handling ---

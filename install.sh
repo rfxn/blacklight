@@ -19,13 +19,16 @@ BL_REPO_URL="${BL_REPO_URL:-https://raw.githubusercontent.com/rfxn/blacklight/ma
 BL_PREFIX="${BL_PREFIX:-}"
 BL_BIN_DIR="${BL_PREFIX}/usr/local/bin"
 BL_BIN="${BL_BIN_DIR}/bl"
+BL_CONF_DIR="${BL_PREFIX}/etc/blacklight"
+BL_HOOKS_DIR="${BL_CONF_DIR}/hooks"
 BL_SRC="${BL_SRC:-}"
+BL_HOOK_SRC="${BL_HOOK_SRC:-}"
 MODE="remote"
 
 while (( $# > 0 )); do
     case "$1" in
         --local) MODE="local"; shift ;;
-        --prefix) BL_PREFIX="$2"; BL_BIN_DIR="${BL_PREFIX}/usr/local/bin"; BL_BIN="${BL_BIN_DIR}/bl"; shift 2 ;;
+        --prefix) BL_PREFIX="$2"; BL_BIN_DIR="${BL_PREFIX}/usr/local/bin"; BL_BIN="${BL_BIN_DIR}/bl"; BL_CONF_DIR="${BL_PREFIX}/etc/blacklight"; BL_HOOKS_DIR="${BL_CONF_DIR}/hooks"; shift 2 ;;
         -h|--help)
             sed -n '2,/^set -euo/{/^set -euo/d;p}' "$0" | sed 's/^# \{0,1\}//'
             exit 0
@@ -52,6 +55,49 @@ if [[ -z "$BL_PREFIX" ]] && [[ "$(id -u)" != "0" ]]; then
 fi
 
 command mkdir -p "$BL_BIN_DIR" || _err "cannot create $BL_BIN_DIR"
+
+# --- Provision /etc/blacklight/ directory tree ---
+_info "provisioning $BL_CONF_DIR"
+command mkdir -p "$BL_CONF_DIR" "$BL_CONF_DIR/notify.d" "$BL_HOOKS_DIR" \
+    || _err "cannot create $BL_CONF_DIR"
+command chmod 0750 "$BL_CONF_DIR" "$BL_CONF_DIR/notify.d" "$BL_HOOKS_DIR"
+
+# Copy blacklight.conf.default — cp -n preserves operator's customized conf
+if [[ "$MODE" == "local" ]]; then
+    conf_src="${BL_CONF_SRC:-./files/etc/blacklight.conf.default}"
+    if [[ -f "$conf_src" ]]; then
+        command cp -n "$conf_src" "$BL_CONF_DIR/blacklight.conf.default" || true  # cp -n exits non-zero when dest already exists; preserving existing conf is correct
+        _info "installed blacklight.conf.default (existing preserved)"
+    fi
+else
+    if curl -fsSL --retry 3 --retry-delay 2 \
+            "$BL_REPO_URL/files/etc/blacklight.conf.default" \
+            -o "$BL_CONF_DIR/blacklight.conf.default.new"; then
+        command mv "$BL_CONF_DIR/blacklight.conf.default.new" "$BL_CONF_DIR/blacklight.conf.default"
+    else
+        _info "blacklight.conf.default fetch skipped (non-fatal)"
+    fi
+fi
+
+# Copy bl-lmd-hook into hooks/ with executable bit (operator runs `bl setup
+# --install-hook lmd` to wire it into LMD conf.maldet)
+if [[ "$MODE" == "local" ]]; then
+    hook_src="${BL_HOOK_SRC:-./files/hooks/bl-lmd-hook}"
+    if [[ -f "$hook_src" ]]; then
+        command cp "$hook_src" "$BL_HOOKS_DIR/bl-lmd-hook"
+        command chmod 0755 "$BL_HOOKS_DIR/bl-lmd-hook"
+        _info "installed bl-lmd-hook → $BL_HOOKS_DIR/bl-lmd-hook"
+    fi
+else
+    if curl -fsSL --retry 3 --retry-delay 2 \
+            "$BL_REPO_URL/files/hooks/bl-lmd-hook" \
+            -o "$BL_HOOKS_DIR/bl-lmd-hook.new"; then
+        command mv "$BL_HOOKS_DIR/bl-lmd-hook.new" "$BL_HOOKS_DIR/bl-lmd-hook"
+        command chmod 0755 "$BL_HOOKS_DIR/bl-lmd-hook"
+    else
+        _info "bl-lmd-hook fetch skipped (non-fatal)"
+    fi
+fi
 
 # --- Fetch or copy bl ---
 if [[ "$MODE" == "local" ]]; then

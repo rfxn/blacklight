@@ -10,6 +10,8 @@ setup() {
     TEST_PREFIX="$(mktemp -d)"
     export BL_PREFIX="$TEST_PREFIX"
     export BL_SRC="$BL_STUB"
+    export BL_CONF_SRC="$BL_REPO_ROOT/files/etc/blacklight.conf.default"
+    export BL_HOOK_SRC="$BL_REPO_ROOT/files/hooks/bl-lmd-hook"
 }
 
 teardown() {
@@ -43,6 +45,36 @@ teardown() {
         run bash "$INSTALL_SH" --local
     [ "$status" -eq 1 ]
     [[ "$output" == *"local bl not found"* ]]
+}
+
+@test "install.sh --local creates /etc/blacklight/ directory tree" {
+    run bash "$INSTALL_SH" --local
+    [ "$status" -eq 0 ]
+    [ -d "$TEST_PREFIX/etc/blacklight" ]
+    [ -d "$TEST_PREFIX/etc/blacklight/notify.d" ]
+    [ -d "$TEST_PREFIX/etc/blacklight/hooks" ]
+}
+
+@test "install.sh --local copies blacklight.conf.default" {
+    run bash "$INSTALL_SH" --local
+    [ "$status" -eq 0 ]
+    [ -f "$TEST_PREFIX/etc/blacklight/blacklight.conf.default" ]
+}
+
+@test "install.sh --local cp -n semantic: second run preserves existing conf" {
+    bash "$INSTALL_SH" --local
+    echo "operator_custom=1" > "$TEST_PREFIX/etc/blacklight/blacklight.conf.default"
+    run bash "$INSTALL_SH" --local
+    [ "$status" -eq 0 ]
+    grep -q "operator_custom=1" "$TEST_PREFIX/etc/blacklight/blacklight.conf.default"
+}
+
+@test "install.sh --local installs bl-lmd-hook +x into hooks/" {
+    run bash "$INSTALL_SH" --local
+    [ "$status" -eq 0 ]
+    [ -x "$TEST_PREFIX/etc/blacklight/hooks/bl-lmd-hook" ]
+    mode=$(stat -c '%a' "$TEST_PREFIX/etc/blacklight/hooks/bl-lmd-hook")
+    [ "$mode" = "755" ]
 }
 
 @test "uninstall.sh --yes removes binary + backs up state" {
@@ -81,4 +113,42 @@ teardown() {
     [ "$status" -eq 0 ]
     [ -f "$TEST_PREFIX/var/lib/bl/marker" ]
     [ ! -e "$TEST_PREFIX/usr/local/bin/bl" ]
+}
+
+@test "uninstall.sh --yes removes post_scan_hook from LMD conf" {
+    bash "$INSTALL_SH" --local
+    lmd_conf="$(mktemp)"
+    printf 'email_alert=1\npost_scan_hook="/etc/blacklight/hooks/bl-lmd-hook"\nemail_addr="root"\n' > "$lmd_conf"
+    BL_LMD_CONF_PATH="$lmd_conf" run bash "$UNINSTALL_SH" --yes
+    [ "$status" -eq 0 ]
+    # post_scan_hook line referencing bl-lmd-hook must be gone
+    ! grep -qE '^post_scan_hook=.*bl-lmd-hook' "$lmd_conf"
+    # other LMD conf lines must remain intact
+    grep -q 'email_alert=1' "$lmd_conf"
+    rm -f "$lmd_conf"
+}
+
+@test "uninstall.sh --yes leaves post_scan_hook alone when not bl-lmd-hook" {
+    bash "$INSTALL_SH" --local
+    lmd_conf="$(mktemp)"
+    printf 'post_scan_hook="/usr/local/custom-hook"\nemail_alert=1\n' > "$lmd_conf"
+    BL_LMD_CONF_PATH="$lmd_conf" run bash "$UNINSTALL_SH" --yes
+    [ "$status" -eq 0 ]
+    # unrelated post_scan_hook must be preserved
+    grep -q 'post_scan_hook="/usr/local/custom-hook"' "$lmd_conf"
+    rm -f "$lmd_conf"
+}
+
+@test "uninstall.sh --yes removes /etc/blacklight/ config tree" {
+    bash "$INSTALL_SH" --local
+    BL_LMD_CONF_PATH="/dev/null" run bash "$UNINSTALL_SH" --yes
+    [ "$status" -eq 0 ]
+    [ ! -d "$TEST_PREFIX/etc/blacklight" ]
+}
+
+@test "uninstall.sh --keep-state preserves /etc/blacklight/ config tree" {
+    bash "$INSTALL_SH" --local
+    BL_LMD_CONF_PATH="/dev/null" run bash "$UNINSTALL_SH" --keep-state
+    [ "$status" -eq 0 ]
+    [ -d "$TEST_PREFIX/etc/blacklight" ]
 }

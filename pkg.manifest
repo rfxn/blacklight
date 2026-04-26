@@ -42,5 +42,18 @@ PKG_SKILLS_DIR="routing-skills"
 PKG_CORPUS_DIR="skills-corpus"
 PKG_CORPUS_BUILD_SCRIPT="scripts/build-skills-corpus.sh"
 
+# Operator config tree — installed by install.sh; not owned by the binary
+# files/etc/blacklight.conf.default → /etc/blacklight/blacklight.conf.default
+# install.sh uses `cp -n` (preserves existing operator conf on upgrade)
+PKG_CONF_DIR="/etc/blacklight"
+PKG_CONF_DEFAULT_SRC="files/etc/blacklight.conf.default"
+PKG_CONF_DEFAULT_DST="/etc/blacklight/blacklight.conf.default"
+
+# LMD hook adapter — installed to /etc/blacklight/hooks/ by install.sh
+# Operator wires it with `bl setup --install-hook lmd`
+PKG_HOOK_SRC="files/hooks/bl-lmd-hook"
+PKG_HOOK_DST="/etc/blacklight/hooks/bl-lmd-hook"
+PKG_HOOK_MODE="0755"
+
 # Docker — blacklight is unprivileged
 PKG_DOCKER_FLAGS=""
