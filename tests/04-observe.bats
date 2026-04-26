@@ -624,6 +624,51 @@ teardown() {
     [[ "$last" == *"backend_meta"* ]]
 }
 
+@test "bl observe firewall: comment + blank lines skipped (no rule='#...' bogus records)" {
+    # Regression: apf /etc/apf/deny_hosts.rules and csf /etc/csf/csf.deny
+    # ship comment headers (## / # Trust based... / # Format of this file...)
+    # plus blank separators that previously emitted as firewall.rule records
+    # with rule="##" / rule="# Trust based...". The line filter at
+    # src/bl.d/41-observe-collectors.sh:1129 must skip both.
+    local fix_file="$BL_VAR_DIR/apf_with_comments.txt"
+    cat >"$fix_file" <<'APF_DENY_EOF'
+##
+# deny_hosts
+#
+# Trust based rule file to define addresses that are implicitly denied.
+# Format of this file is line-separated addresses, IP masking is supported.
+# Example:
+#   192.168.5.0/24
+
+203.0.113.51 # bl-case CASE-2026-9999 polyshell-c2
+203.0.113.52
+   # leading-whitespace comment
+203.0.113.53/32
+APF_DENY_EOF
+    run env BL_FIREWALL_DUMP_FIXTURE="$fix_file" \
+        BL_VAR_DIR="$BL_VAR_DIR" ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" BL_HOST_LABEL="$BL_HOST_LABEL" \
+        "$BL_SOURCE" observe firewall --backend iptables
+    [ "$status" -eq 0 ]
+    # No firewall.rule record may have rule starting with '#'
+    local bogus
+    bogus=$(printf '%s\n' "$output" \
+        | grep '^{' \
+        | jq -r 'select(.source=="firewall.rule") | .record.rule' \
+        | grep -c '^[[:space:]]*#') || true
+    [ "$bogus" -eq 0 ]
+    # Real rule records must survive (3 IP lines)
+    local rule_count
+    rule_count=$(printf '%s\n' "$output" \
+        | grep '^{' \
+        | jq -r 'select(.source=="firewall.rule") | .record.rule' \
+        | wc -l)
+    [ "$rule_count" -eq 3 ]
+    # Summary total_records must agree
+    local last
+    last=$(printf '%s\n' "$output" | grep '^{' | tail -1)
+    [[ "$last" == *'"total_records":3'* ]]
+}
+
 # ---------------------------------------------------------------------------
 # Group: sigs — bl_observe_sigs
 # ---------------------------------------------------------------------------

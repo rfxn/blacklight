@@ -5718,8 +5718,17 @@ bl_observe_firewall() {
 
     local total=0
     local bl_case_tag_re='bl-case (CASE-[0-9]{4}-[0-9]{4})'
+    # Skip blank lines + lines whose first non-blank char is '#'. apf
+    # /etc/apf/deny_hosts.rules and csf /etc/csf/csf.deny ship comment
+    # headers / examples that previously emitted as bogus firewall.rule
+    # records (rule="##", rule="# Trust based..."). End-of-line `#`
+    # comments on real csf rules survive — only line-start `#` is dropped.
+    # bl-case attribution lives inside iptables/nft `comment "<tag>"` (or
+    # APF natural rule lines), never as a leading-`#` line, so this does
+    # not lose case-tag correlation.
     while IFS= read -r rule_line; do
         [[ -z "$rule_line" ]] && continue
+        [[ "$rule_line" =~ ^[[:space:]]*# ]] && continue
         local bl_tag="null"
         if [[ "$rule_line" =~ $bl_case_tag_re ]]; then
             bl_tag="\"${BASH_REMATCH[1]}\""

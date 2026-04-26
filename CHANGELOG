@@ -2,6 +2,34 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== bl_observe_firewall comment-line filter — 2026-04-26 (Tier-2A e2e fixup) ===
+
+apf /etc/apf/deny_hosts.rules and csf /etc/csf/csf.deny ship with multi-line
+comment headers (## / # Trust based... / # Format of this file... / blank
+separators) that the firewall collector previously emitted as bogus
+firewall.rule records (rule="##", rule="# Trust based..."). End-to-end on a
+host with apf installed produced 44 'firewall.rule' records of which ~30
+were comments — pure bundle bloat consuming downstream skill context.
+
+[Fix] src/bl.d/41-observe-collectors.sh — bl_observe_firewall rule-emit
+      loop adds a `^[[:space:]]*#` skip alongside the existing blank-line
+      skip. End-of-line `#` comments on real csf rules survive (line-start
+      anchor only). bl-case attribution lives inside iptables/nft
+      `comment "<tag>"` or natural rule lines, never as a leading-`#`
+      header, so the filter does not lose case-tag correlation.
+[New] tests/04-observe.bats — regression test 'comment + blank lines
+      skipped (no rule="#..." bogus records)'. Stages an inline
+      apf-style fixture mixing multi-line comment headers, blank
+      separators, leading-whitespace comments, and three real IP
+      entries (one with end-of-line `#` annotation). Asserts zero
+      records with rule starting with `#`, exactly 3 firewall.rule
+      records, and matching summary.total_records.
+[Change] bl — regenerated from 27 parts via 'make bl'.
+
+Verification: bash -n + shellcheck clean; make -C tests test-quick
+green (33/33); 04-observe.bats full run green (83/83 including the
+new regression at #62 and all 5 prior firewall tests).
+
 === bl_help_* alignment with live dispatchers — 2026-04-26 (Tier-1 e2e fixup) ===
 
 End-to-end exercise of `bl` against tests/fixtures/ surfaced systemic drift
