@@ -2,6 +2,18 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== M16 P2 — 2026-04-26 (cron --from-file fixture-mode adapter) ===
+
+[New] src/bl.d/41-observe-collectors.sh — bl_observe_cron `--from-file <path>`
+      reads a static crontab fixture (or LMD post-scan adapter snapshot) and
+      emits cron.entry records the same way --user/--system already do. Mutex
+      against --user/--system: combining live system state with a static
+      snapshot would silently merge unrelated time-frames. Unreadable path
+      returns 72; format is otherwise identical to live read.
+[Change] tests/04-observe.bats — 5 new tests under Group: cron covering
+      happy path emit, ANSI-obscured detection on fixture content, both mutex
+      paths (user + system) returning 64, and unreadable path returning 72.
+
 === M16 P1 — 2026-04-26 (modsec collector parser + corpus alignment) ===
 
 [Fix] src/bl.d/41-observe-collectors.sh — _parse_modsec_serial section

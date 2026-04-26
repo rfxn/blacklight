@@ -298,6 +298,48 @@ teardown() {
     [[ "$output" != *"sigforge"* ]]
 }
 
+@test "bl observe cron: --from-file emits cron.entry records from fixture content" {
+    stage_cron_injected "$BL_VAR_DIR/cron-fixture.txt"
+    run "$BL_SOURCE" observe cron --from-file "$BL_VAR_DIR/cron-fixture.txt"
+    [ "$status" -eq 0 ]
+    # Expect at least one cron.entry record + an observe.summary trailer.
+    local entry_count summary_count
+    entry_count=$(printf '%s\n' "$output" | grep -c '"source":"cron.entry"' || true)
+    summary_count=$(printf '%s\n' "$output" | grep -c '"source":"observe.summary"' || true)
+    [ "$entry_count" -ge 1 ]
+    [ "$summary_count" -ge 1 ]
+    # Source-file label propagates through to record
+    [[ "$output" == *"\"source_file\":\"$BL_VAR_DIR/cron-fixture.txt\""* ]]
+}
+
+@test "bl observe cron: --from-file ANSI-obscured detection still fires" {
+    stage_cron_injected "$BL_VAR_DIR/cron-fixture.txt"
+    run "$BL_SOURCE" observe cron --from-file "$BL_VAR_DIR/cron-fixture.txt"
+    [ "$status" -eq 0 ]
+    # cron-injected.txt fixture carries ESC-prefixed obscured lines per stage_cron_injected
+    [[ "$output" == *"\"ansi_obscured\":true"* ]]
+}
+
+@test "bl observe cron: --from-file mutex with --user exits 64" {
+    stage_cron_injected "$BL_VAR_DIR/cron-fixture.txt"
+    run "$BL_SOURCE" observe cron --from-file "$BL_VAR_DIR/cron-fixture.txt" --user root
+    [ "$status" -eq 64 ]
+    [[ "$output" == *"mutually exclusive"* ]]
+}
+
+@test "bl observe cron: --from-file mutex with --system exits 64" {
+    stage_cron_injected "$BL_VAR_DIR/cron-fixture.txt"
+    run "$BL_SOURCE" observe cron --from-file "$BL_VAR_DIR/cron-fixture.txt" --system
+    [ "$status" -eq 64 ]
+    [[ "$output" == *"mutually exclusive"* ]]
+}
+
+@test "bl observe cron: --from-file unreadable path exits 72" {
+    run "$BL_SOURCE" observe cron --from-file /no/such/path/here
+    [ "$status" -eq 72 ]
+    [[ "$output" == *"not readable"* ]]
+}
+
 # ---------------------------------------------------------------------------
 # Group: proc — bl_observe_proc
 # ---------------------------------------------------------------------------

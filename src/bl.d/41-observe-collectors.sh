@@ -845,14 +845,21 @@ bl_observe_fs_mtime_since() {
 # ---------------------------------------------------------------------------
 bl_observe_cron() {
     unset _BL_OBS_ID _BL_OBS_CLUSTER_N
-    local user_arg="" do_system=0
+    local user_arg="" do_system=0 from_file=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --user)   user_arg="$2"; shift 2 ;;
-            --system) do_system=1; shift ;;
-            *)        bl_error_envelope observe "cron: unknown option: $1"; return "$BL_EX_USAGE" ;;
+            --user)      user_arg="$2"; shift 2 ;;
+            --system)    do_system=1; shift ;;
+            --from-file) from_file="$2"; shift 2 ;;
+            *)           bl_error_envelope observe "cron: unknown option: $1"; return "$BL_EX_USAGE" ;;
         esac
     done
+    # Mutex: --from-file is a static-snapshot source; combining with live-state flags would
+    # silently merge unrelated time-frames. The collector cannot meaningfully reconcile.
+    if [[ -n "$from_file" ]] && { [[ -n "$user_arg" ]] || (( do_system == 1 )); }; then
+        bl_error_envelope observe "cron: --from-file is mutually exclusive with --user/--system"
+        return "$BL_EX_USAGE"
+    fi
 
     local stream_path
     stream_path="$(_bl_obs_open_stream 'cron')"
@@ -908,6 +915,16 @@ bl_observe_cron() {
             content=$(command cat -v "$f")
             _emit_cron_lines "$f" "$content" || return "$?"
         done
+    fi
+
+    if [[ -n "$from_file" ]]; then
+        if [[ ! -r "$from_file" ]]; then
+            bl_error_envelope observe "cron: --from-file not readable: $from_file"
+            return "$BL_EX_NOT_FOUND"
+        fi
+        local content
+        content=$(command cat -v "$from_file")
+        _emit_cron_lines "$from_file" "$content" || return "$?"
     fi
 
     unset -f _emit_cron_lines
