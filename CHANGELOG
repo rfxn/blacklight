@@ -4,6 +4,14 @@ https://github.com/rfxn/blacklight
 
 === M15 — API correctness against live Anthropic Managed Agents ===
 
+M15 P3 (2026-04-26)
+  [Fix] bl_setup_reset uses POST /v1/agents/<id>/archive (the verb the live API
+        actually exposes) instead of DELETE /v1/agents/<id>; aborts the reset on
+        archive failure instead of wiping state.json regardless of platform state
+        (F5, F6).
+  [Change] skills-delete and files-delete loop bodies adopt the same fail-fast
+           discipline: abort reset and preserve state.json on any deletion failure.
+
 M15 P2 (2026-04-26)
   [Fix] bl_setup_seed_corpus dry-run summary uses "would upload" wording;
         eliminates self-contradicting "N uploaded" / "0 mutations would be applied"

@@ -9827,16 +9827,41 @@ bl_setup_reset() {
         read -r response
         [[ "$response" != "y" && "$response" != "Y" ]] && { printf 'bl setup --reset: aborted\n'; return "$BL_EX_OK"; }
     fi
-    [[ -n "$agent_id" ]] && { bl_api_call DELETE "/v1/agents/$agent_id" >/dev/null || bl_warn "agent delete failed"; bl_info "deleted agent $agent_id"; }
+    # F5 + F6 — archive (not delete) the agent; abort the reset if archive
+    # fails so we never wipe state.json while the platform still has a live
+    # agent. Empty `{}` body matches the documented archive verb shape.
+    if [[ -n "$agent_id" ]]; then
+        local empty_body
+        empty_body=$(command mktemp)
+        printf '{}' > "$empty_body"
+        if bl_api_call POST "/v1/agents/$agent_id/archive" "$empty_body" >/dev/null; then
+            bl_info "archived agent $agent_id"
+            command rm -f "$empty_body"
+        else
+            command rm -f "$empty_body"
+            bl_warn "agent archive failed; aborting reset to preserve state.json"
+            return "$BL_EX_UPSTREAM_ERROR"
+        fi
+    fi
     local skill_id
     while IFS= read -r skill_id; do
         [[ -z "$skill_id" ]] && continue
-        bl_skills_delete "$skill_id" || bl_warn "skill delete failed: $skill_id"
+        if bl_skills_delete "$skill_id" >/dev/null; then
+            bl_debug "deleted skill $skill_id"
+        else
+            bl_warn "skill delete failed: $skill_id; aborting reset"
+            return "$BL_EX_UPSTREAM_ERROR"
+        fi
     done < <(jq -r '.skills[].id // empty' "$BL_STATE_DIR/state.json")
     local file_id
     while IFS= read -r file_id; do
         [[ -z "$file_id" ]] && continue
-        bl_files_delete "$file_id" || bl_warn "file delete failed: $file_id"
+        if bl_files_delete "$file_id" >/dev/null; then
+            bl_debug "deleted file $file_id"
+        else
+            bl_warn "file delete failed: $file_id; aborting reset"
+            return "$BL_EX_UPSTREAM_ERROR"
+        fi
     done < <(jq -r '.files[].file_id // empty' "$BL_STATE_DIR/state.json")
     # Wipe state.json: preserve case_memstores + case_files only
     local tmp_state="$BL_STATE_DIR/state.json.tmp.$$"

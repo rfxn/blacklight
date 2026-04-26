@@ -578,7 +578,7 @@ teardown() {
 # N4: --reset deletes agent + Skills + workspace Files (with --force)
 # ---------------------------------------------------------------------------
 
-@test "bl setup --reset deletes agent + Skills + workspace Files (with --force)" {
+@test "bl setup --reset archives agent + DELETEs Skills + workspace Files (with --force)" {
     mkdir -p "$BL_VAR_DIR/state"
     jq -n '{
         schema_version: 1,
@@ -595,13 +595,16 @@ teardown() {
     }' > "$BL_VAR_DIR/state/state.json"
     export BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/curl-requests.log"
     command touch "$BL_MOCK_REQUEST_LOG"
+    bl_curator_mock_add_route '/v1/agents/.*/archive' 'setup-agent-archive-success.json' 200
     bl_curator_mock_set_response 'setup-agent-create-success.json' 200
     run "$BL_SOURCE" setup --reset --force
     [ "$status" -eq 0 ]
-    # DELETE calls for agent + skill + file
-    local del_count
+    # Agent is now archived via POST (not DELETE); skill + file still DELETE
+    local archive_count del_count
+    archive_count=$(awk '/\/archive/{c++} END{print c+0}' "$BL_VAR_DIR/curl-requests.log")
     del_count=$(awk '/^DELETE /{c++} END{print c+0}' "$BL_VAR_DIR/curl-requests.log")
-    [ "$del_count" -ge 3 ]
+    [ "$archive_count" -ge 1 ]
+    [ "$del_count" -ge 2 ]
     # state.json: agent.id cleared, skills/files empty
     run jq -r '.agent.id' "$BL_VAR_DIR/state/state.json"
     [ "$output" = "" ]
@@ -629,6 +632,7 @@ teardown() {
         case_id_counter: {"seq": 1}, case_current: "CASE-2026-0001",
         session_ids: {}, last_sync: ""
     }' > "$BL_VAR_DIR/state/state.json"
+    bl_curator_mock_add_route '/v1/agents/.*/archive' 'setup-agent-archive-success.json' 200
     bl_curator_mock_set_response 'setup-agent-create-success.json' 200
     run "$BL_SOURCE" setup --reset --force
     [ "$status" -eq 0 ]
@@ -937,4 +941,30 @@ teardown() {
     [[ "$output" == *"would upload"* ]]
     # Anti-assertion — the past-tense "uploaded" must not appear under dry-run
     ! [[ "$output" =~ "corpus seed — 1 uploaded" ]]
+}
+
+# ---------------------------------------------------------------------------
+# P3 (M15): --reset uses archive verb + fail-fast on archive failure
+# ---------------------------------------------------------------------------
+
+@test "bl setup --reset: archive verb success → state.json wiped" {
+    _state_json_seeded
+    bl_curator_mock_add_route '/v1/agents/.*/archive' 'setup-agent-archive-success.json' 200
+    run "$BL_SOURCE" setup --reset --force
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"archived agent agent_M8_TEST"* ]]
+    # state.json preserved as a wiped baseline
+    [ -f "$BL_STATE_DIR/state.json" ]
+    [ "$(jq -r '.agent.id' "$BL_STATE_DIR/state.json")" = "" ]
+}
+
+@test "bl setup --reset: archive failure → abort, state.json preserved" {
+    _state_json_seeded
+    bl_curator_mock_add_route '/v1/agents/.*/archive' 'setup-error-400.json' 400
+    run "$BL_SOURCE" setup --reset --force
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"agent archive failed"* ]]
+    [[ "$output" == *"aborting reset"* ]]
+    # state.json untouched: agent.id still present
+    [ "$(jq -r '.agent.id' "$BL_STATE_DIR/state.json")" = "agent_M8_TEST" ]
 }
