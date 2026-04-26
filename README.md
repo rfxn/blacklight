@@ -27,6 +27,14 @@ A portable bash CLI that puts an agent on the same Linux defensive stack you alr
 
 ---
 
+<p align="center">
+<strong><em>The agent doesn't belong in a chat window.<br/>
+It belongs in the shell, on the host, holding the case across days,<br/>
+acting on the substrate the defender already runs.</em></strong>
+</p>
+
+---
+
 ## What blacklight does
 
 At 03:42 UTC on a Saturday, the APSB25-94 advisory drops: Magento stores are actively backdoored via a double-extension webshell hidden in the media cache. Eight hours later the on-call team has run `grep`, `find`, ModSec audit scrapes, ClamAV scans, APF drops, and crontab audits across forty hosts, by hand.
