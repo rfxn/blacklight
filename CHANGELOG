@@ -4,6 +4,7 @@ https://github.com/rfxn/blacklight
 
 === Unreleased — M14 substrate-hook (closed-loop response layer) ===
 
+[New] M14 P11 — skill bundles: bl-capabilities (always-load capability map), lmd-triggers (hook router + backwalk + quarantine discipline), cpanel-easyapache (EA4 substrate router + apply-path discipline); description-routed; skills/INDEX.md not modified (retired M13 P10)
 [Change] M14 P10 — install.sh — /etc/blacklight/ directory tree provisioning: creates /etc/blacklight/, notify.d/, hooks/ with chmod 0750; cp -n copies blacklight.conf.default (preserves operator conf on upgrade); installs bl-lmd-hook into hooks/ with chmod 0755
 [Change] M14 P10 — uninstall.sh — LMD hook removal: sed-deletes post_scan_hook=.*bl-lmd-hook from conf.maldet on uninstall; prompts operator before removing /etc/blacklight/ config tree; --keep-state preserves config tree
 [Change] M14 P10 — pkg.manifest — adds PKG_CONF_DIR, PKG_CONF_DEFAULT_SRC/DST, PKG_HOOK_SRC/DST/MODE entries for RPM/DEB packaging of /etc/blacklight/ artifacts
