@@ -32,7 +32,10 @@
         "clean.proc",
         "clean.file",
         "case.close",
-        "case.reopen"
+        "case.reopen",
+        "trigger.lmd",
+        "setup.install_hook",
+        "setup.import_from_lmd"
       ]
     },
     "action_tier": {

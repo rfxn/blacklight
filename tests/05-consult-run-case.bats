@@ -529,3 +529,47 @@ teardown() {
     [ "$status" -eq 67 ]   # BL_EX_SCHEMA_VALIDATION_FAIL
     [[ "$output" == *"schema"* ]] || [[ "$output" == *"validation"* ]] || [[ "$output" == *"step_id"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# G17.5 (M14 P1): Schema enum extensions — positive-accept + regression guard
+# Validates that schemas/ledger-event.json and schemas/step.json enumerate the
+# 8 new M14 ledger kinds and 3 new step verbs.  Uses jq enum-membership checks
+# (python3/jsonschema is not present in the test container).
+# ---------------------------------------------------------------------------
+
+@test "ledger event schema accepts M14 new kinds" {
+    local schema_file="$BATS_TEST_DIRNAME/../schemas/ledger-event.json"
+    local kinds=(
+        lmd_hook_received trigger_dedup_attached lmd_hit_degraded
+        notify_dispatched notify_failed
+        cpanel_lockin_invoked cpanel_lockin_failed cpanel_lockin_rolled_back
+    )
+    for k in "${kinds[@]}"; do
+        run jq -e --arg k "$k" \
+            '.properties.kind.enum | index($k) != null' \
+            "$schema_file"
+        [ "$status" -eq 0 ]
+        [[ "$output" == "true" ]]
+    done
+}
+
+@test "step verb schema accepts M14 new verbs" {
+    local schema_file="$BATS_TEST_DIRNAME/../schemas/step.json"
+    local verbs=( trigger.lmd setup.install_hook setup.import_from_lmd )
+    for v in "${verbs[@]}"; do
+        run jq -e --arg v "$v" \
+            '.properties.verb.enum | index($v) != null' \
+            "$schema_file"
+        [ "$status" -eq 0 ]
+        [[ "$output" == "true" ]]
+    done
+}
+
+@test "ledger event schema rejects unknown kind" {
+    local schema_file="$BATS_TEST_DIRNAME/../schemas/ledger-event.json"
+    run jq -e --arg k "this_is_not_a_real_kind" \
+        '.properties.kind.enum | index($k) == null' \
+        "$schema_file"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "true" ]]
+}

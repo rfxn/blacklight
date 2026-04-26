@@ -2,6 +2,12 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== Unreleased — M14 P1: Schema enum extensions ===
+
+[New] M14 P1 — schemas/ledger-event.json: extend `kind` enum +8 M14 values (lmd_hook_received, trigger_dedup_attached, lmd_hit_degraded, notify_dispatched, notify_failed, cpanel_lockin_invoked, cpanel_lockin_failed, cpanel_lockin_rolled_back)
+[New] M14 P1 — schemas/step.json: extend `verb` enum +3 M14 values (trigger.lmd, setup.install_hook, setup.import_from_lmd)
+[New] M14 P1 — tests/05-consult-run-case.bats: add G17.5 positive-accept tests for new ledger kinds + step verbs; add regression guard for unknown-kind rejection
+
 === M13 — Skills primitive realignment (Path C) — 2026-04-26 ===
 
 [Change] Synth tooling consolidated under scripts/dev/ — tools/dev/synth-corpus.sh moved to scripts/dev/ alongside synthesize-fixture-logs.sh; tools/ removed; .gitignore stops classifying scripts/dev/ as operator-local (judges need synth-corpus.sh for exhibits/fleet-01/large-corpus/ regeneration); inbound refs updated (README, exhibits/fleet-01/README, tests/04-observe-scale.bats, tests/Dockerfile, tests/live/{README,trace-runner.sh})
