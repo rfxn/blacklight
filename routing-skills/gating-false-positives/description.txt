@@ -1,7 +1,7 @@
-False-positive adjudicator — evaluates whether a ModSec deny-event, APF block, YARA/LMD signature hit, or anomaly flag is a genuine threat signal or a benign-pattern match warranting suppression.
+False-positive adjudicator. Evaluates whether a ModSec deny-event, APF block, YARA/LMD signature hit, or anomaly flag is a real threat or a benign-pattern match warranting suppression.
 
-Use when the curator must decide whether to act on an alert or suppress it: applying the counter-hypothesis discipline, checking the benign-pattern corpus, verifying scanner thresholds, and emitting a suppression rationale with evidence citations to defense-hits.md when the FP-gate fires.
+Activate this skill whenever an alert needs an act-or-suppress decision — counter-hypothesis discipline, benign-pattern corpus lookup, scanner-threshold check, or suppression-rationale authoring — even if the request does not literally say "false positive."
 
-Prefer prescribing-defensive-payloads when the goal is to AUTHOR new rules. Prefer synthesizing-evidence when the goal is cross-stream timeline reconstruction, not alert adjudication.
+Prefer prescribing-defensive-payloads for AUTHORING new rules; prefer synthesizing-evidence for cross-stream timeline reconstruction.
 
-Examples: "ModSec rule 981172 fired on a Magento admin POST — is this a scanner FP or a real credential-stuffing attempt?" / "APF blocked 93.184.216.34 — benign CDN IP, suppress and add to allowlist" / "YARA sig matched vendor/magento/framework/View/Asset/Bundle.php — known-good file, log suppression rationale."
+Examples: "ModSec rule 981172 on Magento admin POST — scanner FP or real?" / "APF block on CDN IP — suppress and allowlist" / "YARA hit on vendor/magento/framework — log suppression."

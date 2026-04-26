@@ -1,7 +1,7 @@
-Defense-payload author — generates ModSec SecRule bodies, APF/iptables/nftables firewall entries, YARA signatures, and LMD pattern strings grounded in the observed threat signal.
+Defense-payload author. Generates ModSec SecRule bodies, APF/iptables/nftables firewall entries, YARA signatures, and LMD hex patterns grounded in the observed threat signal.
 
-Use when the curator must AUTHOR a concrete defensive artifact: a ModSec rule targeting observed URI/UA/header patterns, an APF deny-host or deny-subnet block, a YARA rule matching a confirmed webshell family, or an LMD hex-pattern for a staged dropper. Also applicable when substrate signals (CVE/advisory IDs, Magento install paths, pre-systemd distro markers) call for substrate-aware rule scoping.
+Activate this skill whenever a defensive artifact must be AUTHORED — a ModSec rule, an APF deny-host or deny-subnet block, a YARA signature for a webshell family, an LMD hex pattern for a staged dropper — or when substrate signals (CVE/advisory IDs, Magento install paths, pre-systemd distro markers) call for substrate-aware rule scoping, even if the request does not literally say "write a rule."
 
-Prefer synthesizing-evidence when the primary goal is cross-stream correlation, not rule authoring. Prefer gating-false-positives when the goal is to EVALUATE whether an existing rule hit is a true positive.
+Prefer synthesizing-evidence for cross-stream correlation; prefer gating-false-positives for evaluating an existing rule hit.
 
-Examples: "Write a ModSec SecRule blocking the eval(base64_decode()) POST body pattern" / "APF deny block for IPs in ip-clusters.md" / "YARA rule for the polyshell loader hex obfuscation layer."
+Examples: "ModSec rule for eval(base64_decode()) POST body" / "APF deny block for ip-clusters.md" / "YARA rule for polyshell loader hex layer."

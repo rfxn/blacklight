@@ -1,7 +1,7 @@
-IOC normalizer and cluster builder — extracts, deduplicates, and clusters IP addresses, domains, file hashes (MD5/SHA256), URLs, and webshell-family fingerprints from raw evidence into structured aggregation files.
+IOC normalizer and cluster builder. Extracts, deduplicates, and clusters IPs, domains, file hashes (MD5/SHA256), URLs, and webshell-family fingerprints from raw evidence into structured aggregation files.
 
-Use when the curator must normalize IOC strings from log excerpts, filesystem scan results, or network captures; cluster IPs into actor groups; build URL pattern sets; or fingerprint webshell families for cross-host correlation. Does not correlate across evidence streams — produces structured output, not narrative.
+Activate this skill whenever IOCs must be normalized, clustered, or fingerprinted — IPs into /24 cohorts, hashes into file-patterns.md, callback domains into actor groups, webshell strings into family signatures — even if the request does not literally say "extract IOCs."
 
-Prefer synthesizing-evidence when the goal is timeline reconstruction or cross-stream hypothesis building. Prefer gating-false-positives when the goal is alert adjudication rather than IOC extraction.
+Prefer synthesizing-evidence for timeline reconstruction or cross-stream hypothesis work; prefer gating-false-positives for alert adjudication.
 
-Examples: "Extract and deduplicate IPs from Apache access log lines, cluster by /24 subnet" / "Normalize the SHA256 hashes from the maldet scan report into file-patterns.md" / "Group the observed callback domains by registrar/ASN pattern — same actor cluster?"
+Examples: "Dedup Apache access IPs, cluster by /24 subnet" / "Normalize maldet SHA256s into file-patterns.md" / "Group callback domains by registrar — same actor?"
