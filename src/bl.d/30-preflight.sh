@@ -237,17 +237,22 @@ bl observe — read-only evidence extraction into the case bundle.
 Usage: bl observe <verb> [options]
 
 Verbs:
-  apache     collect access_log / error_log / modsec2 audit windows
-  fs         enumerate mtime-clustered paths under a root
-  crons      snapshot crontabs (system + user) with diff vs baseline
-  htaccess   walk .htaccess trees under a web root
-  bundle     assemble all collected artifacts into a single case bundle
+  file <path>                          file-triage: sha256, magic, size, strings
+  log apache --around <path> [--window 6h]   parse access/error log around mtime
+  log modsec --around <path> [--txn ID] [--rule ID]  parse ModSec Serial audit
+  log journal [--since <ts>] [--unit <u>]    journalctl read window
+  cron [--user <u>] [--system]                snapshot crontabs (ANSI-obscured detect)
+  proc                                  argv-spoof + suspicious-binary triage
+  htaccess --root <path>                walk .htaccess tree under a web root
+  fs --mtime-cluster --under <p> [--cluster-window-secs N]
+  fs --mtime-since   --since <ts> --under <p> [--ext <ext>]
+  firewall                              snapshot iptables/nftables backend
+  sigs --root <path> --sigs <hdb>       maldet hdb signature scan
+  substrate                             host-substrate enumeration (12 categories)
+  bundle                                assemble all observe shards into a tgz
 
-Options:
-  --case <id>        case id (default: current case from /var/lib/bl/state)
-  --from / --to      time window for log collectors (ISO 8601)
-  --root <path>      root for fs/htaccess walkers
-  --json             emit JSONL summary instead of human log lines
+Common:
+  --case <id>        override current case (default: /var/lib/bl/state/case.current)
 
 Exit codes: docs/exit-codes.md
 HELP_EOF

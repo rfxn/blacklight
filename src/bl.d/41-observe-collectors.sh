@@ -188,10 +188,19 @@ bl_observe_log_modsec() {
         esac
     done
 
-    # Locate log
+    # Locate log — explicit --around wins over hardcoded probes (fixture mode + non-standard paths)
     local log_path=""
     local concurrent_dir=""
-    if [[ -d /var/log/modsec_audit ]]; then
+    if [[ -n "$around_path" ]]; then
+        if [[ -r "$around_path" && -f "$around_path" ]]; then
+            log_path="$around_path"
+        elif [[ -r "$around_path" && -d "$around_path" ]]; then
+            concurrent_dir="$around_path"
+        else
+            bl_error_envelope observe "log modsec: --around path not readable: $around_path"
+            return "$BL_EX_NOT_FOUND"
+        fi
+    elif [[ -d /var/log/modsec_audit ]]; then
         concurrent_dir="/var/log/modsec_audit"
     else
         for candidate in \
