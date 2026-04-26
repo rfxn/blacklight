@@ -43,6 +43,8 @@ COPY scripts/ /opt/scripts/
 COPY skills-corpus/ /opt/skills-corpus/
 COPY routing-skills/ /opt/routing-skills/
 COPY Makefile /opt/Makefile
+# M14 P7: bl-lmd-hook adapter; tests access via $BATS_TEST_DIRNAME/../files/hooks/
+COPY files/ /opt/files/
 RUN chmod +x /opt/bl /opt/scripts/dev/synth-corpus.sh /opt/scripts/dev/synthesize-fixture-logs.sh
 
 WORKDIR /opt/tests

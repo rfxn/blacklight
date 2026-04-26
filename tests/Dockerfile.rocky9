@@ -30,6 +30,8 @@ COPY schemas/ /opt/schemas/
 COPY prompts/ /opt/prompts/
 COPY case-templates/ /opt/case-templates/
 COPY skills/ /opt/skills/
+# M14 P7: bl-lmd-hook adapter; tests access via $BATS_TEST_DIRNAME/../files/hooks/
+COPY files/ /opt/files/
 RUN chmod +x /opt/bl
 
 WORKDIR /opt/tests

@@ -1,0 +1,37 @@
+#!/bin/bash
+# bl-lmd-hook — LMD post_scan_hook adapter for blacklight
+# Installed by `bl setup --install-hook lmd`
+# LMD calls this with positional args + LMD_* env vars; we fork-and-exec into
+# bl trigger lmd in the background and return immediately so LMD's scan loop
+# is not blocked. LMD hook contract is fail-open per hookscan_fail_open=1.
+
+set -uo pipefail   # NOT -e: hook contract requires exit 0 to LMD; logger
+                   #         failure (no syslog socket in chroot/container) must
+                   #         not propagate non-zero before our explicit exit 0
+
+# Fast-path: if there's no agent-id cached, log + exit 0 (LMD's contract).
+# The forked child does the full preflight; failures land in syslog via bl's
+# own logging.
+BL_STATE_DIR="${BL_VAR_DIR:-/var/lib/bl}/state"
+if [[ ! -r "$BL_STATE_DIR/agent-id" ]]; then
+    logger -t bl-lmd-hook "agent-id not cached; bl trigger skipped (run 'bl setup' to provision)" || true   # || true: syslog absence in chroot/container is safe; LMD must get exit 0
+    exit 0
+fi
+
+# Only fire if LMD reports hits in this scan session
+if [[ "${LMD_HITS:-0}" -lt 1 ]]; then
+    exit 0
+fi
+
+# Fork the trigger; redirect output to syslog; LMD-side returns immediately.
+# Inner subshell with `exec >/dev/null 2>&1` ensures LMD-side does not block
+# on inherited pipe FDs even if LMD configured post_scan_hook_exec=sync.
+export BL_INVOKED_BY=lmd-hook
+( exec >/dev/null 2>&1
+  /usr/local/bin/bl trigger lmd \
+      --scanid "${LMD_SCANID:-unknown}" \
+      --session-file "${LMD_SESSION_FILE:-}" \
+      --source-conf /usr/local/maldetect/conf.maldet
+) &
+
+exit 0

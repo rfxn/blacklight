@@ -4,6 +4,19 @@ https://github.com/rfxn/blacklight
 
 === Unreleased — M14 substrate-hook (closed-loop response layer) ===
 
+[New] M14 P7 — src/bl.d/29-trigger.sh — bl_trigger, bl_trigger_lmd, _bl_trigger_lmd_read_session, _bl_trigger_lmd_fingerprint, bl_help_trigger
+[New] M14 P7 — _bl_trigger_lmd_read_session — TSV→JSONL parser with degraded-path handling (lmd_hit_degraded on unreadable/empty session-file)
+[New] M14 P7 — _bl_trigger_lmd_fingerprint — sha256[:16] cluster fingerprint over (scanid, sorted-sigs, sorted-paths)
+[Change] M14 P7 — src/bl.d/90-main.sh — register trigger verb in dispatch + per-verb help; bl trigger --help dispatches to bl_help_trigger
+[Change] M14 P7 — src/bl.d/30-preflight.sh — bl_usage Commands list includes trigger (Open a case from a hook-fired event source)
+[New] M14 P7 — files/hooks/bl-lmd-hook — LMD post_scan_hook adapter (fork-exec; <100ms hook return; agent-id fast-path + LMD_HITS<1 gate)
+[New] M14 P7 — tests/14-trigger-lmd.bats — G1 hook integration + G2 cluster fingerprint scenarios (9 tests; 2 skip-pending-integration)
+[New] M14 P7 — tests/fixtures/lmd-session-tsv-7-hits.tsv — 7-hit cluster fixture (public-source LMD TSV format)
+[New] M14 P7 — tests/helpers/lmd-mock.bash — LMD env injection + agent-id seed helpers
+[Change] M14 P7 — tests/01-cli-surface.bats — assert trigger in --help + bl trigger --help per-verb dispatch
+[Change] M14 P7 — tests/Dockerfile + tests/Dockerfile.rocky9 — COPY files/ /opt/files/ for bl-lmd-hook adapter test access
+[Change] M14 P7 — bl regenerated (slot 29 added between 28-notify.sh and 30-preflight.sh)
+
 [New] M14 P5 — src/bl.d/30-preflight.sh — _bl_load_blacklight_conf parses /etc/blacklight/blacklight.conf with allowlisted keys + metacharacter rejection
 [New] M14 P5 — src/bl.d/30-preflight.sh — bl_is_unattended 5-layer resolution chain
 [Change] M14 P5 — src/bl.d/30-preflight.sh — bl_preflight calls _bl_load_blacklight_conf + _bl_notify_register_channels (fail-soft)

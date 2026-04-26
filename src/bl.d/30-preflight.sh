@@ -180,6 +180,7 @@ Commands:
   clean     Apply remediation (diff-confirmed; quarantine preserved)
   case      Inspect / log / close / reopen cases
   setup     Provision or sync the Anthropic workspace
+  trigger   Open a case from a hook-fired event source (LMD post_scan_hook)
   flush     Drain queued outbox records
 
 Options:

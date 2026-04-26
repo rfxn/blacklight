@@ -32,6 +32,20 @@ teardown() {
     [[ "$output" == *"clean"* ]]
     [[ "$output" == *"setup"* ]]
     [[ "$output" == *"flush"* ]]
+    [[ "$output" == *"trigger"* ]]
+}
+
+@test "bl --help includes trigger verb" {
+    run "$BL_SOURCE" --help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"trigger"* ]]
+}
+
+@test "bl trigger --help: prints usage" {
+    run "$BL_SOURCE" trigger --help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"bl trigger lmd:"* ]]
+    [[ "$output" == *"--scanid"* ]]
 }
 
 @test "bl help exits 0 (positional form)" {
@@ -132,7 +146,7 @@ teardown() {
 }
 
 @test "bl <verb> --help dispatches per-verb (all verbs)" {
-    for verb in observe consult run defend clean case setup flush; do
+    for verb in observe consult run defend clean case setup flush trigger; do
         run "$BL_SOURCE" "$verb" --help
         [ "$status" -eq 0 ]
         [[ "$output" == bl*"$verb"*—* ]] || { echo "verb=$verb output=$output"; return 1; }

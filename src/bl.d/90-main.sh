@@ -33,6 +33,7 @@ main() {
                     case)     bl_help_case;     return "$BL_EX_OK" ;;
                     setup)    bl_help_setup;    return "$BL_EX_OK" ;;
                     flush)    bl_help_flush;    return "$BL_EX_OK" ;;
+                    trigger)  bl_help_trigger;  return "$BL_EX_OK" ;;
                     *)
                         bl_error_envelope usage "unknown command: $1" "(use \`bl --help\` for a list of commands)"
                         return "$BL_EX_USAGE"
@@ -61,6 +62,7 @@ main() {
         defend)   shift; bl_defend   "$@"; return $? ;;
         clean)    shift; bl_clean    "$@"; return $? ;;
         case)     shift; bl_case     "$@"; return $? ;;
+        trigger)  shift; bl_trigger  "$@"; return $? ;;
         flush)
             shift
             local flush_target=""

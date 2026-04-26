@@ -1,0 +1,7 @@
+2026-04-25T02:14:47Z	hex.php.webshell.polyshell	/var/www/sitefoo/wp-content/uploads/2026/04/poly.php	a3f8e9d2b1c45067...	quarantined
+2026-04-25T02:14:47Z	hex.php.webshell.polyshell	/var/www/sitefoo/wp-content/themes/active/inc/auth.php	b4f9eaff3cd56178...	quarantined
+2026-04-25T02:14:47Z	hex.php.eval.b64	/var/www/sitefoo/index_old.php	c5fafbcc4de67289...	quarantined
+2026-04-25T02:14:47Z	hex.php.webshell.polyshell	/var/www/barwidget/admin/.cache/x.php	d6abfcdd5ef7839a...	quarantined
+2026-04-25T02:14:47Z	hex.php.webshell.polyshell	/var/www/barwidget/checkout/.tmp/y.php	e7bcfeee6ab8940b...	quarantined
+2026-04-25T02:14:47Z	hex.php.eval.gzinflate	/var/www/barwidget/wp-includes/.bak/legacy.php	f8cdfeff7bcaa51c...	quarantined
+2026-04-25T02:14:47Z	hex.php.webshell.polyshell	/var/www/barwidget/wp-config-bak.php	a9deafff8cdbb62d...	quarantined
