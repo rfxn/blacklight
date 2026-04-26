@@ -318,37 +318,97 @@ bl_consult_update_index_row_append() {
 }
 
 bl_consult_new() {
-    # bl_consult_new <trigger> <notes> <dedup> — 0/64/65/71; emits case-id to stdout
-    local trigger="$1"
-    local notes="$2"
-    local dedup="$3"
-    # BL_MEMSTORE_CASE_ID: read from state file per MUST-FIX 6.2
-    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
+    # bl_consult_new — open a new case (or attach via dedup gate).
+    # Positional form (preserved for existing callers):
+    #   bl_consult_new <trigger> <notes> <dedup>      — 0/64/65/71
+    # Flag form (M14 — bl_trigger_lmd uses this):
+    #   bl_consult_new --trigger <path> --notes <str> --dedup <yes|""> \
+    #                  [--fingerprint <hex>] [--dedup-window-hours <N>]
+    # Returns: emits case-id to stdout on 0; emits ledger trigger_dedup_attached
+    # on within-window match.
+    local trigger="" notes="" dedup="" fingerprint_override="" dedup_window_hours=0
+
+    if [[ "${1:-}" == --* ]]; then
+        # Flag form
+        while (( $# > 0 )); do
+            case "$1" in
+                --trigger)              trigger="$2"; shift 2 ;;
+                --notes)                notes="$2"; shift 2 ;;
+                --dedup)                dedup="$2"; shift 2 ;;
+                --fingerprint)          fingerprint_override="$2"; shift 2 ;;
+                --dedup-window-hours)   dedup_window_hours="$2"; shift 2 ;;
+                *) bl_error_envelope consult "unknown flag: $1"; return "$BL_EX_USAGE" ;;
+            esac
+        done
+    else
+        # Positional form (existing semantic preserved)
+        trigger="${1:-}"
+        notes="${2:-}"
+        dedup="${3:-}"
+    fi
+
+    BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"   # 2>/dev/null: state file may be absent on first invocation; default id
     if [[ -z "$trigger" ]]; then
         bl_error_envelope consult "missing --trigger <artifact>"
         return "$BL_EX_USAGE"
     fi
+
+    # Fingerprint: use override (M14 cluster-fp injected by bl_trigger_lmd) or
+    # fall through to existing file-content fingerprint
     local fp
-    fp=$(bl_consult_fingerprint_trigger "$trigger") || return $?
+    if [[ -n "$fingerprint_override" ]]; then
+        fp="$fingerprint_override"
+    else
+        fp=$(bl_consult_fingerprint_trigger "$trigger") || return $?
+    fi
+
     if [[ "$dedup" == "yes" ]]; then
         local existing=""
         existing=$(bl_consult_find_open_case_by_fingerprint "$fp") || existing=""   # miss → empty string, not error
         if [[ -n "$existing" ]]; then
-            bl_info "dedup: attaching to existing open case $existing (fingerprint $fp)"
-            bl_consult_attach "$existing"
-            return $?
+            # M14: time-bound the dedup match if --dedup-window-hours > 0
+            if (( dedup_window_hours > 0 )); then
+                local ledger_path="$BL_VAR_DIR/ledger/${existing}.jsonl"
+                if [[ -r "$ledger_path" ]]; then
+                    local opened_ts now_epoch opened_epoch age_hours
+                    opened_ts=$(jq -rs '.[] | select(.kind=="case_opened") | .ts' "$ledger_path" 2>/dev/null | head -1)   # 2>/dev/null: malformed JSONL falls through to fresh-case path
+                    if [[ -n "$opened_ts" ]]; then
+                        now_epoch=$(date -u +%s)
+                        opened_epoch=$(date -u -d "$opened_ts" +%s 2>/dev/null) || opened_epoch=0   # 2>/dev/null: BSD date may not parse ISO Z; treat as stale → fall through
+                        age_hours=$(( (now_epoch - opened_epoch) / 3600 ))
+                        if (( age_hours > dedup_window_hours )); then
+                            bl_debug "dedup: existing case $existing is ${age_hours}h old, > ${dedup_window_hours}h window — treating as not-found"
+                            existing=""
+                        fi
+                    fi
+                fi
+            fi
+            if [[ -n "$existing" ]]; then
+                bl_info "dedup: attaching to existing open case $existing (fingerprint $fp)"
+                bl_consult_attach "$existing"
+                local rc=$?
+                if (( rc == 0 )); then
+                    # M14: emit trigger_dedup_attached ledger event
+                    bl_ledger_append "$existing" \
+                        "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$existing" --arg f "$fp" \
+                            '{ts:$ts, case:$c, kind:"trigger_dedup_attached", payload:{fingerprint:$f, attached_to_case:$c}}')" || \
+                        bl_warn "ledger append failed for trigger_dedup_attached"
+                fi
+                return $rc
+            fi
         fi
     elif [[ -z "$dedup" ]]; then
         local existing=""
         existing=$(bl_consult_find_open_case_by_fingerprint "$fp") || existing=""   # miss → empty, non-fatal
         [[ -n "$existing" ]] && bl_warn "trigger fingerprint $fp already open in $existing (use --dedup to attach, or proceed for new)"
     fi
+
     local case_id attempt=0
     while (( attempt < 3 )); do
         case_id=$(bl_consult_allocate_case_id) || return $?
         if bl_consult_materialize_case "$case_id" "$fp" "$notes"; then
             printf '%s' "$case_id" > "$BL_CASE_CURRENT_FILE"
-            bl_consult_register_curator "$case_id" "$fp" || true   # non-fatal; outbox queued
+            bl_consult_register_curator "$case_id" "$fp" || true   # || true: non-fatal; outbox queued
             bl_ledger_append "$case_id" \
                 "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg f "$fp" \
                     '{ts:$ts, case:$c, kind:"case_opened", payload:{trigger_fingerprint:$f}}')"
