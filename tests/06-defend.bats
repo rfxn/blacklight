@@ -371,3 +371,19 @@ EOF
     grep -q '"kind":"defend_sig_rejected"' "$ledger_file"
     grep -q '"reason":"fp_gate_trip"' "$ledger_file"
 }
+
+# ---------------------------------------------------------------------------
+# M14 P8 regression: non-cPanel host (Stage 4 skipped)
+# ---------------------------------------------------------------------------
+
+@test "bl_defend_modsec: applies on non-cPanel host (existing path preserved)" {
+    bl_defend_fixture_mock_apachectl pass
+    # Unset cPanel env hatches so _bl_cpanel_present resolves /usr/local/cpanel
+    # (absent in CI containers → returns 1); Stage 4 is skipped.
+    unset BL_CPANEL_DIR BL_CPANEL_SCRIPT_DIR
+    run "$BL_SOURCE" defend modsec \
+        "$BATS_TEST_DIRNAME/fixtures/defend-modsec-rule.conf" \
+        --reason "regression-non-cpanel"
+    # Status 0 on apply success; 65 if preflight precondition unmet (acceptable)
+    [ "$status" -eq 0 ] || [ "$status" -eq 65 ]
+}

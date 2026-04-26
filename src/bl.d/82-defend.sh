@@ -222,6 +222,19 @@ bl_defend_modsec() {
     "$apachectl" graceful >/dev/null 2>&1 || \
         bl_warn "graceful reload returned non-zero (rules applied but server reload may require manual intervention)"   # reload failure non-fatal: rules are applied in config; manual 'service reload' is operator's fallback
 
+    # M14: cPanel Stage 4 — if substrate is cPanel EA4, lock in via restartsrv_httpd.
+    # NOTE: runs AFTER apachectl graceful succeeds. cPanel hosts get both:
+    # apachectl-graceful (Stage 3) AND restartsrv_httpd --restart (Stage 4).
+    if _bl_cpanel_present 2>/dev/null; then   # 2>/dev/null: detection-time noise (test -d on missing dir) is safe to suppress
+        local cpanel_rc=0
+        _bl_cpanel_lockin_global "$case_id" "$new_file" "${prev_target:+$confdir/$prev_target}" || cpanel_rc=$?
+        if (( cpanel_rc != 0 )); then
+            # Stage 4 failed; ledger already emitted via _bl_cpanel_lockin_global rollback path
+            bl_error_envelope defend "cpanel Stage 4 lock-in failed; rollback completed (see ledger cpanel_lockin_*)"
+            return "$cpanel_rc"
+        fi
+    fi
+
     # shellcheck disable=SC2016  # $t,$new,$prev,$r are jq --arg variable names, not shell variables
     _bl_defend_ledger_emit "$case_id" "defend_applied" \
         '{verb:"defend.modsec", target:$new, previous_symlink:$prev, result:"ok", retire_hint:"30d", reason:$r}' \
