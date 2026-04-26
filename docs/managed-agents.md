@@ -119,6 +119,37 @@ Stateful reasoning context that ties together agent, environment, and resources.
 
 ---
 
+## 5.5 Primitives deliberately not used
+
+The Anthropic Managed Agents surface exposes two further primitives that
+blacklight does not consume. The omission is a framing decision, not a
+roadmap deferral. Mirrors `DESIGN.md §12.7`.
+
+**`callable_agents` — not used.** Sub-agent dispatch fragments the
+single-session 1M-context cross-stream correlation that distinguishes
+signal from noise on a real evidence bundle (see `prompts/curator-agent.md`
+§1). The v1 architecture used per-evidence-class hunters as separate
+sessions and merged their output; v2 retired that pattern in favor of one
+session per case where every stream is in scope simultaneously. The two
+helper Messages-API calls (Sonnet 4.6 bundle summary, Haiku 4.5 FP-gate)
+are wrapper-side cost optimizations *outside* the curator session, not
+callable_agents from inside it. Re-introducing `callable_agents` would
+re-introduce the v1 fragmentation; the 1M context is the architectural
+answer, not a workaround.
+
+**`mcp_servers` — not used.** blacklight's pitch is the host's own
+defensive primitives — ModSec, APF, CSF, iptables, nftables, LMD, ClamAV,
+YARA — directed by the curator. MCP integrations would extend the surface
+to external systems (cloud firewalls, ticketing, SIEM forwarders) —
+valuable, but a different product. The Layer C boundary in `DESIGN.md §3`
+("existing defensive primitives on the host") is the framing constraint;
+an MCP-exposed external system is *not* on the host. `FUTURE.md` items 18
+(notification channels) and 5 (additional firewall backends) cover the
+externalization path through wrapper-side adapters when the surface needs
+to grow there, keeping the curator's tool-invocation contract local.
+
+---
+
 ## 6. Caps summary
 
 | Primitive | Cap | Source |

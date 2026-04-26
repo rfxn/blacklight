@@ -83,6 +83,8 @@ M13 realigned the Layer B surface from the pre-Path-C layout (two memory stores:
 
 `bl-skills` memory store is **retired** in Path C. Skill content lives in the Skills primitive (description-routed, lazy-loaded) instead of a flat read_only memstore. See §7.1 for the retirement note.
 
+**Skill-version pinning at session create.** Routing Skills are version-pinned at the moment a session is created — the agent sees the skill content frozen at that version for the life of the session, regardless of subsequent `bl setup --sync` updates. This is the load-bearing adversarial-content invariant (§13.2): attacker-supplied evidence cannot mutate operator knowledge mid-investigation, because the knowledge is read-only from the agent's perspective AND immutable for the session's duration. Operational consequence: an operator who updates a routing-skill body and re-syncs sees the new content only on *new* sessions. Active long-lived cases continue to reason against the pinned version. To rebind an active case to the new content, close and reopen the case (`bl case close` + `bl case --reopen <id> --reason "skill rebind: <slug>"`) — the reopen creates a fresh session that picks up the latest skill version at create time.
+
 ---
 
 ## 4. Runtime flow — the agent-directed REPL
@@ -472,6 +474,17 @@ All setup operations are safely re-executable. Agent exists → POST `/v1/agents
 - `bl setup --install-hook lmd` — copies `files/hooks/bl-lmd-hook` to `/etc/blacklight/hooks/`, edits `/usr/local/maldetect/conf.maldet` to set `post_scan_hook="..."` (flock-serialized; `bash -n` syntax check on conf; restore-from-backup on parse fail).
 - `bl setup --import-from-lmd` — reads `conf.maldet`, writes notification credentials (email, Slack, Telegram, Discord) under `/etc/blacklight/notify.d/*` with `chmod 0600`. Metacharacter rejection and key-allowlist before any write.
 
+### 8.8 Workspace recovery — lost or corrupted `state.json`
+
+`state.json` is operator-local; the agent / memory store / workspace files / skills all persist on Anthropic's side. An operator whose host loses `state.json` (reinstall, accidental rm, disk failure) recovers via re-running `bl setup --sync`:
+
+1. **Agent rebind.** `GET /v1/agents` returns the workspace agent list; client-side filter on `.name == "bl-curator"` rebinds `state.agent.id` and `state.agent.version` from the live record. The CAS sequence resumes from whatever the live agent's `version` field reports.
+2. **Environment / memory store / workspace Files / Skills rebind.** Each is name-keyed on the workspace; sync's idempotency contract (§8.6) treats existing-by-name as cache hit and skips create. The full workspace surface re-binds without re-uploading content. SHA-256 delta-check covers any local content that was edited between the loss and the recovery.
+3. **What does NOT recover automatically.** `state.session_ids[<case>]` and `state.case_files[<case>]` live only in `state.json`. After recovery, prior cases are visible in the `bl-case` memory store but their per-case session ids are lost — the next `bl consult --attach <case>` opens a fresh session against the existing memory-store subtree (the hypothesis / open-questions / attribution state survives intact via the memory store; only the SSE session continuity is reset).
+4. **Per-case Files (evidence bundles, briefs).** Recoverable by re-running observe verbs to regenerate bundles, or by reattaching from the workspace Files API if the `file_id` was recorded in the case memory store. Closed-case briefs likewise rebind from `bl-case/CASE-<id>/brief-file-id`.
+
+The recovery path assumes the workspace `ANTHROPIC_API_KEY` and Anthropic-side records are intact. A workspace that has itself been lost (organization-level deletion) has no recovery short of re-running `bl setup --sync` against a new workspace and accepting that prior case continuity is gone — the audit trail is in the closed-case briefs, which the operator should retain out-of-band per §13.4.
+
 ---
 
 ## 9. Skills architecture
@@ -695,6 +708,16 @@ Three corrections applied in M15 against the live Anthropic Managed Agents API s
 3. **Sessions.create body field name** — `agent: <id>`, **not** `agent_id: <id>`. The wrong name is rejected with `agent_id: Extra inputs are not permitted. Did you mean 'agent'?`. The response shape is unrelated and may still carry `agent_id`. Implemented in `bl_consult_create_session` in `50-consult.sh`.
 
 `bl_api_call` (in `20-api.sh`) maps the conflict to `BL_EX_CONFLICT=71`; agent-update's CAS retry is the only caller that distinguishes 409 from other 4xx by exit code.
+
+### 12.7 Primitives deliberately not used
+
+Two Managed Agents primitives are intentionally absent from blacklight's Layer B surface. The omission is a framing decision, not a roadmap deferral.
+
+**`callable_agents` — not used.** The v1 architecture dispatched per-evidence-class hunters (log-hunter, fs-hunter, timeline-hunter) as separate Sonnet 4.6 sessions and merged their output. v2 retired that pattern in favor of single-session 1M-context cross-stream correlation: every evidence stream loads into the same session and the curator reasons over the full bundle in one pass (`prompts/curator-agent.md` §1, `PIVOT-v2.md §4.2`). The cross-stream correlation that distinguishes signal from noise only resolves when every stream is in scope simultaneously — sub-agent dispatch fragments that bundle. Re-introducing `callable_agents` would re-introduce the v1 fragmentation; the 1M context is the architectural answer, not a workaround.
+
+**`mcp_servers` — not used.** blacklight's pitch is the host's own defensive primitives (ModSec, APF, CSF, iptables, nftables, LMD, ClamAV, YARA) directed by the curator. MCP integrations would extend the surface to external systems (cloud firewalls, ticketing, SIEM forwarders) — valuable, but a different product. The Layer C boundary in §3 ("existing defensive primitives on the host") is the framing constraint; an MCP-exposed external system is *not* on the host. Items 18 (notification channels) and 5 (additional firewall backends) in `FUTURE.md` cover the externalization path through wrapper-side adapters when the surface needs to grow there, keeping the curator's tool-invocation contract local.
+
+The two helper Messages-API calls (`bl_messages_call` against Sonnet 4.6 for bundle summary and Haiku 4.5 for FP-gate adjudication, §12.4-§12.5) are wrapper-side cost optimizations *outside* the curator session — not callable_agents from inside it. The distinction is load-bearing: the curator reasons in a single 1M-context session; the wrapper independently reaches for cheaper models on bounded tasks the curator does not need to see.
 
 ---
 
