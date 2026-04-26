@@ -325,7 +325,7 @@ bl_case_close() {
     local brief_path
     brief_path=$(bl_case_close_render_brief_input "$case_id") || return $?
     local fid_md
-    fid_md=$(bl_files_api_upload "text/markdown" "$brief_path")
+    fid_md=$(bl_files_create "text/markdown" "$brief_path")
     local up_rc=$?
     if (( up_rc != 0 )); then
         bl_error_envelope case "brief MD upload failed (rc=$up_rc)"

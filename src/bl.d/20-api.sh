@@ -152,7 +152,7 @@ bl_poll_pending() {
 #   JSON Schema Draft 2020-12 (type, required, enum, properties, items).
 #   --strict enables unknown-key rejection (additionalProperties: false).
 # bl_ledger_append: flock-protected append to /var/lib/bl/ledger/<case>.jsonl.
-# bl_files_api_upload: multipart POST to /v1/files; returns file_id.
+# Note: bl_files_api_upload relocated to 23-files.sh as bl_files_create (M13 P2).
 # ----------------------------------------------------------------------------
 
 bl_jq_schema_check() {
@@ -204,58 +204,9 @@ bl_jq_schema_check() {
     return "$BL_EX_OK"
 }
 
-bl_files_api_upload() {
-    # bl_files_api_upload <mime> <file-path> — prints file_id on stdout; 0/69/70
-    local mime="$1"
-    local path="$2"
-    local attempt=0
-    local backoffs=(2 5 10)
-    local resp http_status body
-    if [[ ! -r "$path" ]]; then
-        bl_error_envelope files "upload path not readable: $path"
-        return "$BL_EX_UPSTREAM_ERROR"
-    fi
-    while (( attempt < 3 )); do
-        resp=$(curl -sS --max-time 60 -w '\n%{http_code}' -X POST \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "anthropic-beta: files-api-2025-04-14,managed-agents-2026-04-01" \
-            -F "file=@$path;type=$mime" \
-            "https://api.anthropic.com/v1/files" 2>&1) || true   # retry handles curl exit
-        http_status="${resp##*$'\n'}"
-        body="${resp%$'\n'*}"
-        # Cost-cap wire-up — append compact 2xx response JSON to BL_CURL_TRACE_LOG when set;
-        # trace-runner's bl_check_cost_cap awks the file for usage.{input,output}_tokens per line.
-        if [[ -n "${BL_CURL_TRACE_LOG:-}" ]] && [[ "$http_status" =~ ^2 ]]; then
-            printf '%s\n' "$body" | jq -c '.' >> "$BL_CURL_TRACE_LOG" 2>/dev/null || true   # 2>/dev/null + || true: trace-log write failure or non-JSON body must not break the API call (cost-cap is observational only)
-        fi
-        case "$http_status" in
-            2??)
-                printf '%s\n' "$body" | jq -r '.id'
-                return "$BL_EX_OK"
-                ;;
-            429)
-                attempt=$((attempt + 1))
-                (( attempt >= 3 )) && { bl_error_envelope files "rate limited after retries"; return "$BL_EX_RATE_LIMITED"; }
-                sleep "${backoffs[attempt-1]}"
-                ;;
-            5??)
-                attempt=$((attempt + 1))
-                (( attempt >= 3 )) && { bl_error_envelope files "upstream error (HTTP $http_status) after retries"; return "$BL_EX_UPSTREAM_ERROR"; }
-                sleep "${backoffs[attempt-1]}"
-                ;;
-            *)
-                bl_error_envelope files "files.create failed (HTTP ${http_status:-?})"
-                bl_debug "bl_files_api_upload: body=$body"
-                return "$BL_EX_UPSTREAM_ERROR"
-                ;;
-        esac
-    done
-    return "$BL_EX_UPSTREAM_ERROR"
-}
-
 # ----------------------------------------------------------------------------
 # Memory-store adapter — API schema migration shim (M12 P6).
+# Sole consumer is bl-case under Path C (M13 P2); bl-skills consumer paths shed.
 # The managed-agents API changed from key-based to path-based memories:
 #   key="bl-case/foo" → path="/bl-case/foo" (absolute)
 #   GET by key → list by path_prefix + GET by mem_id
@@ -287,9 +238,7 @@ bl_mem_get() {
     # bl_mem_get <store_id> <key> — fetch memory by path; prints full API body (with .content)
     local store_id="$1" key="$2"
     local encoded_path
-    encoded_path=$(printf '%s' "/$key" | /usr/bin/python3 -c \
-        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe=""))' 2>/dev/null \
-        || printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g')
+    encoded_path=$(printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g; s|@|%40|g')
     local list_body mem_id
     list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_path}&limit=1") || return $?
     mem_id=$(printf '%s' "$list_body" | jq -r \
@@ -307,9 +256,7 @@ bl_mem_patch() {
     local store_id="$1" key="$2" content_file="$3"
     # Find existing mem_id
     local encoded_path mem_id list_body
-    encoded_path=$(printf '%s' "/$key" | /usr/bin/python3 -c \
-        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe=""))' 2>/dev/null \
-        || printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g')
+    encoded_path=$(printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g; s|@|%40|g')
     list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_path}&limit=1") || return $?
     mem_id=$(printf '%s' "$list_body" | jq -r \
         --arg p "/$key" '.data[] | select((.path == $p) or (.key == ($p | ltrimstr("/")))) | .id' | head -1)
@@ -324,9 +271,7 @@ bl_mem_delete_by_key() {
     # bl_mem_delete_by_key <store_id> <key> — find mem_id by path then DELETE
     local store_id="$1" key="$2"
     local encoded_path list_body mem_id
-    encoded_path=$(printf '%s' "/$key" | /usr/bin/python3 -c \
-        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe=""))' 2>/dev/null \
-        || printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g')
+    encoded_path=$(printf '%s' "/$key" | sed 's|/|%2F|g; s| |%20|g; s|@|%40|g')
     list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_path}&limit=1") || return $?
     mem_id=$(printf '%s' "$list_body" | jq -r \
         --arg p "/$key" '.data[] | select((.path == $p) or (.key == ($p | ltrimstr("/")))) | .id' | head -1)
@@ -339,9 +284,7 @@ bl_mem_list() {
     # bl_mem_list <store_id> <key_prefix> — list memories under prefix; normalizes .path→.key
     local store_id="$1" key_prefix="$2"
     local encoded_prefix list_body
-    encoded_prefix=$(printf '%s' "/$key_prefix" | /usr/bin/python3 -c \
-        'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(),safe="/"))' 2>/dev/null \
-        || printf '%s' "/$key_prefix")
+    encoded_prefix=$(printf '%s' "/$key_prefix" | sed 's| |%20|g; s|@|%40|g')
     list_body=$(bl_api_call GET "/v1/memory_stores/$store_id/memories?path_prefix=${encoded_prefix}") || return $?
     # Normalize .key field — production emits .path (with /), mock fixtures emit .key (no /).
     # Prefer .path when present; fall back to existing .key; never overwrite a real .key with null.

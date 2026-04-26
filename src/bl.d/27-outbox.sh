@@ -247,7 +247,7 @@ bl_outbox_drain() {
             signal_upload)
                 mime=$(printf '%s' "$payload" | jq -r '.mime')
                 path=$(printf '%s' "$payload" | jq -r '.path')
-                bl_files_api_upload "$mime" "$path" >/dev/null || rc=$?
+                bl_files_create "$mime" "$path" >/dev/null || rc=$?
                 ;;
             action_mirror)
                 body_tmp=$(mktemp)
