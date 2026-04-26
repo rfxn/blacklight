@@ -48,6 +48,10 @@ ${BL_<KEY>:-default} fallback.
       IMPORTANT / TIP) replace plain blockquote disclaimers at four
       sites. Skills bundle file-tree replaced with three-row table.
       Docs footer collapsed to a "Further reading" table.
+[Change] README.md — em-dash style sweep. All 63 em-dashes replaced
+      contextually: colons for header-style separators, commas for
+      inline parentheticals, parens for embedded clauses, periods for
+      sentence breaks. No content changes; visual cleanup only.
 [Change] CHANGELOG / pkg/rpm/blacklight.spec / pkg/deb/debian/changelog /
       pkg.manifest / HACKATHON_TIMELINE.md — version-stamp 0.5.1 → 0.5.2
       across all sync points.

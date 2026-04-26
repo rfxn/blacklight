@@ -1,6 +1,6 @@
 # blacklight
 
-> Attackers have agents. Defenders still have grep. **`bl`** is the counter — a portable bash CLI that turns the Linux defensive stack the operator already runs into an agent-directed incident-response surface.
+> Attackers have agents. Defenders still have grep. **`bl`** is the counter, a portable bash CLI that turns the Linux defensive stack the operator already runs into an agent-directed incident-response surface.
 
 [![Version](https://img.shields.io/github/v/tag/rfxn/blacklight?label=version&color=blue&sort=semver)](https://github.com/rfxn/blacklight/tags)
 [![License](https://img.shields.io/github/license/rfxn/blacklight?color=blue)](LICENSE)
@@ -10,14 +10,14 @@
 [![Managed Agents](https://img.shields.io/badge/Anthropic-Managed%20Agents-7f4dff.svg)](#why-this-stack)
 
 > [!IMPORTANT]
-> **v0.5.0 — hackathon build, Cerebral Valley "Built with 4.7" April 2026.**
+> **v0.5.0 hackathon build, Cerebral Valley "Built with 4.7" April 2026.**
 > Production-shape, not production-tested at fleet scale. External operator beta is roadmap P1.
 
 ---
 
 ## What blacklight does
 
-At 03:42 UTC on a Saturday, the APSB25-94 advisory drops: Magento stores are actively backdoored via a double-extension webshell hidden in the media cache. Eight hours later the on-call team has run `grep`, `find`, ModSec audit scrapes, ClamAV scans, APF drops, and crontab audits across forty hosts — by hand.
+At 03:42 UTC on a Saturday, the APSB25-94 advisory drops: Magento stores are actively backdoored via a double-extension webshell hidden in the media cache. Eight hours later the on-call team has run `grep`, `find`, ModSec audit scrapes, ClamAV scans, APF drops, and crontab audits across forty hosts, by hand.
 
 **blacklight collapses that arc into agentic-minutes** on the same Linux substrate the defender already runs. No platform buy-in. No fleet migration. No analyst retraining. A Managed Agent curator holds the case across days; the operator runs the steps it prescribes.
 
@@ -47,14 +47,14 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 bl setup
 ```
 
-Floor: bash 4.1+, curl, jq. RPM and DEB packaging under `pkg/`. `bl setup` is one-time per Anthropic workspace — see [`docs/setup-flow.md`](docs/setup-flow.md).
+Floor: bash 4.1+, curl, jq. RPM and DEB packaging under `pkg/`. `bl setup` is one-time per Anthropic workspace; see [`docs/setup-flow.md`](docs/setup-flow.md).
 
 ---
 
-## Try it — APSB25-94 in five minutes
+## Try it: APSB25-94 in five minutes
 
 > [!NOTE]
-> Output is illustrative — shaped by the public APSB25-94 advisory. The full recorded trace lives at [`tests/live/evidence/`](tests/live/evidence/); regenerate with `make live-trace` (requires `ANTHROPIC_API_KEY`).
+> Output is illustrative, shaped by the public APSB25-94 advisory. The full recorded trace lives at [`tests/live/evidence/`](tests/live/evidence/); regenerate with `make live-trace` (requires `ANTHROPIC_API_KEY`).
 
 **1. Collect Apache logs and check the filesystem:**
 
@@ -66,7 +66,7 @@ bl observe fs --mtime-since 2026-03-20T00:00:00Z --under /var/www/html --ext php
 **2. Open a case; the curator proposes the next step:**
 
 ```bash
-bl consult --new --trigger "APSB25-94 double-extension webshell — obs-0001 obs-0002"
+bl consult --new --trigger "APSB25-94 double-extension webshell, obs-0001 obs-0002"
 ```
 
 ```
@@ -80,21 +80,21 @@ blacklight: pending step s-0043 ready
 Confirm and apply? [y/N]
 ```
 
-**3. Apply the rule — tier-gated, `apachectl configtest` pre-flight, backup written:**
+**3. Apply the rule (tier-gated, `apachectl configtest` pre-flight, backup written):**
 
 ```bash
 bl run s-0043 --yes
 ```
 
 ```
-blacklight: s-0043 defend.modsec [suggested] — applying
+blacklight: s-0043 defend.modsec [suggested]: applying
   apachectl -t ... OK
   rule installed: /etc/apache2/mods-enabled/bl-CASE-2026-0001-941999.conf
   apache2ctl graceful ... OK
 blacklight: ledger event defend_applied written
 ```
 
-The full motion — observation → consult → defense → clean → case close — is exercised end-to-end by [`tests/live/setup-live.bats`](tests/live/setup-live.bats).
+The full motion (observation → consult → defense → clean → case close) is exercised end-to-end by [`tests/live/setup-live.bats`](tests/live/setup-live.bats).
 
 ---
 
@@ -105,7 +105,7 @@ A judge or operator can verify install + smoke + version in under 60 seconds wit
 ```bash
 git clone https://github.com/rfxn/blacklight && cd blacklight
 make bl                                       # assemble bl from src/bl.d/NN-*.sh
-./bl --version                                # → bl 0.5.0
+./bl --version                                # → bl 0.5.2
 ./bl --help                                   # nine-namespace surface
 make -C tests test-quick                      # 00-smoke + 01-cli-surface (~70s)
 ls schemas/ skills/ routing-skills/ skills-corpus/   # 6 skill primitives + 8 corpora
@@ -120,20 +120,20 @@ git log --oneline | head -20                  # steady commit cadence
 | Live API | `make live-trace` | `BL_LIVE`-gated; requires `ANTHROPIC_API_KEY` |
 
 > [!TIP]
-> The test suite never makes a live API call — `tests/helpers/curator-mock.bash` shims `curl` against `tests/fixtures/step-*.json`. A judge with no API key can run the full 348-test suite.
+> The test suite never makes a live API call. `tests/helpers/curator-mock.bash` shims `curl` against `tests/fixtures/step-*.json`. A judge with no API key can run the full 348-test suite.
 
 ---
 
-## Why this exists — APSB25-94 in production
+## Why this exists: APSB25-94 in production
 
-In **mid-March 2026**, [Sansec](https://sansec.io) publicly disclosed **PolyShell** as part of [APSB25-94](https://helpx.adobe.com/security/products/magento/apsb25-94.html) — an unauthenticated file-upload RCE affecting **every version** of Magento 2 Community Edition and Adobe Commerce. **No vendor patch existed at disclosure. None exists today.** Mass exploitation began within 48 hours.
+In **mid-March 2026**, [Sansec](https://sansec.io) publicly disclosed **PolyShell** as part of [APSB25-94](https://helpx.adobe.com/security/products/magento/apsb25-94.html), an unauthenticated file-upload RCE affecting **every version** of Magento 2 Community Edition and Adobe Commerce. **No vendor patch existed at disclosure. None exists today.** Mass exploitation began within 48 hours.
 
 ```mermaid
 timeline
-    title APSB25-94 / PolyShell — managed-Magento hosting fleet response
+    title APSB25-94 / PolyShell · managed-Magento hosting fleet response
     Late Feb 2026 : Polyglot signatures flag artifacts (PHP-in-PNG/GIF)
     Mid Mar 2026 : Sansec discloses APSB25-94 publicly
-                 : No vendor patch — none exists today
+                 : No vendor patch · none exists today
     +48 hours : Mass exploitation begins
               : 6.8k+ attacker IPs · 1.5M+ requests · peak 210k/day
     Persistent window : 12+ path-evasion techniques iterated
@@ -153,9 +153,9 @@ We ran the response across a managed-Magento hosting fleet of a thousand-plus se
 - A separate upload vector traced back **months before public disclosure**
 - Post-compromise C2 beacons, secondary backdoors, and JavaScript payment skimmers
 
-Polyglot signatures had been flagging the artifacts since late February — PHP hidden inside valid GIF and PNG images, shells on disk that looked harmless to every file-type check. Some layers held. Some didn't. Attackers found evasion paths that bypassed initial WAF mitigations, and we iterated rules through the persistent attack window. We built **50+ assessment checks per store** mid-incident because existing tools didn't give us the coverage the threat demanded. After the industry-wide persistent attack pattern, **attack volume dropped 99.9%** — while the rest of the ecosystem continued to wait for a patch that still does not exist.
+Polyglot signatures had been flagging the artifacts since late February: PHP hidden inside valid GIF and PNG images, shells on disk that looked harmless to every file-type check. Some layers held. Some didn't. Attackers found evasion paths that bypassed initial WAF mitigations, and we iterated rules through the persistent attack window. We built **50+ assessment checks per store** mid-incident because existing tools didn't give us the coverage the threat demanded. After the industry-wide persistent attack pattern, **attack volume dropped 99.9%**, while the rest of the ecosystem continued to wait for a patch that still does not exist.
 
-**Where Claude entered.** Through that window, Claude played a foundational role in helping us gain leverage — every IR analyst was pasting evidence into chat, getting forensic synthesis back, and applying the result by hand. The lesson by the end of the campaign was not "AI helps with IR." The lesson was: **the agent doesn't belong in a chat window. It belongs in the shell, holding the case across days, on the substrate the defender already runs.** **blacklight is that lesson shipped** — the agent-directed CLI we wished we'd had on day 1.
+**Where Claude entered.** Through that window, Claude played a foundational role in helping us gain leverage; every IR analyst was pasting evidence into chat, getting forensic synthesis back, and applying the result by hand. The lesson by the end of the campaign was not "AI helps with IR." The lesson was: **the agent doesn't belong in a chat window. It belongs in the shell, holding the case across days, on the substrate the defender already runs.** **blacklight is that lesson shipped**: the agent-directed CLI we wished we'd had on day 1.
 
 > [!IMPORTANT]
 > No customer data lives in this repo. The volumes cited are from public field reporting on the campaign. The APSB25-94 reconstruction in [`exhibits/fleet-01/`](exhibits/fleet-01/) is built **only** from the public Adobe advisory, public Sansec analyses, and OWASP CRS / Magento developer documentation.
@@ -164,7 +164,7 @@ Polyglot signatures had been flagging the artifacts since late February — PHP 
 
 ## Who this is for
 
-Anyone running a defensive Linux stack — ModSecurity / Apache / iptables / nftables / cron / syslog — without a Charlotte-class platform budget and without time for a multi-quarter platform rollout. The substrate is industry-standard; blacklight is vendor-agnostic about which detection tools sit on top of it.
+Anyone running a defensive Linux stack (ModSecurity / Apache / iptables / nftables / cron / syslog) without a Charlotte-class platform budget and without time for a multi-quarter platform rollout. The substrate is industry-standard; blacklight is vendor-agnostic about which detection tools sit on top of it.
 
 | Operator profile | What `bl` gives them |
 |---|---|
@@ -173,23 +173,23 @@ Anyone running a defensive Linux stack — ModSecurity / Apache / iptables / nft
 | **Hosting product owner / sysadmin on small fleets** | GPL v2, zero license cost, single bash file, `$ANTHROPIC_API_KEY` is the only credential. Operator pays Anthropic API usage; that is the entire cost. |
 | **Defender already running RFXN tools** (LMD/APF/BFD) | First-class trigger adapter for LMD `post_scan_hook`; same install discipline and operator vocabulary as the existing R-fx Networks portfolio. |
 
-`bl` does not require LMD/APF/BFD. It directs whatever defensive primitives the host already has — Apache + ModSec, iptables, nftables, ClamAV, YARA, cron, journalctl. RFXN is one anchor case, not a precondition.
+`bl` does not require LMD/APF/BFD. It directs whatever defensive primitives the host already has: Apache + ModSec, iptables, nftables, ClamAV, YARA, cron, journalctl. RFXN is one anchor case, not a precondition.
 
 ---
 
 ## How blacklight compares
 
-The first wave of agentic defensive tooling — **CrowdStrike Charlotte AI** (Falcon EDR/XDR), **Microsoft Security Copilot** (Sentinel + Defender + M365 E5), **Palo Alto Purple AI** (Cortex), **Google SecLM / Duet for Security** (Chronicle) — shares one structural constraint: the operator must be inside the vendor platform before the agent is available. The reasoning quality is real. The bottleneck is platform reach.
+The first wave of agentic defensive tooling, including **CrowdStrike Charlotte AI** (Falcon EDR/XDR), **Microsoft Security Copilot** (Sentinel + Defender + M365 E5), **Palo Alto Purple AI** (Cortex), and **Google SecLM / Duet for Security** (Chronicle), shares one structural constraint: the operator must be inside the vendor platform before the agent is available. The reasoning quality is real. The bottleneck is platform reach.
 
 | Adoption barrier | Charlotte-class | blacklight |
 |---|---|---|
 | Platform onboarding | 3–18 months fleetwide | ~30 seconds (`curl \| bash`, then `bl setup`) |
 | Per-endpoint licensing | $75–$250 / host / year | $0; only Anthropic API usage |
-| SIEM/SOAR/IdP integration | Quarters of platform engineering | None — `bl` reads existing logs in place |
-| Analyst retraining | Weeks to months on vendor DSL | Zero — operator vocabulary preserved |
+| SIEM/SOAR/IdP integration | Quarters of platform engineering | None; `bl` reads existing logs in place |
+| Analyst retraining | Weeks to months on vendor DSL | Zero; operator vocabulary preserved |
 | Extensibility | Vendor DSL detection authoring | Fork the repo; drop in a markdown skill |
-| Lock-in | Per-vendor; migration cost compounds | None — wrapper and skills are GPL v2 |
-| Works on CentOS 6 / RHEL 7 / Debian 10 | Rarely supported | Yes — bash 4.1 + curl is the floor |
+| Lock-in | Per-vendor; migration cost compounds | None; wrapper and skills are GPL v2 |
+| Works on CentOS 6 / RHEL 7 / Debian 10 | Rarely supported | Yes; bash 4.1 + curl is the floor |
 | Compatible with $10/month customer margins | No | Yes |
 | Auditable in 30 minutes | No (closed platform) | Yes (single bash file + markdown) |
 
@@ -203,16 +203,16 @@ Three layers, clear separation of concerns:
 
 ```mermaid
 flowchart TB
-    subgraph A["Layer A — bl on the host · bash 4.1+, curl, jq"]
+    subgraph A["Layer A · bl on the host · bash 4.1+, curl, jq"]
         direction TB
         A1[26 src/bl.d/ parts → assembled bl · ~10,700 lines · 136 bl_* fns]
         A2[bl observe · consult · run · defend · clean · case · setup · trigger · flush]
     end
-    subgraph B["Layer B — Managed Agent session · Anthropic-hosted · Opus 4.7 · 1M ctx"]
+    subgraph B["Layer B · Managed Agent session · Anthropic-hosted · Opus 4.7 · 1M ctx"]
         direction TB
         B1[Agent · Environment · Skills 6 · Files · Memory Store · Sessions · Custom tools · Triggers]
     end
-    subgraph C["Layer C — host primitives · directed, never replaced"]
+    subgraph C["Layer C · host primitives · directed, never replaced"]
         direction TB
         C1[apachectl + ModSecurity-CRS · APF · CSF · iptables · nftables · LMD · ClamAV · YARA · Apache/nginx logs · journalctl · cron · /proc]
     end
@@ -228,9 +228,9 @@ flowchart TB
     class C lc
 ```
 
-**Layer-boundary invariants.** Layer A executes; Layer B reasons; Layer C is untouched by blacklight source — no new rule engines, no new manifests, no new wire formats. Cases are agent-directed REPLs, not batch dossier analyses.
+**Layer-boundary invariants.** Layer A executes; Layer B reasons; Layer C is untouched by blacklight source: no new rule engines, no new manifests, no new wire formats. Cases are agent-directed REPLs, not batch dossier analyses.
 
-**Investigation flow** — async polled step-emit. The wrapper does not hold an SSE socket; the agent writes proposed step JSON to `bl-case/<case>/pending/<step-id>.json` and the wrapper polls.
+**Investigation flow** (async polled step-emit). The wrapper does not hold an SSE socket; the agent writes proposed step JSON to `bl-case/<case>/pending/<step-id>.json` and the wrapper polls.
 
 ```mermaid
 sequenceDiagram
@@ -272,13 +272,13 @@ Nine namespaces, one assembled bash binary. Per-verb help bypasses preflight (`b
 
 | Namespace | Purpose |
 |---|---|
-| `bl observe` | Read-only evidence — `file`, `log {apache\|modsec\|journal}`, `cron`, `proc`, `htaccess`, `fs`, `firewall`, `sigs`, `substrate`, `bundle`. JSONL out. |
+| `bl observe` | Read-only evidence: `file`, `log {apache\|modsec\|journal}`, `cron`, `proc`, `htaccess`, `fs`, `firewall`, `sigs`, `substrate`, `bundle`. JSONL out. |
 | `bl consult` | Open or attach an investigation case via the `bl-curator` Managed Agent. |
 | `bl run` | Execute an agent-prescribed step. Schema-validated, tier-gated, ledger-logged. `--list`, `--batch [--max <N>]`, `--dry-run`, `--explain`. |
-| `bl defend` | Apply an agent-authored payload — `modsec` (rule apply / `--remove` / rollback), `firewall` (APF/CSF/iptables/nftables, CDN-safelist aware, `--retire <duration>`), `sig` (LMD/ClamAV append, FP-corpus gated). |
-| `bl clean` | Diff-shown remediation — `file` (quarantine, never unlink), `htaccess`, `cron`, `proc` (capture-then-SIGTERM). `--undo`, `--unquarantine` round-trip. |
-| `bl case` | Lifecycle — `show`, `list`, `log [--audit]`, `close`, `reopen`. |
-| `bl setup` | Workspace bootstrap — `--sync`, `--reset --force`, `--gc`, `--eval`, `--check`, `--install-hook lmd`, `--import-from-lmd`. |
+| `bl defend` | Apply an agent-authored payload: `modsec` (rule apply / `--remove` / rollback), `firewall` (APF/CSF/iptables/nftables, CDN-safelist aware, `--retire <duration>`), `sig` (LMD/ClamAV append, FP-corpus gated). |
+| `bl clean` | Diff-shown remediation: `file` (quarantine, never unlink), `htaccess`, `cron`, `proc` (capture-then-SIGTERM). `--undo`, `--unquarantine` round-trip. |
+| `bl case` | Lifecycle: `show`, `list`, `log [--audit]`, `close`, `reopen`. |
+| `bl setup` | Workspace bootstrap: `--sync`, `--reset --force`, `--gc`, `--eval`, `--check`, `--install-hook lmd`, `--import-from-lmd`. |
 | `bl trigger` | Hook-driven case open. Today: LMD `post_scan_hook`. |
 | `bl flush` | Drain durable outbox of queued memstore writes (cron-driven). |
 
@@ -288,9 +288,9 @@ Ten documented exit codes ([`docs/exit-codes.md`](docs/exit-codes.md)); 1–63 r
 
 ## Why this stack
 
-### Managed Agents — the case IS the session
+### Managed Agents: the case IS the session
 
-The curator is an Anthropic Managed Agent, not a stateless API call wrapped in a prompt. Open a case Monday, collect more evidence Tuesday, call `bl consult` again Friday — the curator already holds the hypothesis, the evidence index, the pending steps, and every prior revision. No re-prompt, no context reconstruction.
+The curator is an Anthropic Managed Agent, not a stateless API call wrapped in a prompt. Open a case Monday, collect more evidence Tuesday, call `bl consult` again Friday; the curator already holds the hypothesis, the evidence index, the pending steps, and every prior revision. No re-prompt, no context reconstruction.
 
 `bl setup` provisions the **full five-primitive Managed Agents surface** and persists every ID into a single `state.json`:
 
@@ -313,11 +313,11 @@ Pre-flight validation (`apachectl -t`) runs in the agent's own sandbox before an
 
 Live API surfaces verified against the `managed-agents-2026-04-01` beta header in M15: `POST /v1/agents/<id>` (update), `POST /v1/agents/<id>/archive` (retire), `sessions.create` body `{ agent: <id>, ... }`. See [`docs/managed-agents.md`](docs/managed-agents.md).
 
-### Opus 4.7 + 1M context — full-bundle correlation
+### Opus 4.7 + 1M context: full-bundle correlation
 
 A realistic APSB25-94-shaped case routinely accumulates **250,000 to 400,000 tokens** of raw evidence (Apache transfer + error, ModSec audit, FS mtime, crontabs, process snapshots, journalctl, maldet history) before the curator has authored a single hypothesis. Chunking destroys correlation: a retriever picking "top 5 evidence items" misses the one record that matters precisely because it does not look relevant in isolation.
 
-The 1M context window makes full-bundle correlation possible without a retrieval layer. Opus 4.7 brings the forensic reasoning depth to distinguish a staging artifact from a false positive by applying ModSecurity grammar, Magento path conventions, and attacker TTPs simultaneously. A hot mid-investigation case lives at ~85K–120K tokens — 8–12% of the window. Prompt caching amortizes the stable portion (skills + history); only the new evidence delta is uncached. [`exhibits/fleet-01/`](exhibits/fleet-01/) ships a deterministic, byte-identical, **~360k-token** APSB25-94 forensic bundle for stress verification.
+The 1M context window makes full-bundle correlation possible without a retrieval layer. Opus 4.7 brings the forensic reasoning depth to distinguish a staging artifact from a false positive by applying ModSecurity grammar, Magento path conventions, and attacker TTPs simultaneously. A hot mid-investigation case lives at ~85K–120K tokens (8–12% of the window). Prompt caching amortizes the stable portion (skills + history); only the new evidence delta is uncached. [`exhibits/fleet-01/`](exhibits/fleet-01/) ships a deterministic, byte-identical, **~360k-token** APSB25-94 forensic bundle for stress verification.
 
 ### Three-tier model routing
 
@@ -328,21 +328,21 @@ The 1M context window makes full-bundle correlation possible without a retrieval
 | `bl observe bundle` summary render | **`claude-sonnet-4-6`** | Pattern condensation at speed and cost. Falls back to deterministic helper on `--no-llm-summary` or `BL_DISABLE_LLM=1`. |
 | FP-gate adjudication (sig append) | **`claude-haiku-4-5`** | Binary-scan-passed signatures spot-checked before LMD/ClamAV append. Cheap, fast, schema-output. |
 
-Curator calls are infrequent and expensive **by design** — they carry the full evidence bundle. Step-execution and FP-gating calls are frequent and cheap **by design**. Same model everywhere would either make investigations prohibitively expensive or leave the reasoning-intensive curator step under-resourced. `BL_DISABLE_LLM=1` short-circuits all LLM calls and forces deterministic fallbacks.
+Curator calls are infrequent and expensive **by design**: they carry the full evidence bundle. Step-execution and FP-gating calls are frequent and cheap **by design**. Same model everywhere would either make investigations prohibitively expensive or leave the reasoning-intensive curator step under-resourced. `BL_DISABLE_LLM=1` short-circuits all LLM calls and forces deterministic fallbacks.
 
-### Bash — the moat
+### Bash, the moat
 
-The bash 4.1 + curl + jq runtime IS the commercial moat against Charlotte-class platforms — because Charlotte cannot deploy here either.
+The bash 4.1 + curl + jq runtime IS the commercial moat against Charlotte-class platforms, because Charlotte cannot deploy here either.
 
 - **Portability floor: bash 4.1 from December 2009 (RHEL/CentOS 6 era).** Tens of millions of legacy hosting environments still run on or near this floor.
-- **Pre-usr-merge handling.** CentOS 6 has coreutils at `/bin/`, modern distros at `/usr/bin/`. `bl` never hardcodes either — every coreutil call goes through the `command` builtin for portable PATH resolution.
+- **Pre-usr-merge handling.** CentOS 6 has coreutils at `/bin/`, modern distros at `/usr/bin/`. `bl` never hardcodes either; every coreutil call goes through the `command` builtin for portable PATH resolution.
 - **Zero runtime daemons, zero databases, zero service ports.** State lives in `/var/lib/bl/` on the host (operator-owned) and the Anthropic workspace (operator-owned). `bl` exits when its operation completes.
 - **Single secret = `$ANTHROPIC_API_KEY`.** No service account, no long-lived token, no mTLS, no certificate management. Workspace boundary is the blast radius of a compromised credential.
 - **Distro matrix.** `make -C tests test-all` against debian12, rocky9, centos7, rocky8, ubuntu2004, ubuntu2404. CentOS 6 floor verified via `Dockerfile.centos6` on demand.
 
 ---
 
-## Safety model — five tiers, eight mechanics
+## Safety model: five tiers, eight mechanics
 
 Every action is classified into one of five tiers; the wrapper enforces the gate based on the tier the agent declared, not on trust from the agent alone.
 
@@ -362,15 +362,15 @@ Full safety policy: [`docs/security-model.md`](docs/security-model.md), [`docs/a
 
 ## Skills bundle
 
-Operator-voice knowledge is the moat. The bundle is grounded in twenty-five years of Linux hosting security operations, authored from public sources only (Adobe advisories, ModSecurity grammar, Magento developer docs, Linux hosting-stack documentation, public YARA repositories) — never operator-local data.
+Operator-voice knowledge is the moat. The bundle is grounded in twenty-five years of Linux hosting security operations, authored from public sources only (Adobe advisories, ModSecurity grammar, Magento developer docs, Linux hosting-stack documentation, public YARA repositories), never operator-local data.
 
 | Surface | Path | Count | Role |
 |---|---|---|---|
 | Raw research substrate | `skills/` | 23 dirs / 73 files | Operator-voice knowledge files, grounded in lived experience |
-| Routing-skills | `routing-skills/` | 6 description-routed | Platform Skills primitives — lazy-loaded per turn |
-| Workspace corpora | `skills-corpus/` | 8 markdown corpora | Mounted as Files at session create — always present |
+| Routing-skills | `routing-skills/` | 6 description-routed | Platform Skills primitives; lazy-loaded per turn |
+| Workspace corpora | `skills-corpus/` | 8 markdown corpora | Mounted as Files at session create; always present |
 
-**Routing model (M13 Path C):** the legacy `bl-skills` memory store is **retired**. Skills are description-routed Skills primitives — the platform router selects per turn from the description, so per-turn token load on routed Skills is bounded.
+**Routing model (M13 Path C):** the legacy `bl-skills` memory store is **retired**. Skills are description-routed Skills primitives; the platform router selects per turn from the description, so per-turn token load on routed Skills is bounded.
 
 **Authoring discipline (non-negotiable):** each skill opens with a scenario from lived experience, states a non-obvious rule, gives one concrete example drawn from public APSB25-94 material, and names a failure mode. If the only available draft would be generic IR/SOC boilerplate, the gap is flagged and the file lands later. **Slop is not shipped.**
 
@@ -378,18 +378,18 @@ Operator-voice knowledge is the moat. The bundle is grounded in twenty-five year
 
 ---
 
-## Bash SDK — 136 reusable `bl_*` primitives
+## Bash SDK: 136 reusable `bl_*` primitives
 
-`bl` is not just a CLI; it is a bash SDK. Source `bl` from any other bash tool (`source bl || true`) and you get reusable primitives for Anthropic Managed Agents, Files, Memory Stores, Skills, Messages API, prompt-injection fencing, ledger writes, outbox rate-limiting, and operator notification — in pure bash, with no Python or service runtime.
+`bl` is not just a CLI; it is a bash SDK. Source `bl` from any other bash tool (`source bl || true`) and you get reusable primitives for Anthropic Managed Agents, Files, Memory Stores, Skills, Messages API, prompt-injection fencing, ledger writes, outbox rate-limiting, and operator notification, in pure bash, with no Python or service runtime.
 
 | Family | Source | Purpose |
 |---|---|---|
 | `bl_api_*` (incl. `bl_mem_*`, `bl_poll_*`, `bl_jq_*`) | `20-api.sh` | Managed Agents REST surface; backoff+retry; memory-store CRUD; schema check |
 | `bl_messages_call` | `22-models.sh` | Messages API caller (Sonnet 4.6 / Haiku 4.5) |
-| `bl_files_*` | `23-files.sh` | Anthropic Files API — upload, attach, GC orphans |
-| `bl_skills_*` | `24-skills.sh` | Anthropic Skills API — upload, version-pin |
+| `bl_files_*` | `23-files.sh` | Anthropic Files API: upload, attach, GC orphans |
+| `bl_skills_*` | `24-skills.sh` | Anthropic Skills API: upload, version-pin |
 | `bl_ledger_*` | `25-ledger.sh` | Dual-write audit ledger (memory store + local JSONL) |
-| `bl_fence_*` | `26-fence.sh` | Prompt-injection fence — session-unique tokens, untrusted-content wrap |
+| `bl_fence_*` | `26-fence.sh` | Prompt-injection fence: session-unique tokens, untrusted-content wrap |
 | `bl_outbox_*` | `27-outbox.sh` | Rate-limit queue with watermarks + age-gated drain |
 | `bl_notify` | `28-notify.sh` | Multi-channel operator notification |
 | `bl_trigger_*` | `29-trigger.sh` | Hook adapters (LMD `post_scan_hook` today) |
@@ -404,14 +404,14 @@ Full SDK reference: [`PRD.md`](PRD.md) §5.0.1.
 
 ## What blacklight is NOT
 
-Explicit non-goals — not in this version, not in any version:
+Explicit non-goals. Not in this version, not in any version:
 
 - **Not an EDR.** No kernel sensor, no endpoint telemetry agent, no platform to roll out fleetwide.
 - **Not a SIEM.** No log-aggregation substrate; `bl observe` consumes existing logs in place.
 - **Not a daemon.** `bl` is invoked once per operator thought and exits. State lives in `/var/lib/bl/` and the Anthropic-hosted session.
 - **Not a fleet manager.** v0.5.0 is single-host. Fleet propagation rides the customer's existing Puppet/Ansible/Salt/Chef.
 - **Not multi-tenant SaaS.** The Anthropic workspace is operator-provisioned and operator-owned. Per-tenant isolation is platform-native.
-- **Not a replacement for ModSec/APF/LMD/ClamAV/YARA.** `bl` directs them — supercharge, not rearchitect.
+- **Not a replacement for ModSec/APF/LMD/ClamAV/YARA.** `bl` directs them: supercharge, not rearchitect.
 - **Not Python.** Zero language runtime on the host. `bl` is bash; the agent runs in Anthropic's sandbox.
 - **Not closed-core commercial.** GPL v2 is permanent.
 
@@ -422,18 +422,18 @@ Explicit non-goals — not in this version, not in any version:
 Behavioral verification is committed evidence, not a claim. Four artifacts:
 
 - **348 BATS tests across 17 files**, fixture-driven (no live API calls in CI). Pre-commit gate: debian12 + rocky9 must be green before every commit. Full release matrix runs across debian12, rocky9, ubuntu2404, centos7, rocky8, ubuntu2004.
-- **Live integration smoke** — [`tests/live/setup-live.bats`](tests/live/setup-live.bats) (`BL_LIVE`-gated) exercises the full provision path against the real Managed Agents API: workspace setup, agent ensure/archive, environment ensure, memory-store CRUD, Files upload, Skills create/update with CAS, session create, wake event, polled step-emit consume.
-- **Committed live trace** — [`tests/live/evidence/`](tests/live/evidence/) — recorded run from the M12 timeline: Scenes 0/1/2 hermetic and green; Scene 3 hit a session-creation drift in the Managed Agents beta that M15 closed in source.
-- **Stress corpus** — [`exhibits/fleet-01/`](exhibits/fleet-01/) — deterministic, byte-identical, ~360k-token APSB25-94 forensic bundle (apache + modsec + fs + cron + proc + journal + maldet) with attack needles buried in realistic noise. Cross-stream correlation is the only resolution path; no single stream resolves the case.
+- **Live integration smoke**. [`tests/live/setup-live.bats`](tests/live/setup-live.bats) (`BL_LIVE`-gated) exercises the full provision path against the real Managed Agents API: workspace setup, agent ensure/archive, environment ensure, memory-store CRUD, Files upload, Skills create/update with CAS, session create, wake event, polled step-emit consume.
+- **Committed live trace**. [`tests/live/evidence/`](tests/live/evidence/) is a recorded run from the M12 timeline: Scenes 0/1/2 hermetic and green; Scene 3 hit a session-creation drift in the Managed Agents beta that M15 closed in source.
+- **Stress corpus**. [`exhibits/fleet-01/`](exhibits/fleet-01/) is a deterministic, byte-identical, ~360k-token APSB25-94 forensic bundle (apache + modsec + fs + cron + proc + journal + maldet) with attack needles buried in realistic noise. Cross-stream correlation is the only resolution path; no single stream resolves the case.
 
 ---
 
 ## Roadmap
 
-- **P1 — stabilization + community release.** Public release under `rfxn/blacklight`, external operator beta, signed releases (GPG), `bl undo` universal action revert.
-- **P2 — detection breadth + ecosystem hooks.** Additional firewall backends, notification channels (Slack/Telegram/Discord/email), source-side log compaction, inline curator tool wiring, threat-intelligence enrichment, YARA-of-known-malware.
-- **P3 — fleet operation + sophisticated detection.** `bl observe --fleet`, container/Kubernetes awareness, behavioral baselining, forensic capture (memory, timeline, procnet), curator model strategy + air-gapped operation.
-- **P4 — presentation, extensibility, hardening.** Brief HTML/PDF/multi-language rendering, skill marketplace, ARM64/Alpine/BSD parity, redaction + data residency, ledger integrity hardening.
+- **P1 · stabilization + community release.** Public release under `rfxn/blacklight`, external operator beta, signed releases (GPG), `bl undo` universal action revert.
+- **P2 · detection breadth + ecosystem hooks.** Additional firewall backends, notification channels (Slack/Telegram/Discord/email), source-side log compaction, inline curator tool wiring, threat-intelligence enrichment, YARA-of-known-malware.
+- **P3 · fleet operation + sophisticated detection.** `bl observe --fleet`, container/Kubernetes awareness, behavioral baselining, forensic capture (memory, timeline, procnet), curator model strategy + air-gapped operation.
+- **P4 · presentation, extensibility, hardening.** Brief HTML/PDF/multi-language rendering, skill marketplace, ARM64/Alpine/BSD parity, redaction + data residency, ledger integrity hardening.
 
 Multi-tenant SaaS variant tracked under T8; the OSS CLI stays GPL v2. Thirty items across eight strategic themes scoped in [`FUTURE.md`](FUTURE.md).
 
@@ -458,10 +458,10 @@ Multi-tenant SaaS variant tracked under T8; the OSS CLI stays GPL v2. Thirty ite
 
 GNU GPL v2. See [`LICENSE`](LICENSE).
 
-Part of the R-fx Networks defensive OSS portfolio — alongside [LMD](https://github.com/rfxn/linux-malware-detect), [APF](https://github.com/rfxn/advanced-policy-firewall), [BFD](https://github.com/rfxn/brute-force-detection). blacklight is vendor-agnostic about which detection tools sit on top of the Linux substrate; the RFXN family is one anchor case, not a precondition.
+Part of the R-fx Networks defensive OSS portfolio, alongside [LMD](https://github.com/rfxn/linux-malware-detect), [APF](https://github.com/rfxn/advanced-policy-firewall), and [BFD](https://github.com/rfxn/brute-force-detection). blacklight is vendor-agnostic about which detection tools sit on top of the Linux substrate; the RFXN family is one anchor case, not a precondition.
 
 R-fx Networks `<proj@rfxn.com>` · Ryan MacDonald `<ryan@rfxn.com>`.
 
 ---
 
-*Hackathon build — Opus 4.7 + Anthropic Managed Agents, Cerebral Valley "Built with 4.7" April 2026.*
+*Hackathon build · Opus 4.7 + Anthropic Managed Agents · Cerebral Valley "Built with 4.7" April 2026.*
