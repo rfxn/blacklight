@@ -35,6 +35,19 @@ ${BL_<KEY>:-default} fallback.
       installer behaviour is unchanged. Outbox section comment now
       explicitly states tunables are readonly constants in
       27-outbox.sh, not conf-tunable.
+[Change] README.md — visual rearchitecture (787 → 467 lines). Audience
+      broadened off RFXN-only framing; "Who this is for" now leads with
+      defensive-Linux-stack operators and lists RFXN as an anchor case,
+      not a precondition. 19 H2 sections collapsed to 14; four "Why X"
+      sections folded under one "Why this stack" with H3 subsections;
+      manual TOC dropped (GitHub auto-generates). Mermaid replaces
+      ASCII art at five sites: top-of-doc operator/curator/host
+      flowchart, APSB25-94 incident timeline, three-layer architecture,
+      investigation-flow sequence diagram (async polled step-emit),
+      Managed Agents five-primitive map. GitHub callouts (NOTE /
+      IMPORTANT / TIP) replace plain blockquote disclaimers at four
+      sites. Skills bundle file-tree replaced with three-row table.
+      Docs footer collapsed to a "Further reading" table.
 [Change] CHANGELOG / pkg/rpm/blacklight.spec / pkg/deb/debian/changelog /
       pkg.manifest / HACKATHON_TIMELINE.md — version-stamp 0.5.1 → 0.5.2
       across all sync points.
