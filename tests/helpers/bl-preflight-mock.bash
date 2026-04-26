@@ -5,7 +5,7 @@
 # and returns one of three pre-configured responses for GET /v1/agents:
 #
 #   bl_mock_set_response empty     — HTTP 200 + {"data": []}  (triggers 66 path)
-#   bl_mock_set_response populated — HTTP 200 + {"data": [{"id":"agent_test_stub"}]} (triggers cache+0)
+#   bl_mock_set_response populated — HTTP 200 + {"data": [{"id":"agent_test_stub","name":"bl-curator"}]} (triggers cache+0)
 #   bl_mock_set_response bad_key   — HTTP 401 (triggers 65 path)
 #
 # Response shape matches docs/setup-flow.md §8 provenance notes
@@ -20,7 +20,7 @@ bl_mock_init() {
 # bl-preflight-mock: curl shim
 case "$BL_MOCK_RESPONSE" in
     empty)     printf '{"data": []}\n200'; exit 0 ;;
-    populated) printf '{"data": [{"id": "agent_test_stub"}]}\n200'; exit 0 ;;
+    populated) printf '{"data": [{"id": "agent_test_stub", "name": "bl-curator"}]}\n200'; exit 0 ;;
     bad_key)   printf '{"error": {"type": "authentication_error"}}\n401'; exit 0 ;;  # curl -w emits status to stdout, not stderr; exit 0 matches successful HTTP with 4xx body
     *)         printf 'bl-preflight-mock: unknown response config: %s\n' "$BL_MOCK_RESPONSE" >&2; exit 1 ;;
 esac

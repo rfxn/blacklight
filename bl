@@ -3769,16 +3769,17 @@ _bl_load_blacklight_conf() {
 
 # bl_is_unattended — resolution chain (most-explicit-wins):
 # 1. --unattended CLI flag (caller sets BL_UNATTENDED_FLAG=1 before calling)
-# 2. BL_UNATTENDED env
+# 2. BL_UNATTENDED env (=1 forces unattended; =0 forces attended, suppressing auto-detect)
 # 3. /etc/blacklight/blacklight.conf unattended_mode="1" (exported as BL_UNATTENDED_MODE)
 # 4. BL_INVOKED_BY non-empty (lmd-hook, cron, future hooks)
-# 5. No controlling TTY on stdin AND stdout
+# 5. No controlling TTY on stdin AND stdout (auto-detect — overridden by explicit BL_UNATTENDED=0)
 # Returns 0 if any layer fires; 1 otherwise.
 bl_is_unattended() {
     [[ "${BL_UNATTENDED_FLAG:-}" == "1" ]] && return 0
     [[ "${BL_UNATTENDED:-}" == "1" ]] && return 0
     [[ "${BL_UNATTENDED_MODE:-}" == "1" ]] && return 0
     [[ -n "${BL_INVOKED_BY:-}" ]] && return 0
+    [[ "${BL_UNATTENDED:-}" == "0" ]] && return 1   # explicit attended override before TTY auto-detect
     if [[ ! -t 0 ]] && [[ ! -t 1 ]]; then
         return 0
     fi
@@ -6735,7 +6736,8 @@ bl_consult_new() {
             fi
             if [[ -n "$existing" ]]; then
                 bl_info "dedup: attaching to existing open case $existing (fingerprint $fp)"
-                bl_consult_attach "$existing"
+                # Skip probe: INDEX fp-column match already proved the case is active.
+                bl_consult_attach "$existing" yes
                 local rc=$?
                 if (( rc == 0 )); then
                     # M14: emit trigger_dedup_attached ledger event
@@ -6774,8 +6776,11 @@ bl_consult_new() {
 }
 
 bl_consult_attach() {
-    # bl_consult_attach <case-id> — 0/64/65/69/72
+    # bl_consult_attach <case-id> [skip_probe] — 0/64/65/69/72
+    # skip_probe="yes" bypasses the hypothesis.md GET when caller has already
+    # validated case existence (e.g. dedup fast path via INDEX fp column).
     local case_id="$1"
+    local skip_probe="${2:-no}"
     BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
     if [[ -z "$case_id" ]]; then
         bl_error_envelope consult "missing <case-id> for --attach"
@@ -6787,17 +6792,19 @@ bl_consult_attach() {
         bl_error_envelope consult "case-id format invalid (expected CASE-YYYY-NNNN): $case_id"
         return "$BL_EX_USAGE"
     fi
-    local probe_rc=0
-    bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" >/dev/null || probe_rc=$?
-    if (( probe_rc == 65 )); then
-        local list_rc=0 list_out
-        list_out=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/") || list_rc=$?
-        if (( list_rc != 0 )) || [[ -z "$(printf '%s' "${list_out:-}" | jq -r '.data[0].id // empty' 2>/dev/null)" ]]; then
-            bl_error_envelope consult "case not found: $case_id"
-            return "$BL_EX_NOT_FOUND"
+    if [[ "$skip_probe" != "yes" ]]; then
+        local probe_rc=0
+        bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" >/dev/null || probe_rc=$?
+        if (( probe_rc == 65 )); then
+            local list_rc=0 list_out
+            list_out=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/") || list_rc=$?
+            if (( list_rc != 0 )) || [[ -z "$(printf '%s' "${list_out:-}" | jq -r '.data[0].id // empty' 2>/dev/null)" ]]; then
+                bl_error_envelope consult "case not found: $case_id"
+                return "$BL_EX_NOT_FOUND"
+            fi
+        elif (( probe_rc != 0 )); then
+            return "$probe_rc"
         fi
-    elif (( probe_rc != 0 )); then
-        return "$probe_rc"
     fi
     printf '%s' "$case_id" > "$BL_CASE_CURRENT_FILE"
     bl_ledger_append "$case_id" \
@@ -9932,7 +9939,8 @@ bl_setup_eval() {
     export BL_EVAL_REPORT_FILE="$report_file"
     local runner_log
     runner_log=$(command mktemp)
-    if ! BL_EVAL_LIVE=1 bats tests/skill-routing/eval-runner.bats --formatter tap > "$runner_log" 2>&1; then
+    local eval_runner="${BL_REPO_ROOT:-$(pwd)}/tests/skill-routing/eval-runner.bats"
+    if ! BL_EVAL_LIVE=1 bats "$eval_runner" --formatter tap > "$runner_log" 2>&1; then
         bl_error_envelope setup "eval-runner failed; see $runner_log"
         command tail -50 "$runner_log" >&2
         return "$BL_EX_UPSTREAM_ERROR"

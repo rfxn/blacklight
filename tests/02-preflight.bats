@@ -5,7 +5,7 @@
 load 'helpers/bl-preflight-mock.bash'
 
 setup() {
-    BL_SOURCE="${BL_SOURCE:-$BATS_TEST_DIRNAME/../bl}"
+    export BL_SOURCE="${BL_SOURCE:-$BATS_TEST_DIRNAME/../bl}"
     export BL_VAR_DIR="$(mktemp -d)"
     export ANTHROPIC_API_KEY="sk-ant-test"
     bl_mock_init   # prepends mock curl to PATH
@@ -138,7 +138,7 @@ teardown() {
 @test "bl_init_workdir creates baserun/ subdir for tlog_lib cursor state" {
     local td
     td=$(mktemp -d)
-    BL_VAR_DIR="$td" run bash -c 'source ./bl; bl_init_workdir'
+    BL_VAR_DIR="$td" run bash -c 'source "$BL_SOURCE"; bl_init_workdir'
     [ "$status" -eq 0 ]
     [ -d "$td/baserun" ]
     command rm -rf "$td"
@@ -148,7 +148,7 @@ teardown() {
     local td
     td=$(mktemp -d)
     BL_VAR_DIR="$td" BL_BLACKLIGHT_CONF="/no/such/path" \
-    ANTHROPIC_API_KEY=test-key run bash -c 'source ./bl; bl_preflight 2>&1'
+    ANTHROPIC_API_KEY=test-key run bash -c 'source "$BL_SOURCE"; bl_preflight 2>&1'
     # Preflight may exit 66 (workspace not seeded) — that is expected since
     # we have no api key, but it must not exit 65 due to absent conf
     [ "$status" -ne 65 ]

@@ -388,7 +388,8 @@ bl_consult_new() {
             fi
             if [[ -n "$existing" ]]; then
                 bl_info "dedup: attaching to existing open case $existing (fingerprint $fp)"
-                bl_consult_attach "$existing"
+                # Skip probe: INDEX fp-column match already proved the case is active.
+                bl_consult_attach "$existing" yes
                 local rc=$?
                 if (( rc == 0 )); then
                     # M14: emit trigger_dedup_attached ledger event
@@ -427,8 +428,11 @@ bl_consult_new() {
 }
 
 bl_consult_attach() {
-    # bl_consult_attach <case-id> — 0/64/65/69/72
+    # bl_consult_attach <case-id> [skip_probe] — 0/64/65/69/72
+    # skip_probe="yes" bypasses the hypothesis.md GET when caller has already
+    # validated case existence (e.g. dedup fast path via INDEX fp column).
     local case_id="$1"
+    local skip_probe="${2:-no}"
     BL_MEMSTORE_CASE_ID="${BL_MEMSTORE_CASE_ID:-$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf 'memstore_bl_case')}"
     if [[ -z "$case_id" ]]; then
         bl_error_envelope consult "missing <case-id> for --attach"
@@ -440,17 +444,19 @@ bl_consult_attach() {
         bl_error_envelope consult "case-id format invalid (expected CASE-YYYY-NNNN): $case_id"
         return "$BL_EX_USAGE"
     fi
-    local probe_rc=0
-    bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" >/dev/null || probe_rc=$?
-    if (( probe_rc == 65 )); then
-        local list_rc=0 list_out
-        list_out=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/") || list_rc=$?
-        if (( list_rc != 0 )) || [[ -z "$(printf '%s' "${list_out:-}" | jq -r '.data[0].id // empty' 2>/dev/null)" ]]; then
-            bl_error_envelope consult "case not found: $case_id"
-            return "$BL_EX_NOT_FOUND"
+    if [[ "$skip_probe" != "yes" ]]; then
+        local probe_rc=0
+        bl_mem_get "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/hypothesis.md" >/dev/null || probe_rc=$?
+        if (( probe_rc == 65 )); then
+            local list_rc=0 list_out
+            list_out=$(bl_mem_list "${BL_MEMSTORE_CASE_ID}" "bl-case/$case_id/") || list_rc=$?
+            if (( list_rc != 0 )) || [[ -z "$(printf '%s' "${list_out:-}" | jq -r '.data[0].id // empty' 2>/dev/null)" ]]; then
+                bl_error_envelope consult "case not found: $case_id"
+                return "$BL_EX_NOT_FOUND"
+            fi
+        elif (( probe_rc != 0 )); then
+            return "$probe_rc"
         fi
-    elif (( probe_rc != 0 )); then
-        return "$probe_rc"
     fi
     printf '%s' "$case_id" > "$BL_CASE_CURRENT_FILE"
     bl_ledger_append "$case_id" \

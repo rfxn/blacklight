@@ -54,9 +54,9 @@ command -v gawk >/dev/null 2>&1 || { printf 'synth-corpus: gawk required (strfti
 
 command mkdir -p "$OUT_DIR/journal"
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-[ -n "$REPO_ROOT" ] || { printf 'synth-corpus: cannot resolve repo root from %s\n' "$0" >&2; exit 1; }
-SYNTH="$REPO_ROOT/scripts/dev/synthesize-fixture-logs.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+[ -n "$SCRIPT_DIR" ] || { printf 'synth-corpus: cannot resolve script dir from %s\n' "$0" >&2; exit 1; }
+SYNTH="$SCRIPT_DIR/synthesize-fixture-logs.sh"
 
 # ---------------------------------------------------------------------------
 # bl_synth_cron — emits 50 user crontabs to stdout; user 'magento' carries

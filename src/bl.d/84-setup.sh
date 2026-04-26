@@ -600,7 +600,8 @@ bl_setup_eval() {
     export BL_EVAL_REPORT_FILE="$report_file"
     local runner_log
     runner_log=$(command mktemp)
-    if ! BL_EVAL_LIVE=1 bats tests/skill-routing/eval-runner.bats --formatter tap > "$runner_log" 2>&1; then
+    local eval_runner="${BL_REPO_ROOT:-$(pwd)}/tests/skill-routing/eval-runner.bats"
+    if ! BL_EVAL_LIVE=1 bats "$eval_runner" --formatter tap > "$runner_log" 2>&1; then
         bl_error_envelope setup "eval-runner failed; see $runner_log"
         command tail -50 "$runner_log" >&2
         return "$BL_EX_UPSTREAM_ERROR"

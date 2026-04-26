@@ -145,16 +145,17 @@ _bl_load_blacklight_conf() {
 
 # bl_is_unattended — resolution chain (most-explicit-wins):
 # 1. --unattended CLI flag (caller sets BL_UNATTENDED_FLAG=1 before calling)
-# 2. BL_UNATTENDED env
+# 2. BL_UNATTENDED env (=1 forces unattended; =0 forces attended, suppressing auto-detect)
 # 3. /etc/blacklight/blacklight.conf unattended_mode="1" (exported as BL_UNATTENDED_MODE)
 # 4. BL_INVOKED_BY non-empty (lmd-hook, cron, future hooks)
-# 5. No controlling TTY on stdin AND stdout
+# 5. No controlling TTY on stdin AND stdout (auto-detect — overridden by explicit BL_UNATTENDED=0)
 # Returns 0 if any layer fires; 1 otherwise.
 bl_is_unattended() {
     [[ "${BL_UNATTENDED_FLAG:-}" == "1" ]] && return 0
     [[ "${BL_UNATTENDED:-}" == "1" ]] && return 0
     [[ "${BL_UNATTENDED_MODE:-}" == "1" ]] && return 0
     [[ -n "${BL_INVOKED_BY:-}" ]] && return 0
+    [[ "${BL_UNATTENDED:-}" == "0" ]] && return 1   # explicit attended override before TTY auto-detect
     if [[ ! -t 0 ]] && [[ ! -t 1 ]]; then
         return 0
     fi

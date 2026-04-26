@@ -18,7 +18,7 @@ teardown() {
 
 @test "_bl_notify_register_channels: missing token → channel auto-disabled" {
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         _bl_notify_register_channels
         alert_channel_enabled slack && echo "ENABLED" || echo "DISABLED"
     '
@@ -29,7 +29,7 @@ teardown() {
     printf 'token=xoxb-test\nchannel=test\n' > "$BL_NOTIFY_DIR/slack.token"
     chmod 0644 "$BL_NOTIFY_DIR/slack.token"
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         _bl_notify_register_channels
         alert_channel_enabled slack && echo "ENABLED" || echo "DISABLED"
     '
@@ -41,7 +41,7 @@ teardown() {
     printf 'token=xoxb-test\nchannel=test\n' > "$BL_NOTIFY_DIR/slack.token"
     chmod 0600 "$BL_NOTIFY_DIR/slack.token"
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         _bl_notify_register_channels
         alert_channel_enabled slack && echo "ENABLED" || echo "DISABLED"
         printf "TOKEN=%s\n" "$ALERT_SLACK_TOKEN"
@@ -54,7 +54,7 @@ teardown() {
     printf 'token=xoxb;rm -rf /\n' > "$BL_NOTIFY_DIR/slack.token"
     chmod 0600 "$BL_NOTIFY_DIR/slack.token"
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         _bl_notify_export_from_file "$BL_NOTIFY_DIR/slack.token" ALERT_SLACK
         printf "TOKEN=%s\n" "${ALERT_SLACK_TOKEN:-empty}"
     '
@@ -64,7 +64,7 @@ teardown() {
 
 @test "bl_notify: severity floor below conf → no dispatch" {
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         export BL_NOTIFY_SEVERITY_FLOOR=warn
         bl_notify CASE-2026-0001 info "test" "body"
     '
@@ -73,7 +73,7 @@ teardown() {
 
 @test "bl_notify: missing args → BL_EX_USAGE (64)" {
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         bl_notify "" info "subj" "body"
     '
     [ "$status" -eq 64 ]
@@ -81,7 +81,7 @@ teardown() {
 
 @test "bl_notify: no channels enabled → returns 0 with warn" {
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         # No channels enabled (default state after sourcing bl)
         bl_notify CASE-2026-0001 info "subj" "body"
     '
@@ -91,7 +91,7 @@ teardown() {
 @test "bl_notify: enabled channels receive payload" {
     # Stub alert_dispatch to record the call instead of actually dispatching
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         alert_dispatch() { echo "DISPATCHED:$2:$3" >> "$BL_VAR_DIR/dispatch.log"; return 0; }
         alert_channel_enabled() { return 0; }   # all-channels-enabled stub
         bl_notify CASE-2026-0001 info "subj" "body"
@@ -102,7 +102,7 @@ teardown() {
 
 @test "bl_notify: per-channel send fail → notify_failed ledger + outbox enqueue" {
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         alert_dispatch() { return 1; }
         alert_channel_enabled() { [[ "$1" == "slack" ]]; }   # only slack enabled
         bl_notify CASE-2026-0001 critical "alert" "body"
@@ -114,7 +114,7 @@ teardown() {
 
 @test "bl_notify: per-channel send fail → notify_dispatched ledger entry" {
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         alert_dispatch() { return 1; }
         alert_channel_enabled() { [[ "$1" == "slack" ]]; }   # only slack enabled
         bl_notify CASE-2026-0001 critical "alert" "body"
@@ -127,7 +127,7 @@ teardown() {
     printf 'webhook_url=https://hooks.example.com/test\n' > "$BL_NOTIFY_DIR/test.token"
     chmod 0600 "$BL_NOTIFY_DIR/test.token"
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         _bl_notify_export_from_file "$BL_NOTIFY_DIR/test.token" ALERT_TEST
         printf "URL=%s\n" "${ALERT_TEST_WEBHOOK_URL:-empty}"
     '
@@ -136,7 +136,7 @@ teardown() {
 
 @test "_bl_notify_register_channels: syslog registered + enabled when logger present" {
     run bash -c '
-        source ./bl
+        source "$BL_REPO_ROOT/bl"
         # Provide a logger stub
         logger() { return 0; }
         export -f logger

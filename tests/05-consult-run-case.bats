@@ -14,6 +14,9 @@ setup() {
     export ANTHROPIC_API_KEY="sk-ant-test"
     export BL_MEMSTORE_CASE_ID="memstore_test_stub"
     export BL_SESSION_ID="sesn_test_stub"
+    # Force attended-mode for tier-gate tests; bats has no TTY so auto-detect
+    # would otherwise trip the unattended queue+notify path.
+    export BL_UNATTENDED=0
     bl_curator_mock_init
 }
 
@@ -260,7 +263,7 @@ teardown() {
     # List pending returns 3 steps; uses query-string URL
     # Default catch-all first; specific overrides take priority (matched in registration order)
     bl_curator_mock_set_response 'files-api-upload.json' 200
-    bl_curator_mock_add_route 'key_prefix=bl-case' 'memstore-pending-list-mixed.json' 200
+    bl_curator_mock_add_route 'path_prefix=/bl-case' 'memstore-pending-list-mixed.json' 200
     # Individual step GETs use %2F-encoded paths
     bl_curator_mock_add_route 'pending%2Fs-0042' 'memstore-step-auto.json' 200
     bl_curator_mock_add_route 'pending%2Fs-0043' 'memstore-step-suggested.json' 200
@@ -277,7 +280,7 @@ teardown() {
 
 @test "bl run --list enumerates pending steps without executing them" {
     bl_case_fixture_seed CASE-2026-0001
-    bl_curator_mock_add_route 'key_prefix=bl-case' 'memstore-pending-list-empty.json' 200
+    bl_curator_mock_add_route 'path_prefix=/bl-case' 'memstore-pending-list-empty.json' 200
     run "$BL_SOURCE" run --list
     [ "$status" -eq 0 ]
 }

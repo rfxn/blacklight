@@ -86,7 +86,7 @@ _mock_wrap_for_list() {
     path_value=$(printf '%s' "$wrap_url" | sed -n 's/.*[?&]path_prefix=\([^&]*\).*/\1/p' \
         | sed 's/%2F/\//g; s/%20/ /g')
     [[ "$path_value" != /* ]] && path_value="/$path_value"
-    mem_id="mem_mock_$(printf '%s' "$path_value" | sed 's|/|_|g; s/^_//')"
+    mem_id="mem_mock$(printf '%s' "$path_value" | sed 's|/|%2F|g')"
     printf '%s' "$raw" | jq --arg p "$path_value" --arg id "$mem_id" \
         '{data: [(. + {id: $id, path: $p})]}' 2>/dev/null \
         || printf '{"data":[{"id":"%s","path":"%s"}]}' "$mem_id" "$path_value"
@@ -242,7 +242,7 @@ _mock_wrap_for_list() {
     path_value=$(printf '%s' "$wrap_url" | sed -n 's/.*[?&]path_prefix=\([^&]*\).*/\1/p' \
         | sed 's/%2F/\//g; s/%20/ /g')
     [[ "$path_value" != /* ]] && path_value="/$path_value"
-    mem_id="mem_mock_$(printf '%s' "$path_value" | sed 's|/|_|g; s/^_//')"
+    mem_id="mem_mock$(printf '%s' "$path_value" | sed 's|/|%2F|g')"
     printf '%s' "$raw" | jq --arg p "$path_value" --arg id "$mem_id" \
         '{data: [(. + {id: $id, path: $p})]}' 2>/dev/null \
         || printf '{"data":[{"id":"%s","path":"%s"}]}' "$mem_id" "$path_value"

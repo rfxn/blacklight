@@ -4,6 +4,57 @@ https://github.com/rfxn/blacklight
 
 === M15 — API correctness against live Anthropic Managed Agents ===
 
+Post-M15 baseline-green triage (2026-04-26)
+  [Fix] scripts/dev/synth-corpus.sh — REPO_ROOT path-doubling bug
+        (resolved to scripts/, then prepended scripts/dev/ again).
+        Replaced with SCRIPT_DIR (sibling synthesize-fixture-logs.sh).
+        Was 04-observe-scale.bats #4-#6 status-127 failure surface.
+  [Fix] src/bl.d/30-preflight.sh — bl_is_unattended honors explicit
+        BL_UNATTENDED=0 to suppress the !TTY auto-detect. Tests run
+        under bats with no controlling TTY; auto-detect was tripping
+        the unattended queue+notify path on tier-gate tests that
+        explicitly exercise the interactive operator-decline flow.
+  [Fix] src/bl.d/50-consult.sh — bl_consult_attach accepts skip_probe
+        positional flag. INDEX-fp-column dedup fast path already
+        validated case existence via active-status check; the
+        redundant hypothesis.md GET probe was breaking the fast-path
+        attach when callers test with a 404-routed hypothesis path.
+  [Fix] src/bl.d/84-setup.sh — bl_setup_eval invokes the eval-runner
+        bats file via ${BL_REPO_ROOT}/tests/skill-routing/eval-runner.bats
+        rather than the relative path which fails when CWD is /opt/tests.
+  [Fix] tests/04-observe.bats — M4 block lint greps anchor with
+        ^[^#]*<pattern> so prose mentions of "which" / "egrep" /
+        coreutil paths inside comments do not falsely fail the test.
+  [Fix] tests/14-notify.bats + tests/02-preflight.bats — replace
+        `source ./bl` (which silently fails because /opt/tests/bl
+        does not exist) with explicit BL_REPO_ROOT/BL_SOURCE-relative
+        sourcing. Vacuous test passes were masking 11 real notify +
+        preflight assertions.
+  [Fix] tests/helpers/bl-preflight-mock.bash — populated-mock fixture
+        carries name="bl-curator" so the M12 P5.5 client-side filter
+        on .data[].name actually matches. Mock had been silently
+        failing the seeded-agent test path since M12.
+  [Fix] tests/helpers/curator-mock.bash — synthesized mem_id mirrors
+        path with %2F separators. Test route patterns keyed off
+        encoded paths now match both list-style and GET-by-id URLs.
+  [Fix] tests/05-consult-run-case.bats — pending-list route patterns
+        updated from legacy key_prefix=bl-case to path_prefix=/bl-case
+        (M12 P5.5 URL form). Setup forces BL_UNATTENDED=0 so tier-gate
+        tests exercise the interactive operator-decline path.
+  [Fix] tests/08-setup.bats — --eval / --eval --promote tests gated
+        on BL_EVAL_LIVE=1 + ANTHROPIC_API_KEY (matching eval-runner's
+        own _eval_skip_unless_live). M13 P6 stub was promoted to live
+        in M13 P11 but tests retained stub-era expectations.
+  [Fix] tests/Dockerfile.rocky9 — sync with tests/Dockerfile: COPY
+        scripts/, skills-corpus/, routing-skills/, Makefile; chmod
+        synth-corpus.sh + synthesize-fixture-logs.sh executable.
+        synth-corpus failures on rocky9 were caused by the missing
+        scripts/ directory in the rocky9 image.
+
+  Result: debian12 + rocky9 baseline GREEN at 348 tests / 0 failed.
+          (DEVELOPMENT MODE banner remains active; full matrix
+           validation deferred until banner is unset.)
+
 M15 P8 (2026-04-26)
   [New] tests/live/setup-live.bats — BL_LIVE=1 gated full-stack smoke test
         covering setup --sync → --check → consult --new --attach → --reset

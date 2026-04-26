@@ -700,10 +700,14 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# N8: --eval (stub) emits expected JSON shape
+# N8: --eval emits expected JSON shape (live API; opt-in via BL_EVAL_LIVE)
+# Per M13 P11, bl_setup_eval invokes the real eval-runner against the live
+# Anthropic API. CI default skips cleanly; operator runs via
+# `BL_EVAL_LIVE=1 ANTHROPIC_API_KEY=... make -C tests test-skill-routing-eval`.
 # ---------------------------------------------------------------------------
 
-@test "bl setup --eval (stub) emits expected JSON shape" {
+@test "bl setup --eval emits expected JSON shape" {
+    [[ -n "${BL_EVAL_LIVE:-}" && -n "${ANTHROPIC_API_KEY:-}" ]] || skip "BL_EVAL_LIVE=1 + ANTHROPIC_API_KEY required (live API)"
     run "$BL_SOURCE" setup --eval
     [ "$status" -eq 0 ]
     # Output must contain the expected JSON fields
@@ -715,10 +719,11 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# N9: --eval --promote returns 65 when bar not met (stub)
+# N9: --eval --promote returns 65 when bar not met (live API; opt-in)
 # ---------------------------------------------------------------------------
 
-@test "bl setup --eval --promote returns 65 when bar not met (stub)" {
+@test "bl setup --eval --promote returns 65 when bar not met" {
+    [[ -n "${BL_EVAL_LIVE:-}" && -n "${ANTHROPIC_API_KEY:-}" ]] || skip "BL_EVAL_LIVE=1 + ANTHROPIC_API_KEY required (live API)"
     run "$BL_SOURCE" setup --eval --promote
     [ "$status" -eq 65 ]
     [[ "$output" == *"promotion bar not met"* ]] || [[ "$output" == *"below_bar"* ]]

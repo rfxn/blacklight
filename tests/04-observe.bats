@@ -868,16 +868,16 @@ teardown() {
         run shellcheck "$bl_path"
         [ "$status" -eq 0 ]
     fi
-    # No bare which
-    run bash -c "grep -n '\\bwhich\\b' '$bl_path'"
+    # No bare which (skip comment lines — natural English "which" is fine in prose)
+    run bash -c "grep -nE '^[^#]*\\bwhich\\b' '$bl_path'"
     [ "$status" -ne 0 ] || [ -z "$output" ]
     # No egrep
-    run bash -c "grep -n '\\begrep\\b' '$bl_path'"
+    run bash -c "grep -nE '^[^#]*\\begrep\\b' '$bl_path'"
     [ "$status" -ne 0 ] || [ -z "$output" ]
     # No hardcoded /usr/bin/ coreutil paths
-    run bash -c "grep -nE '/usr/bin/(find|sort|stat|tar|gzip|cat|awk|sed|grep|tr|wc|head|tail|cut|rm|mv|cp|chmod|mkdir|touch|ln)' '$bl_path'"
+    run bash -c "grep -nE '^[^#]*/usr/bin/(find|sort|stat|tar|gzip|cat|awk|sed|grep|tr|wc|head|tail|cut|rm|mv|cp|chmod|mkdir|touch|ln)' '$bl_path'"
     [ "$status" -ne 0 ] || [ -z "$output" ]
     # No backslash-bypass coreutil calls
-    run bash -c "grep -n '\\\\cp \\|\\\\mv \\|\\\\rm ' '$bl_path'"
+    run bash -c "grep -nE '^[^#]*(\\\\cp |\\\\mv |\\\\rm )' '$bl_path'"
     [ "$status" -ne 0 ] || [ -z "$output" ]
 }
