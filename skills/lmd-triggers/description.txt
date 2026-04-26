@@ -1,0 +1,7 @@
+LMD post_scan_hook router — activates when LMD fires its post_scan_hook and the bl-lmd-hook adapter invokes bl trigger lmd. Covers cluster-shape triage, fingerprint contract, TSV-to-JSONL normalization, deduplication-window semantics, and the first-turn investigation checklist.
+
+Use when a case was opened by an automated LMD scan hook rather than by direct operator invocation. The cluster fingerprint, scanid, and session-file path distinguish hook-driven cases from manual bl consult cases — different evidence shape, different first turn.
+
+Prefer synthesizing-evidence when the case is already open and the goal is cross-stream correlation. Prefer extracting-iocs when the goal is purely IOC normalization from hit lines, not routing the initial trigger.
+
+Examples: "LMD post_scan_hook fired with 14 hits, scanid=abc — cluster or scattered?" / "TSV session-file arrived; what is the cluster fingerprint contract?" / "How does bl handle a degraded hook where the session-file is empty but LMD_HITS>0?"

@@ -1,0 +1,7 @@
+cPanel EasyApache 4 substrate router — activates when the host substrate is cPanel EasyApache 4 and a ModSec defend action is being applied. Covers the two apply paths (global modsec2.user.conf vs. per-user userdata/ vhost conf), the restartsrv_httpd vs. ensure_vhost_includes invocation contract, and what must not be touched.
+
+Use when applying ModSec userdata rules on a cPanel EA4 host. The substrate router chooses global vs. uservhost path based on the case scope; the apply-path discipline prevents rule-loss on the next WHM ModSecurity rebuild.
+
+Prefer prescribing-defensive-payloads when the goal is to author the SecRule body, not to route its application. This skill owns the cPanel-side application mechanics, not the rule grammar.
+
+Examples: "cPanel EA4 host, single shared-hosting user flagged — which apply path?" / "restartsrv_httpd vs ensure_vhost_includes — which fires first and why?" / "What is the rollback sequence if restartsrv_httpd fails on the global path?"

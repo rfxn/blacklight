@@ -1,0 +1,7 @@
+bl capability map — always-loaded reference for every curator session. Covers all nine verbs (observe, consult, run, defend, clean, case, setup, flush, trigger), the five action tiers with their gate behaviors, every schema-enumerated verb form, and the hard-boundary list of what bl explicitly cannot do.
+
+Load at session start, before any reasoning about which verb to emit. The curator must know the wrapper's enforcement surface — tier gates, exit codes, schema enums, unattended-mode restrictions — before proposing any step to the operator.
+
+Complements prescribing-defensive-payloads (payload authoring) and curating-cases (case lifecycle). This skill does not prescribe what to do — it describes what bl is wired to execute and where the gates sit.
+
+Examples: "Which tier is defend.modsec?" / "Does bl trigger lmd run in unattended mode?" / "What exit code does bl return when the tier gate denies a destructive step?" / "What verbs are legal in an unattended session?"
