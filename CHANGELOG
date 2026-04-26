@@ -2,6 +2,26 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== M16 P1 — 2026-04-26 (modsec collector parser + corpus alignment) ===
+
+[Fix] src/bl.d/41-observe-collectors.sh — _parse_modsec_serial section
+      tracking. Prior `/^[A-Z]$/` regex never matched (ModSec embeds the
+      section letter in the boundary line, not on its own); section state
+      stayed empty so total_records was always 0 against any corpus.
+      Now extracts letter from the boundary via portable substr(), accepts
+      both single-line canonical Section A (`[ts] uid client-ip ...`) and
+      legacy 2-line form (uid + Apache time). JSON value escaping added —
+      embedded quotes in rule_msgs would emit invalid JSON that broke jq
+      downstream. 570 records now parse from fleet-01 large-corpus.
+[Change] scripts/dev/synth-corpus.sh — modsec generator emits canonical
+      8-hex transaction ids (per skills/linux-forensics/modsec-audit-format.md
+      and Apache mod_unique_id convention) instead of multi-segment
+      `txn-NNNNNN-XXXX`. Section A body uses Apache common-log time format
+      with embedded uid + client/server tuples — the form `bl observe log
+      modsec` actually parses.
+[Change] exhibits/fleet-01/large-corpus/modsec_audit.log — regenerated from
+      seed 42; 570 transactions × 9 lines = 5130 lines. sha256 drift expected.
+
 === v0.5.2 release — 2026-04-26 (pre-ship adversarial sweep + judge-facing honesty pass) ===
 
 Pre-submission red-team sweep against six attack vectors (README claim

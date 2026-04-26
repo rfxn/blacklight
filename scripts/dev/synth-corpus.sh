@@ -194,10 +194,17 @@ bl_synth_modsec_large() {
         srand(seed + 1)
         for (i = 0; i < 570; i++) {
             ts = base + i * 27
-            tstr = strftime("%Y-%m-%dT%H:%M:%SZ", ts, 1)
-            txn = sprintf("txn-%06d-%04x", i, int(rand() * 65536))
+            # Apache common-log time, the canonical ModSec Section A timestamp form.
+            tstr = strftime("%d/%b/%Y:%H:%M:%S +0000", ts, 1)
+            # Canonical ModSec boundary: 8-hex transaction id (mod_unique_id-style).
+            # Per-i deterministic via Knuth multiplicative hash so --seed reproduces.
+            txn = sprintf("%08x", and(i * 2654435769 + seed * 16777619, 4294967295))
+            # uid: 24-char alphanumeric, mod_unique_id-style. Deterministic per-i.
+            uid = sprintf("Zw%05xAAAEAA%05x", i, and(i * 0x9e3779b9, 0xfffff))
+            # Section A single-line canonical form:
+            #   [DD/Mon/YYYY:HH:MM:SS +0000] uid client-ip client-port server-ip server-port
             printf "--%s-A--\n", txn
-            printf "[%s] [client 203.0.113.42] %s ModSecurity-Audit\n", tstr, host
+            printf "[%s] %s 203.0.113.42 %d 10.0.0.5 443\n", tstr, uid, 30000 + (i % 35000)
             printf "--%s-B--\n", txn
             if (i >= 280 && i < 292) {
                 # 12 attack-adjacent admin endpoint POSTs preceding webshell drop

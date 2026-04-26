@@ -4570,21 +4570,53 @@ bl_observe_log_modsec() {
     _parse_modsec_serial() {
         local file="$1"
         command awk '
-        /^--[0-9a-fA-F]+-A--$/ { in_txn=1; uid=""; ts_src=""; reset_rec(); next }
-        /^--[0-9a-fA-F]+-Z--$/ {
-            if (in_txn && uid!="") {
-                printf "{\"unique_id\":\"%s\",\"ts_source\":\"%s\",\"client_ip\":\"%s\",\"method\":\"%s\",\"path\":\"%s\",\"response_status\":\"%s\",\"rule_ids\":\"%s\",\"rule_msgs\":\"%s\"}\n",
-                    uid, ts_src, client_ip, method, path, resp_status, rule_ids, rule_msgs
-            }
-            in_txn=0; next
+        # JSON string escape: backslash, quote, then a few control chars.
+        # Real ModSec rule messages routinely embed quotes around regex patterns.
+        function jescape(s,    r) {
+            r = s
+            gsub(/\\/, "\\\\", r)
+            gsub(/"/,  "\\\"", r)
+            gsub(/\t/, "\\t",  r)
+            gsub(/\r/, "\\r",  r)
+            gsub(/\n/, "\\n",  r)
+            return r
         }
-        in_txn && /^[A-Z]$/ { section=$0; next }
-        in_txn && section=="A" && /^[A-Za-z0-9+\/=]+$/ && uid=="" { uid=$0; next }
-        in_txn && section=="A" && /^[0-9]/ && ts_src=="" { ts_src=$1" "$2; next }
+        # Section is encoded in the boundary line itself per skills/linux-forensics/modsec-audit-format.md;
+        # ModSec never emits a standalone single-letter section line, so /^[A-Z]$/ would never fire.
+        # Portable: substr() penultimate char ($0 ends in "--", letter is at length-2).
+        /^--[0-9a-fA-F]+-[A-Z]--$/ {
+            sec_letter = substr($0, length($0)-2, 1)
+            if (sec_letter == "Z") {
+                if (in_txn && (uid!="" || client_ip!="")) {
+                    printf "{\"unique_id\":\"%s\",\"ts_source\":\"%s\",\"client_ip\":\"%s\",\"method\":\"%s\",\"path\":\"%s\",\"response_status\":\"%s\",\"rule_ids\":\"%s\",\"rule_msgs\":\"%s\"}\n",
+                        jescape(uid), jescape(ts_src), jescape(client_ip), jescape(method), jescape(path), jescape(resp_status), jescape(rule_ids), jescape(rule_msgs)
+                }
+                in_txn=0; section=""; next
+            }
+            if (sec_letter == "A") { in_txn=1; reset_rec() }
+            section = sec_letter
+            next
+        }
+        # Section A canonical single-line form (per skill doc):
+        #   [timestamp] uid client-ip client-port server-ip server-port
+        # Square-bracket leader; uid is field 2; client_ip is field 3.
+        in_txn && section=="A" && /^\[/ {
+            ts_src=$1" "$2
+            if (NF >= 3 && uid=="") uid=$3
+            if (NF >= 4 && client_ip=="") client_ip=$4
+            next
+        }
+        # Section A 2-line form (test fixture + some legacy deployments):
+        #   line 1: <uid> alone   line 2: DD/Mon/YYYY:HH:MM:SS.us +offset
+        in_txn && section=="A" && uid=="" && /^[A-Za-z0-9+\/=]+$/ { uid=$0; next }
+        in_txn && section=="A" && ts_src=="" && /^[0-9]/ { ts_src=$1" "$2; next }
         in_txn && section=="B" && /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)/ {
             method=$1; path=$2; next
         }
-        in_txn && section=="B" && /^X-Forwarded-For:|^X-Real-IP:/ { client_ip=$2; next }
+        in_txn && section=="B" && /^X-Forwarded-For:|^X-Real-IP:/ {
+            if (client_ip=="") client_ip=$2
+            next
+        }
         in_txn && section=="F" && /^HTTP\// { resp_status=$2; next }
         in_txn && section=="H" && /^Rule id:/ { rule_ids=rule_ids (rule_ids?",":"") $3; next }
         in_txn && section=="H" && /^Message:/ { msg=$0; sub(/^Message: /,"",msg); rule_msgs=rule_msgs (rule_msgs?"|":"") msg; next }
