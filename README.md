@@ -21,7 +21,7 @@ A portable bash CLI that puts an agent on the same Linux defensive stack you alr
 </div>
 
 > [!IMPORTANT]
-> **v0.5.0 hackathon build, Cerebral Valley "Built with 4.7" April 2026.**
+> **v0.5.2 hackathon build, Cerebral Valley "Built with 4.7" April 2026.**
 > Production-shape, not production-tested at fleet scale. External operator beta is roadmap P1.
 > The full docs site at [**blacklight.rfxn.com**](https://blacklight.rfxn.com) is the richer surface: this README, design notes, demo trace, talk material, and operator collateral, all rendered with proper navigation.
 
@@ -303,7 +303,7 @@ The curator is an Anthropic Managed Agent, not a stateless API call wrapped in a
 ```mermaid
 flowchart LR
     AG([bl-curator<br/>Agent · Opus 4.7]) --> ENV[bl-curator-env<br/>Environment]
-    AG --> SK[6 description-routed<br/>Skills primitives]
+    AG --> SK[6 routing-skill bundles<br/>Skills primitive when allowlisted · Files fallback otherwise]
     AG --> SE[Sessions<br/>one per case]
     SE --> MS[(bl-case<br/>Memory Store · read_write)]
     SE --> WF[8 workspace Files<br/>foundations + corpora]
@@ -373,10 +373,10 @@ Operator-voice knowledge is the moat. The bundle is grounded in twenty-five year
 | Surface | Path | Count | Role |
 |---|---|---|---|
 | Raw research substrate | `skills/` | 23 dirs / 73 files | Operator-voice knowledge files, grounded in lived experience |
-| Routing-skills | `routing-skills/` | 6 description-routed | Platform Skills primitives; lazy-loaded per turn |
+| Routing-skills | `routing-skills/` | 6 bundles | Platform Skills primitives when workspace is allowlisted; uploaded as workspace Files in the submitted build |
 | Workspace corpora | `skills-corpus/` | 8 markdown corpora | Mounted as Files at session create; always present |
 
-**Routing model:** the legacy `bl-skills` memory store is **retired**. Skills are description-routed Skills primitives; the platform router selects per turn from the description, so per-turn token load on routed Skills is bounded.
+**Routing model:** the legacy `bl-skills` memory store is **retired**. Routing-skills upload as Skills primitives when the workspace is allowlisted for `/v1/skills`; in the submitted build, Anthropic's Skills endpoint is allowlist-gated for this workspace, so the bundles upload through the Files surface instead. The architectural shape (description-routed selection, per-turn lazy load) is the upgrade path once allowlist propagates; the file-fallback is feature-equivalent at the corpus level and degrades only the per-turn token bound.
 
 **Authoring discipline (non-negotiable):** each skill opens with a scenario from lived experience, states a non-obvious rule, gives one concrete example drawn from public APSB25-94 material, and names a failure mode. If the only available draft would be generic IR/SOC boilerplate, the gap is flagged and the file lands later. **Slop is not shipped.**
 
@@ -415,7 +415,7 @@ Explicit non-goals. Not in this version, not in any version:
 - **Not an EDR.** No kernel sensor, no endpoint telemetry agent, no platform to roll out fleetwide.
 - **Not a SIEM.** No log-aggregation substrate; `bl observe` consumes existing logs in place.
 - **Not a daemon.** `bl` is invoked once per operator thought and exits. State lives in `/var/lib/bl/` and the Anthropic-hosted session.
-- **Not a fleet manager.** v0.5.0 is single-host. Fleet propagation rides the customer's existing Puppet/Ansible/Salt/Chef.
+- **Not a fleet manager.** v0.5.2 is single-host. Fleet propagation rides the customer's existing Puppet/Ansible/Salt/Chef.
 - **Not multi-tenant SaaS.** The Anthropic workspace is operator-provisioned and operator-owned. Per-tenant isolation is platform-native.
 - **Not a replacement for ModSec/APF/LMD/ClamAV/YARA.** `bl` directs them: supercharge, not rearchitect.
 - **Not Python.** Zero language runtime on the host. `bl` is bash; the agent runs in Anthropic's sandbox.
@@ -427,9 +427,9 @@ Explicit non-goals. Not in this version, not in any version:
 
 Behavioral verification is committed evidence, not a claim. Four artifacts:
 
-- **348 BATS tests across 17 files**, fixture-driven (no live API calls in CI). Pre-commit gate: debian12 + rocky9 must be green before every commit. Full release matrix runs across debian12, rocky9, ubuntu2404, centos7, rocky8, ubuntu2004.
+- **348 BATS tests across 17 files**, fixture-driven (no live API calls in CI). Pre-commit gate: debian12 + rocky9 must be green before every commit. Full release matrix runs across debian12, rocky9, ubuntu2404, centos7, rocky8, ubuntu2004. Of the 348 registered tests, 7 are environment-conditional skips (root user, missing `journalctl`/`crontab`/`zstd`, non-Linux host) and 6 are integration-deferred skips with substitute coverage paths documented inline at each `skip` site.
 - **Live integration smoke**. [`tests/live/setup-live.bats`](tests/live/setup-live.bats) (`BL_LIVE`-gated) exercises the full provision path against the real Managed Agents API: workspace setup, agent ensure/archive, environment ensure, memory-store CRUD, Files upload, Skills create/update with CAS, session create, wake event, polled step-emit consume.
-- **Committed live trace**. [`tests/live/evidence/`](tests/live/evidence/) is a recorded end-to-end run against the live API. Workspace setup, case allocation, and observation substrate assembly are clean. The session-creation step in the recording hit a drift in the Managed Agents beta API that has since been closed in source; re-record locally with `make live-trace`.
+- **Committed live trace**. [`tests/live/evidence/`](tests/live/evidence/) is a recorded run against the live Managed Agents API. Setup-phase scenes (workspace bootstrap, agent + environment provisioning, case allocation, observation substrate assembly) are clean and endpoint-verified against the real workspace. The hypothesis turn is gated behind a known Managed Agents beta drift in `/v1/sessions/{id}/events` polling; the architectural wiring is endpoint-by-endpoint verified in the trace's setup output. Re-record locally with `make live-trace`.
 - **Stress corpus**. [`exhibits/fleet-01/`](exhibits/fleet-01/) is a deterministic, byte-identical, ~360k-token APSB25-94 forensic bundle (apache + modsec + fs + cron + proc + journal + maldet) with attack needles buried in realistic noise. Cross-stream correlation is the only resolution path; no single stream resolves the case.
 
 ---

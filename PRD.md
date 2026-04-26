@@ -1,4 +1,4 @@
-# PRD — blacklight v0.5.0
+# PRD — blacklight v0.5.2
 
 > Defensive post-incident Linux forensics on the substrate the defender already owns.
 > A portable bash CLI driven by a skills-native Anthropic Managed Agent that wields
@@ -12,10 +12,9 @@ and a Managed Agent session in the operator's Anthropic workspace. The agent is
 the direction; the wrapper is the hands; the host's existing primitives are the
 muscle.
 
-> **Targeted release: 0.5.0.** The current source carries `BL_VERSION="0.4.0"`
-> at `src/bl.d/00-header.sh:26`; the version bump lands at the release tag
-> alongside this PRD. This document is written against post-M15 source —
-> live-API-correct, M13 skill-routing realigned, M14 substrate-hook complete.
+> **Targeted release: 0.5.2.** This document is written against post-M15 source — live-API-correct, M13 skill-routing realigned, M14 substrate-hook complete.
+>
+> **Note on Skills primitive references.** Routing-skills are described throughout as "description-routed platform Skills primitives" — that is the architectural design and the runtime path when the workspace is allowlisted for `/v1/skills`. In the submitted-build runtime, Anthropic's Skills endpoint is allowlist-gated for this workspace (HTTP 404), so the bundles upload through the Files surface. The architectural shape is preserved; the upgrade path is zero-code-change once allowlist propagates. See `ANTHROPIC-API-NOTES.md` for the gated-runtime detail.
 
 ---
 
@@ -187,7 +186,7 @@ Four operator profiles, in priority order:
   place.
 - **Not a daemon or service.** `bl` is invoked once per operator thought and
   exits. State is kept in `/var/lib/bl/` and the Anthropic-hosted session.
-- **Not a fleet manager.** v0.5.0 is single-host. Fleet propagation rides the
+- **Not a fleet manager.** v0.5.2 is single-host. Fleet propagation rides the
   customer's existing Puppet/Ansible/Salt/Chef.
 - **Not multi-tenant SaaS.** The Anthropic workspace is operator-provisioned
   and operator-owned.
@@ -657,7 +656,7 @@ weeks to hours, on tools the defensive side already trusts.
 
 ---
 
-## 13. Success criteria (v0.5.0)
+## 13. Success criteria (v0.5.2)
 
 The current build clears each of these gates:
 

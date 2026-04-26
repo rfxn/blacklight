@@ -155,7 +155,7 @@ These cycles ran in the same day but were operator-driven, not phase-scoped. The
 | 5 | 2026-04-25 | 69 | 35 | M9.5–M13 (hardening, ship, demo, Path C) |
 | 6 | 2026-04-26 | 29 | 14 | M14–M15 + off-plan triage + API gaps |
 
-**Total:** 6 days, 289+ commits, 119 session logs, 0 → v0.5.1.
+**Total:** 6 days, 289+ commits, 119 session logs, 0 → v0.5.2.
 
 The v1 → v2 pivot at the start of Day 4 is the single most consequential
 decision in the build — the v2 milestone-driven rebuild took half the
