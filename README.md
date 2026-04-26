@@ -286,7 +286,7 @@ Nine namespaces, one assembled bash binary. Per-verb help bypasses preflight (`b
 | `bl case` | Lifecycle: `show`, `list`, `log [--audit]`, `close`, `reopen`. |
 | `bl setup` | Workspace bootstrap: `--sync`, `--reset --force`, `--gc`, `--eval`, `--check`, `--install-hook lmd`, `--import-from-lmd`. |
 | `bl trigger` | Hook-driven case open. Today: LMD `post_scan_hook`. |
-| `bl flush` | Drain durable outbox of queued memstore writes (cron-driven). |
+| `bl flush` | `--outbox` drains durable outbox of queued memstore writes (cron-driven); `--session-events [--case <id>]` syncs new curator `report_step` calls into memstore pending/ so `bl run` can dispatch them. |
 
 Ten documented exit codes ([`docs/exit-codes.md`](docs/exit-codes.md)); 1–63 reserved for POSIX, 64–72 for blacklight semantics.
 

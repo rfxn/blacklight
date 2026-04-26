@@ -7,7 +7,7 @@ happened off-plan. Detail lives elsewhere: `CHANGELOG` for per-phase notes,
 
 - **Start:** 2026-04-21 19:48 CT (`Initial commit — blacklight hackathon start`)
 - **Submission target:** 2026-04-26 (current state)
-- **HEAD:** main · v0.5.2 · 348/0 hermetic, 4/4 live
+- **HEAD:** main · v0.6.0 · 399/0 hermetic on debian12 + rocky9, 4/4 live
 
 ---
 
@@ -111,9 +111,9 @@ Session log volume: 35 jsonl sessions — the heaviest day for ad-hoc subagent d
 
 ---
 
-## Day 6 — 2026-04-26 (Sun, today) — closed-loop + API correctness
+## Day 6 — 2026-04-26 (Sun, today) — closed-loop + API correctness + M16 collectors-bridge
 
-29 commits at time of writing. Three layered cycles.
+36 commits at time of writing. Four layered cycles.
 
 ### M14 — Substrate-hook (closed-loop response layer) — v0.3.0 → v0.4.0
 
@@ -129,6 +129,12 @@ Closed with VERSION bump to 0.4.0.
 |------|---------|-------|
 | M15 | `.rdf/archive/2026-04-26-M15/` | Eight phases of live-API drift remediation: load_state migration, corpus dry-run wording, reset uses archive verb, agent CAS via POST, sessions.create field rename (`agent_id`→`agent`), Path A workspace allowlist (delete dead `bl_skills_list`), doc drift sweep, live integration smoke + operator runbook |
 | M15-final | `.rdf/archive/2026-04-26-M15-final/DESIGN.md` | Final-state design snapshot at submission time (the workspace-level architecture spec, frozen at last M15 P7 doc-drift sweep) |
+
+### M16 — Collectors + bridge + adapter layer (curator end-to-end loop) — v0.5.2 → v0.6.0
+
+| Plan | Archive | Topic |
+|------|---------|-------|
+| M16 | `work-output/archived-plans/PLAN-M16-collectors-bridge.md` | Five phases closing the curator-prescription → collector-execution loop: P1 modsec parser fix + canonical 8-hex corpus alignment; P2 `bl observe cron --from-file` fixture-mode adapter; P3 session-event → memstore-pending bridge (closes M12.5 session-creation gap); P4 writeback emits `user.custom_tool_result` for bridge-enriched steps; P5 args translator + 11 per-verb observe adapters. Two sentinel/FP cycles applied — pre-impl review caught 4 BLOCKER + 9 MAJOR before any code shipped; two post-impl reviews caught 6 MAJORs (saturated cursor, first-write-wins, CRLF strip, BSD date portability, bridge-vs-bl-run cycle, version stamp drift) all confirmed and fixed. Closed with VERSION bump 0.5.2 → 0.6.0. |
 
 ### Off-plan session work (NOT in any PLAN-M*.md)
 
@@ -153,9 +159,9 @@ These cycles ran in the same day but were operator-driven, not phase-scoped. The
 | 3 | 2026-04-23 | 19 | 12 | v1 Managed Agents MVW |
 | 4 | 2026-04-24 | 81 | 32 | **pivot** + M0–M9 |
 | 5 | 2026-04-25 | 69 | 35 | M9.5–M13 (hardening, ship, demo, Path C) |
-| 6 | 2026-04-26 | 29 | 14 | M14–M15 + off-plan triage + API gaps |
+| 6 | 2026-04-26 | 36 | 14 | M14–M16 + off-plan triage + API gaps |
 
-**Total:** 6 days, 289+ commits, 119 session logs, 0 → v0.5.2.
+**Total:** 6 days, 296+ commits, 119+ session logs, 0 → v0.6.0.
 
 The v1 → v2 pivot at the start of Day 4 is the single most consequential
 decision in the build — the v2 milestone-driven rebuild took half the
@@ -167,7 +173,7 @@ fallback.
 
 ## Cross-references
 
-- **Per-phase detail:** `CHANGELOG` (M10, M11, M12, M13, M14, M15 sections;
+- **Per-phase detail:** `CHANGELOG` (M10, M11, M12, M13, M14, M15, M16 sections;
   M0–M9 rolled into the M10-complete summary block).
 - **Architecture:** `DESIGN.md`.
 - **Strategy / framing:** `PIVOT-v2.md`.
