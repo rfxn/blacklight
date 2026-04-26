@@ -1031,3 +1031,21 @@ teardown() {
     [[ "$output" == *"refetching version"* ]]
     [ "$(jq -r '.agent.version' "$BL_STATE_DIR/state.json")" = "6" ]
 }
+
+# ---------------------------------------------------------------------------
+# P6 (M15): Path A invariants — skill_versions present + skills[] is array
+# ---------------------------------------------------------------------------
+
+@test "bl setup P6 — agent body shape matches recorded path" {
+    # Path A invariants — skill_versions present + skills[] is array
+    local fake_repo body
+    fake_repo=$(mktemp -d)
+    _make_fake_repo "$fake_repo"
+    export BL_REPO_ROOT="$fake_repo"
+    body=$(bash -c ". \"$BL_SOURCE\"; bl_setup_compose_agent_body")
+    rm -rf "$fake_repo"
+    printf '%s' "$body" | jq -e '.skill_versions'
+    [ "$?" -eq 0 ]
+    printf '%s' "$body" | jq -e '.skills | type == "array"'
+    [ "$?" -eq 0 ]
+}

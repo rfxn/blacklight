@@ -853,20 +853,25 @@ bl_setup_compose_agent_body() {
     for f in "$prompt_file" "$step_schema" "$def_schema" "$int_schema"; do
         [[ -r "$f" ]] || { bl_error_envelope setup "input file missing: $f"; return "$BL_EX_PREFLIGHT_FAIL"; }
     done
-    local sv_json='{}'
+    local sv_json='{}' skills_json='[]'
     local state_file="$BL_STATE_DIR/state.json"
-    [[ -f "$state_file" ]] && sv_json=$(jq -c '.agent.skill_versions // {}' "$state_file" 2>/dev/null || printf '{}')
+    if [[ -f "$state_file" ]]; then
+        sv_json=$(jq -c '.agent.skill_versions // {}' "$state_file" 2>/dev/null || printf '{}')
+        skills_json=$(jq -c '[.skills[].id] // []' "$state_file" 2>/dev/null || printf '[]')
+    fi
     jq -n \
         --rawfile prompt "$prompt_file" \
         --slurpfile stepRaw "$step_schema" \
         --slurpfile defRaw  "$def_schema" \
         --slurpfile intRaw  "$int_schema" \
         --argjson sv "$sv_json" \
+        --argjson skills "$skills_json" \
         '{
             name: "bl-curator",
             model: "claude-opus-4-7",
             system: $prompt,
             skill_versions: $sv,
+            skills: $skills,
             tools: [
                 {type: "agent_toolset_20260401"},
                 {

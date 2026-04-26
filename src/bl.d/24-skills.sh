@@ -81,12 +81,6 @@ bl_skills_get() {
     return $?
 }
 
-bl_skills_list() {
-    # bl_skills_list — prints JSON list; for setup --reset enumeration; 0/65/69
-    bl_api_call GET "/v1/skills"
-    return $?
-}
-
 bl_skills_delete() {
     # bl_skills_delete <skill-id> — idempotent (404→0); 0/65/69
     local skill_id="$1"

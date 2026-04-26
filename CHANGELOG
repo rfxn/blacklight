@@ -4,6 +4,12 @@ https://github.com/rfxn/blacklight
 
 === M15 — API correctness against live Anthropic Managed Agents ===
 
+M15 P6 Path A (2026-04-26)
+  [Change] Delete dead bl_skills_list helper; M13 Path C architecture preserved
+           (workspace allowlist for Skills CRUD arrived in M15 window).
+  [Change] bl_setup_compose_agent_body: emit skills[] array from state.json
+           alongside skill_versions (Path C plumbing completion).
+
 M15 P5 (2026-04-26)
   [Fix] bl_consult_create_session sessions.create body field renamed
         agent_id → agent (the live API rejects agent_id with "Did you mean
