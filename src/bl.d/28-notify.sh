@@ -47,7 +47,10 @@ bl_notify() {
     # Build a temp template dir — alert_dispatch(template_dir, subject, channel)
     # requires per-channel *.text.tpl files for template rendering.
     local tpl_dir
-    tpl_dir=$(mktemp -d)
+    tpl_dir=$(mktemp -d) || {
+        bl_warn "notify: mktemp -d failed; cannot dispatch channels"
+        return "$BL_EX_UPSTREAM_ERROR"
+    }
     printf '%s\n' "$body" > "$tpl_dir/slack.text.tpl"
     printf '%s\n' "$body" > "$tpl_dir/email.text.tpl"
     printf '%s\n' "$body" > "$tpl_dir/telegram.text.tpl"
