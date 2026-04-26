@@ -1,0 +1,47 @@
+# tests/Dockerfile.centos7 — blacklight test image (CentOS 7, EOL vault)
+# Layers blacklight runtime deps on the batsman centos7 base image.
+# Base provides common utils + EPEL.
+# Knowingly unavailable on CentOS 7 vault (tests skip-guard via
+# tests/helpers/capability-detect.bash):
+#   shellcheck    — not in EPEL7 baseline; lint runs on debian12 / rocky9
+#   nftables      — kernel 3.10 with limited nft support; defend firewall
+#                   lane uses --backend iptables to bypass
+ARG BASE_IMAGE=blacklight-base-centos7
+FROM ${BASE_IMAGE}
+
+RUN yum install -y \
+    jq zstd patch cronie \
+    httpd mod_security iptables yara whois \
+    && yum clean all
+
+# M6: mock LMD/ClamAV shims (see tests/Dockerfile for rationale)
+RUN mkdir -p /usr/local/maldetect && \
+    printf '#!/bin/bash\necho "maldet shim: ${*}"; exit 0\n' \
+        > /usr/local/maldetect/maldet && \
+    chmod +x /usr/local/maldetect/maldet && \
+    printf '#!/bin/bash\necho "clamscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamscan && \
+    printf '#!/bin/bash\necho "clamdscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamdscan && \
+    chmod +x /usr/local/bin/clamscan /usr/local/bin/clamdscan
+
+COPY tests/fixtures/defend-fp-corpus/ /var/lib/bl/fp-corpus/
+
+COPY . /opt/blacklight-src
+COPY tests/ /opt/tests/
+COPY bl /opt/bl
+COPY install.sh /opt/install.sh
+COPY uninstall.sh /opt/uninstall.sh
+COPY schemas/ /opt/schemas/
+COPY prompts/ /opt/prompts/
+COPY case-templates/ /opt/case-templates/
+COPY skills/ /opt/skills/
+COPY scripts/ /opt/scripts/
+COPY skills-corpus/ /opt/skills-corpus/
+COPY routing-skills/ /opt/routing-skills/
+COPY Makefile /opt/Makefile
+# M14 P7: bl-lmd-hook adapter
+COPY files/ /opt/files/
+RUN chmod +x /opt/bl /opt/scripts/dev/synth-corpus.sh /opt/scripts/dev/synthesize-fixture-logs.sh
+
+WORKDIR /opt/tests

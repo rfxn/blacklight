@@ -1,0 +1,48 @@
+# tests/Dockerfile.ubuntu2404 — blacklight test image (Ubuntu 24.04)
+# Layers blacklight runtime deps on the batsman ubuntu2404 base image.
+# Base provides: bash coreutils findutils diffutils procps gawk sed grep gzip
+#                tar wget curl ca-certificates util-linux hostname parallel
+#                bats-core.
+# Missing and required by blacklight: jq zstd shellcheck patch cron apache2
+# (+libapache2-mod-security2) iptables nftables yara whois.
+ARG BASE_IMAGE=blacklight-base-ubuntu2404
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    jq zstd shellcheck patch cron \
+    apache2 libapache2-mod-security2 iptables nftables yara whois \
+    && rm -rf /var/lib/apt/lists/*
+
+# M6: mock LMD (maldet) + ClamAV (clamscan/clamdscan) shims so bl_defend_sig
+# can detect + invoke scanners without installing real binaries (~400MB).
+RUN mkdir -p /usr/local/maldetect && \
+    printf '#!/bin/bash\necho "maldet shim: ${*}"; exit 0\n' \
+        > /usr/local/maldetect/maldet && \
+    chmod +x /usr/local/maldetect/maldet && \
+    printf '#!/bin/bash\necho "clamscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamscan && \
+    printf '#!/bin/bash\necho "clamdscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamdscan && \
+    chmod +x /usr/local/bin/clamscan /usr/local/bin/clamdscan
+
+COPY tests/fixtures/defend-fp-corpus/ /var/lib/bl/fp-corpus/
+
+COPY . /opt/blacklight-src
+COPY tests/ /opt/tests/
+COPY bl /opt/bl
+COPY install.sh /opt/install.sh
+COPY uninstall.sh /opt/uninstall.sh
+COPY schemas/ /opt/schemas/
+COPY prompts/ /opt/prompts/
+COPY case-templates/ /opt/case-templates/
+COPY skills/ /opt/skills/
+COPY scripts/ /opt/scripts/
+COPY skills-corpus/ /opt/skills-corpus/
+COPY routing-skills/ /opt/routing-skills/
+COPY Makefile /opt/Makefile
+# M14 P7: bl-lmd-hook adapter; tests access via $BATS_TEST_DIRNAME/../files/hooks/
+COPY files/ /opt/files/
+RUN chmod +x /opt/bl /opt/scripts/dev/synth-corpus.sh /opt/scripts/dev/synthesize-fixture-logs.sh
+
+WORKDIR /opt/tests

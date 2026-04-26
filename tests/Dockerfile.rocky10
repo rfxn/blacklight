@@ -1,0 +1,51 @@
+# tests/Dockerfile.rocky10 — blacklight test image (Rocky Linux 10)
+# Layers blacklight runtime deps on the batsman rocky10 base image.
+# Base needs --allowerasing for coreutils swap (see batsman base for rationale).
+# yara lives in CRB (CodeReady Builder) on rocky10; mod_security package
+# availability varies — wrap optional installs to allow the build to succeed
+# even when the upstream repo doesn't carry them. defend modsec / sig lanes
+# already skip-guard via tests/helpers/capability-detect.bash.
+ARG BASE_IMAGE=blacklight-base-rocky10
+FROM ${BASE_IMAGE}
+
+RUN dnf install -y --allowerasing \
+        jq zstd patch cronie \
+        httpd iptables nftables whois \
+    && (dnf install -y --enablerepo=crb yara || true) \
+    && (dnf install -y mod_security || true) \
+    && dnf clean all
+# ShellCheck excluded — project lint lanes are debian12 + rocky9 (CLAUDE.md);
+# rocky10 dnf ships a different ShellCheck branch than the lint lanes. The
+# test's shellcheck_available probe skips when absent.
+
+# M6: mock LMD/ClamAV shims (see tests/Dockerfile for rationale)
+RUN mkdir -p /usr/local/maldetect && \
+    printf '#!/bin/bash\necho "maldet shim: ${*}"; exit 0\n' \
+        > /usr/local/maldetect/maldet && \
+    chmod +x /usr/local/maldetect/maldet && \
+    printf '#!/bin/bash\necho "clamscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamscan && \
+    printf '#!/bin/bash\necho "clamdscan shim: ${*}"; exit 0\n' \
+        > /usr/local/bin/clamdscan && \
+    chmod +x /usr/local/bin/clamscan /usr/local/bin/clamdscan
+
+COPY tests/fixtures/defend-fp-corpus/ /var/lib/bl/fp-corpus/
+
+COPY . /opt/blacklight-src
+COPY tests/ /opt/tests/
+COPY bl /opt/bl
+COPY install.sh /opt/install.sh
+COPY uninstall.sh /opt/uninstall.sh
+COPY schemas/ /opt/schemas/
+COPY prompts/ /opt/prompts/
+COPY case-templates/ /opt/case-templates/
+COPY skills/ /opt/skills/
+COPY scripts/ /opt/scripts/
+COPY skills-corpus/ /opt/skills-corpus/
+COPY routing-skills/ /opt/routing-skills/
+COPY Makefile /opt/Makefile
+# M14 P7: bl-lmd-hook adapter
+COPY files/ /opt/files/
+RUN chmod +x /opt/bl /opt/scripts/dev/synth-corpus.sh /opt/scripts/dev/synthesize-fixture-logs.sh
+
+WORKDIR /opt/tests

@@ -78,6 +78,30 @@ Live integration smoke + fixture parity | 2026-04-26
       output_config. Replaces the old skill_versions + skills-array
       assertions which targeted a since-removed body shape.
 
+Release matrix lanes wired | 2026-04-26 — project policy documents the
+      release matrix as debian12 rocky9 ubuntu2404 centos7 rocky8 ubuntu2004
+      plus centos6 deep-legacy floor + rocky10 forward-edge, but only
+      debian12/rocky9/centos6 had project Dockerfiles in tree. Authored
+      the 5 missing lanes; full 8-OS matrix verified GREEN on anvil
+      (348/348 per lane, ~135s/lane).
+[New] tests/Dockerfile.ubuntu2404 — apt: jq zstd shellcheck patch cron
+      apache2 libapache2-mod-security2 iptables nftables yara whois.
+[New] tests/Dockerfile.ubuntu2004 — apt; shellcheck excluded
+      (Ubuntu 20.04 ships 0.7.x which flags warnings absent on lint
+      lanes' 0.9.x). Project lint policy = debian12 + rocky9 only;
+      tests/helpers/capability-detect.bash:shellcheck_available skips
+      the lint test when the binary is absent.
+[New] tests/Dockerfile.centos7 — yum + EPEL: jq zstd patch cronie
+      httpd mod_security iptables yara whois. shellcheck/nftables
+      excluded (vault gap + kernel 3.10 limits); existing capability
+      probes gate the corresponding subgroups.
+[New] tests/Dockerfile.rocky8 — microdnf + EPEL, runtime-dep set
+      mirrors rocky9. ShellCheck excluded for lint-lane consistency.
+[New] tests/Dockerfile.rocky10 — dnf --allowerasing matching the
+      batsman base; yara via --enablerepo=crb, mod_security wrapped
+      optional (rocky10 repo coverage varies). ShellCheck excluded
+      for lint-lane consistency.
+
 Top-level docs (operator-tracked) | 2026-04-26
 [New] ANTHROPIC-API-NOTES.md — operator log of 10 numbered API friction
       points with severity tags (BLOCKING / DEGRADED / MINOR / resolved),
