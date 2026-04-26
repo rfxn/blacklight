@@ -914,3 +914,27 @@ teardown() {
     # legacy files NOT deleted on failure (migration never reached rm phase)
     [ -f "$orig_state_dir/agent-id" ]
 }
+
+# ---------------------------------------------------------------------------
+# P2 (M15): dry-run corpus-seed summary uses "would upload" wording
+# ---------------------------------------------------------------------------
+
+@test "bl setup --sync --dry-run: corpus-seed summary uses 'would upload' wording" {
+    local fake_repo
+    fake_repo=$(mktemp -d)
+    _make_fake_repo "$fake_repo"
+    # Provide one routing-skills entry so bl_setup_seed_skills does not abort
+    mkdir -p "$fake_repo/routing-skills/test-skill"
+    printf 'desc' > "$fake_repo/routing-skills/test-skill/description.txt"
+    printf '# body' > "$fake_repo/routing-skills/test-skill/SKILL.md"
+    printf '# foundations\n' > "$fake_repo/skills-corpus/foundations.md"
+    _state_json_seeded
+    export BL_REPO_ROOT="$fake_repo"
+    bl_curator_mock_set_response 'setup-agents-list-empty.json' 200
+    run "$BL_SOURCE" setup --sync --dry-run
+    rm -rf "$fake_repo"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"would upload"* ]]
+    # Anti-assertion — the past-tense "uploaded" must not appear under dry-run
+    ! [[ "$output" =~ "corpus seed — 1 uploaded" ]]
+}

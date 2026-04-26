@@ -4,6 +4,11 @@ https://github.com/rfxn/blacklight
 
 === M15 — API correctness against live Anthropic Managed Agents ===
 
+M15 P2 (2026-04-26)
+  [Fix] bl_setup_seed_corpus dry-run summary uses "would upload" wording;
+        eliminates self-contradicting "N uploaded" / "0 mutations would be applied"
+        output under --dry-run (F2).
+
 M15 P1 (2026-04-26)
   [Fix] bl_setup_load_state migration is now backup-then-validate-then-commit;
         legacy state files are preserved on any failure during the move to state.json

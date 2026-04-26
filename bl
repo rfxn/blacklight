@@ -9683,7 +9683,11 @@ bl_setup_seed_corpus() {
         printf '%s' "$existing_state" > "$tmp_state"
         command mv "$tmp_state" "$state_file"
     fi
-    bl_info "bl setup: corpus seed — $upload_count uploaded, $skip_count skipped, $supersede_count superseded"
+    if [[ "$mode" == "dry-run" ]]; then
+        bl_info "bl setup: corpus seed — would upload $upload_count, would skip $skip_count, would supersede $supersede_count"
+    else
+        bl_info "bl setup: corpus seed — $upload_count uploaded, $skip_count skipped, $supersede_count superseded"
+    fi
     return "$BL_EX_OK"
 }
 
