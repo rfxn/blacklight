@@ -140,6 +140,165 @@ bl_curator_mock_add_route() {
     export BL_CURATOR_MOCK_PATTERNS_CSV BL_CURATOR_MOCK_FIXTURES_CSV BL_CURATOR_MOCK_STATUSES_CSV
 }
 
+bl_curator_mock_add_route_sequence() {
+    # bl_curator_mock_add_route_sequence <url-regex> <fixture:status> [<fixture:status> ...]
+    # Registers a stateful route that serves responses in order on successive calls.
+    # Each positional argument after the URL regex is "<fixture-filename>:<http-status>".
+    # A per-route counter file in $BL_MOCK_BIN tracks which response is next.
+    # After the last entry is consumed, the final entry repeats on further calls.
+    local pattern="$1"; shift
+    local seq_dir="$BL_MOCK_BIN/seq"
+    mkdir -p "$seq_dir"
+    # Derive a safe filename key from the pattern
+    local key
+    key=$(printf '%s' "$pattern" | tr -cs 'a-zA-Z0-9' '_')
+    local seq_fixtures=() seq_statuses=()
+    local entry fixture status
+    for entry in "$@"; do
+        fixture="${entry%%:*}"
+        status="${entry##*:}"
+        seq_fixtures+=("$fixture")
+        seq_statuses+=("$status")
+    done
+    # Write the sequence file: one "fixture:status" per line
+    local seq_file="$seq_dir/${key}.seq"
+    printf '' > "$seq_file"
+    for entry in "$@"; do
+        printf '%s\n' "$entry" >> "$seq_file"
+    done
+    # Write the counter file (0-indexed)
+    printf '0' > "$seq_dir/${key}.cnt"
+    # Rewrite the curl shim to support sequence routes via per-route counter files.
+    # Sequence routes are stored in $BL_MOCK_BIN/seq/<key>.seq and checked before
+    # the standard pattern table. The key is derived the same way as above.
+    export BL_MOCK_SEQ_DIR="$seq_dir"
+    # Register the pattern in the standard table with a sentinel fixture so the
+    # routing loop fires; actual fixture resolution happens via the seq override
+    # in the extended curl shim below.
+    _bl_curator_mock_rebuild_curl_with_seq
+    # Also register in the standard route table with a special "__seq__:<key>" marker
+    BL_CURATOR_MOCK_ROUTE_PATTERNS+=("$pattern")
+    BL_CURATOR_MOCK_ROUTE_FIXTURES+=("__seq__:${key}")
+    BL_CURATOR_MOCK_ROUTE_STATUS+=("200")
+    local old_ifs="$IFS"
+    IFS='|'
+    BL_CURATOR_MOCK_PATTERNS_CSV="${BL_CURATOR_MOCK_ROUTE_PATTERNS[*]}"
+    BL_CURATOR_MOCK_FIXTURES_CSV="${BL_CURATOR_MOCK_ROUTE_FIXTURES[*]}"
+    BL_CURATOR_MOCK_STATUSES_CSV="${BL_CURATOR_MOCK_ROUTE_STATUS[*]}"
+    IFS="$old_ifs"
+    export BL_CURATOR_MOCK_PATTERNS_CSV BL_CURATOR_MOCK_FIXTURES_CSV BL_CURATOR_MOCK_STATUSES_CSV
+}
+
+_bl_curator_mock_rebuild_curl_with_seq() {
+    # Rebuild the curl shim to handle __seq__:<key> fixture markers by reading
+    # the per-route counter and advancing it on each call.
+    cat > "$BL_MOCK_BIN/curl" <<'MOCKEOF'
+#!/bin/bash
+# curator-mock: URL-routing curl shim (sequence-aware)
+url=""
+method="GET"
+body_file=""
+prev=""
+for arg in "$@"; do
+    case "$prev" in
+        -X) method="$arg" ;;
+        --data-binary)
+            case "$arg" in
+                @*) body_file="${arg#@}" ;;
+                *)  body_file="" ;;
+            esac
+            ;;
+    esac
+    case "$arg" in https://*|http://*) url="$arg" ;; esac
+    prev="$arg"
+done
+if [[ -n "${BL_MOCK_REQUEST_LOG:-}" ]]; then
+    {
+        printf '%s %s\n' "$method" "$url"
+        if [[ -n "$body_file" && -r "$body_file" ]]; then
+            if command -v jq >/dev/null 2>&1; then
+                jq -c '.' < "$body_file" 2>/dev/null || tr -d ' \t\n' < "$body_file"
+            else
+                tr -d ' \t\n' < "$body_file"
+            fi
+            printf '\n'
+        fi
+    } >> "$BL_MOCK_REQUEST_LOG"
+fi
+IFS='|' read -ra patterns <<< "${BL_CURATOR_MOCK_PATTERNS_CSV:-}"
+IFS='|' read -ra fixtures <<< "${BL_CURATOR_MOCK_FIXTURES_CSV:-}"
+IFS='|' read -ra statuses <<< "${BL_CURATOR_MOCK_STATUSES_CSV:-}"
+matched=0
+_mock_wrap_for_list() {
+    local raw="$1" wrap_url="$2"
+    case "$wrap_url" in
+        *'?path_prefix='*|*'&path_prefix='*) : ;;
+        *) printf '%s' "$raw"; return ;;
+    esac
+    if printf '%s' "$raw" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
+        printf '%s' "$raw"; return
+    fi
+    local path_value mem_id
+    path_value=$(printf '%s' "$wrap_url" | sed -n 's/.*[?&]path_prefix=\([^&]*\).*/\1/p' \
+        | sed 's/%2F/\//g; s/%20/ /g')
+    [[ "$path_value" != /* ]] && path_value="/$path_value"
+    mem_id="mem_mock_$(printf '%s' "$path_value" | sed 's|/|_|g; s/^_//')"
+    printf '%s' "$raw" | jq --arg p "$path_value" --arg id "$mem_id" \
+        '{data: [(. + {id: $id, path: $p})]}' 2>/dev/null \
+        || printf '{"data":[{"id":"%s","path":"%s"}]}' "$mem_id" "$path_value"
+}
+for i in "${!patterns[@]}"; do
+    if [[ -n "${patterns[i]}" && "${method} ${url}" =~ ${patterns[i]} ]]; then
+        fixture_entry="${fixtures[i]}"
+        # Sequence route: __seq__:<key>
+        if [[ "$fixture_entry" == __seq__:* ]]; then
+            key="${fixture_entry#__seq__:}"
+            seq_dir="${BL_MOCK_SEQ_DIR:-$BL_MOCK_BIN/seq}"
+            seq_file="$seq_dir/${key}.seq"
+            cnt_file="$seq_dir/${key}.cnt"
+            cnt=$(cat "$cnt_file" 2>/dev/null || printf '0')
+            total=$(wc -l < "$seq_file" 2>/dev/null || printf '1')
+            # Clamp to last entry after sequence is exhausted
+            (( cnt >= total )) && cnt=$(( total - 1 ))
+            # Read line (1-indexed via sed)
+            line=$(sed -n "$(( cnt + 1 ))p" "$seq_file")
+            fixture_name="${line%%:*}"
+            http_status="${line##*:}"
+            # Advance counter (stay at last if exhausted)
+            (( cnt + 1 < total )) && printf '%d' $(( cnt + 1 )) > "$cnt_file"
+        else
+            fixture_name="$fixture_entry"
+            http_status="${statuses[i]}"
+        fi
+        fixture_path="${BL_CURATOR_MOCK_FIXTURES_DIR}/${fixture_name}"
+        if [[ -r "$fixture_path" ]]; then
+            body=$(< "$fixture_path")
+        else
+            body="{}"
+        fi
+        body=$(_mock_wrap_for_list "$body" "$url")
+        printf '%s\n%s' "$body" "$http_status"
+        matched=1
+        break
+    fi
+done
+if (( matched == 0 )); then
+    default_fixture="${BL_CURATOR_MOCK_FIXTURES_DIR}/${BL_CURATOR_MOCK_DEFAULT_FIXTURE:-files-api-upload.json}"
+    default_status="${BL_CURATOR_MOCK_DEFAULT_STATUS:-200}"
+    if [[ -r "$default_fixture" ]]; then
+        body=$(< "$default_fixture")
+    else
+        body="{}"
+    fi
+    body=$(_mock_wrap_for_list "$body" "$url")
+    printf '%s\n%s' "$body" "$default_status"
+fi
+exit 0
+MOCKEOF
+    chmod +x "$BL_MOCK_BIN/curl"
+    export BL_MOCK_SEQ_DIR
+}
+
 bl_curator_mock_set_response() {
     # Set the default (catch-all) response used when no explicit route matches.
     # Does NOT clear existing specific routes — call this before add_route to set

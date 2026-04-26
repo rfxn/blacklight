@@ -9965,37 +9965,20 @@ bl_setup_eval() {
 
 # bl_setup_ensure_agent <mode> — mode: apply | dry-run
 # Creates or updates the bl-curator Managed Agent. On first-run: POST /v1/agents.
-# On subsequent: PATCH /v1/agents/<id> with updated skill_versions from state.json.
+# On subsequent: POST /v1/agents/<id> with {version, ...} CAS body (F9 fix).
 bl_setup_ensure_agent() {
     local mode="${1:-apply}"
     local state_file="$BL_STATE_DIR/state.json"
     local cached_id
     cached_id=$(jq -r '.agent.id // empty' "$state_file" 2>/dev/null || printf '')   # missing state → empty → first-run path
     if [[ -n "$cached_id" ]] && [[ "$mode" == "apply" ]]; then
-        # Update existing agent — bump version with skill_versions from state
-        local body_file
-        body_file=$(command mktemp)
-        local skill_versions_json
-        skill_versions_json=$(jq -c '.agent.skill_versions // {}' "$state_file")
-        jq -n \
-            --argjson sv "$skill_versions_json" \
-            '{skill_versions: $sv}' > "$body_file"
-        local resp rc
-        rc=0
-        resp=$(bl_api_call PATCH "/v1/agents/$cached_id" "$body_file") || rc=$?
-        command rm -f "$body_file"
-        (( rc != 0 )) && return $rc
-        local new_version
-        new_version=$(printf '%s' "$resp" | jq -r '.version // 0')
-        # Persist new version to state.json
-        local existing_state tmp_state
-        existing_state=$(command cat "$state_file")
-        tmp_state="$state_file.tmp.$$"
-        printf '%s' "$existing_state" | jq --argjson v "$new_version" '.agent.version = $v' > "$tmp_state"
-        command mv "$tmp_state" "$state_file"
-        BL_STATE_AGENT_ID="$cached_id"
-        BL_STATE_AGENT_VERSION="$new_version"
-        return "$BL_EX_OK"
+        # F9 fix — agents are versioned; the API uses POST, not PATCH.
+        # Update via POST /v1/agents/<id> with optimistic-CAS body
+        # {version: <current>, ...}.
+        # On 409 ("Concurrent modification detected"), refetch GET, update
+        # cached version in state.json, retry once.
+        bl_setup_update_agent_cas "$cached_id"
+        return $?
     fi
     if [[ "$mode" == "dry-run" ]]; then
         if [[ -z "$cached_id" ]]; then
@@ -10035,6 +10018,78 @@ bl_setup_ensure_agent() {
     BL_STATE_AGENT_VERSION="$created_version"
     bl_setup_save_state || return $?
     return "$BL_EX_OK"
+}
+
+# bl_setup_update_agent_cas <agent-id> — POST /v1/agents/<id> with {version, ...}.
+# On 409 (conflict), GET to refresh version, retry once. Persists new version
+# to state.json on success.
+bl_setup_update_agent_cas() {
+    local cached_id="$1"
+    local state_file="$BL_STATE_DIR/state.json"
+    local current_version
+    current_version=$(jq -r '.agent.version // 0' "$state_file")
+
+    local attempt
+    for attempt in 1 2; do
+        local body_file
+        body_file=$(command mktemp)
+        if ! bl_setup_compose_agent_update_body "$current_version" > "$body_file"; then
+            command rm -f "$body_file"
+            return "$BL_EX_PREFLIGHT_FAIL"
+        fi
+        local resp rc
+        rc=0
+        resp=$(bl_api_call POST "/v1/agents/$cached_id" "$body_file") || rc=$?
+        command rm -f "$body_file"
+        if (( rc == 0 )); then
+            local new_version
+            new_version=$(printf '%s' "$resp" | jq -r '.version // 0')
+            local tmp_state="$state_file.tmp.$$"
+            jq --argjson v "$new_version" '.agent.version = $v' "$state_file" > "$tmp_state"
+            command mv "$tmp_state" "$state_file"
+            BL_STATE_AGENT_ID="$cached_id"
+            BL_STATE_AGENT_VERSION="$new_version"
+            bl_info "bl setup: agent updated ($cached_id, version $current_version → $new_version)"
+            return "$BL_EX_OK"
+        fi
+        # 71 = BL_EX_CONFLICT (HTTP 409). bl_api_call (20-api.sh:55-57) returns
+        # rc=71 without printing the body to stdout — so $resp is empty here.
+        # rc is the only reliable signal of "Concurrent modification detected".
+        # Do NOT pattern-match on $resp content; the upstream spec sketch's
+        # `if [[ "$resp" == *"Concurrent modification"* ]]` would silently
+        # never match.
+        if (( rc == 71 )) && (( attempt == 1 )); then
+            # 409 on first try — refetch and retry once
+            bl_warn "bl setup: agent update conflicted (concurrent modification); refetching version"
+            local fresh_resp fresh_version
+            fresh_resp=$(bl_api_call GET "/v1/agents/$cached_id") || return $?
+            fresh_version=$(printf '%s' "$fresh_resp" | jq -r '.version // 0')
+            if [[ "$fresh_version" == "$current_version" ]]; then
+                bl_error_envelope setup "agent CAS conflict but server version matches local; cannot reconcile"
+                return "$BL_EX_UPSTREAM_ERROR"
+            fi
+            current_version="$fresh_version"
+            continue
+        fi
+        # Non-409 error or 409 on retry — surface
+        return $rc
+    done
+    bl_error_envelope setup "agent update failed after CAS retry; manual intervention required"
+    return "$BL_EX_UPSTREAM_ERROR"
+}
+
+# bl_setup_compose_agent_update_body <current-version> — emits POST /v1/agents/<id> body.
+# Same shape as bl_setup_compose_agent_body but adds {version: <current-version>}
+# for optimistic-CAS gating. Replacement semantics: the server fully overwrites
+# the agent body with these fields on success.
+bl_setup_compose_agent_update_body() {
+    local current_version="$1"
+    [[ -z "$current_version" ]] && { bl_error_envelope setup "compose_agent_update_body: current-version required"; return "$BL_EX_USAGE"; }
+    # Emit the same body shape as bl_setup_compose_agent_body, then merge in
+    # {version: <current>} via a second jq pass.
+    local base_body
+    base_body=$(bl_setup_compose_agent_body) || return $?
+    printf '%s' "$base_body" | jq --argjson ver "$current_version" '. + {version: $ver}'
 }
 
 # bl_setup_ensure_env <out-var> — same shape as old ensure_env; targets /v1/environments.

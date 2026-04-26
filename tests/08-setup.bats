@@ -80,7 +80,7 @@ teardown() {
         "$BL_VAR_DIR/state/state.json" > "$BL_VAR_DIR/state/state.json.tmp"
     command mv "$BL_VAR_DIR/state/state.json.tmp" "$BL_VAR_DIR/state/state.json"
     export BL_REPO_ROOT="$fake_repo"
-    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-success.json' 200
+    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-cas-success.json' 200
     run "$BL_SOURCE" setup --sync
     rm -rf "$fake_repo"
     [ "$status" -eq 0 ]
@@ -182,7 +182,7 @@ teardown() {
     export BL_REPO_ROOT="$fake_repo"
     export BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/curl-requests.log"
     command touch "$BL_MOCK_REQUEST_LOG"   # ensure file exists even if no API calls made
-    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-success.json' 200
+    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-cas-success.json' 200
     run "$BL_SOURCE" setup --sync
     rm -rf "$fake_repo"
     [ "$status" -eq 0 ]
@@ -216,7 +216,7 @@ teardown() {
     command mv "$BL_VAR_DIR/state/state.json.tmp" "$BL_VAR_DIR/state/state.json"
     export BL_REPO_ROOT="$fake_repo"
     # Agent already in state.json → ensure_agent takes PATCH path (not GET/POST create)
-    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-success.json' 200
+    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-cas-success.json' 200
     run "$BL_SOURCE" setup --sync
     rm -rf "$fake_repo"
     [ "$status" -eq 0 ]
@@ -391,7 +391,7 @@ teardown() {
     bl_curator_mock_add_route 'POST.*v1/skills$' 'setup-skill-create-success.json' 201
     bl_curator_mock_add_route 'GET.*v1/skills' 'setup-skill-create-success.json' 200
     # agent: migrated agent_test_stub — ensure_agent will PATCH (cached_id present after migration)
-    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-success.json' 200
+    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-cas-success.json' 200
     run "$BL_SOURCE" setup --sync
     rm -rf "$fake_repo"
     [ "$status" -eq 0 ]
@@ -481,7 +481,7 @@ teardown() {
     export BL_REPO_ROOT="$fake_repo"
     export BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/curl-requests.log"
     command touch "$BL_MOCK_REQUEST_LOG"   # ensure file exists even if no API calls made
-    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-success.json' 200
+    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-cas-success.json' 200
     run "$BL_SOURCE" setup --sync
     rm -rf "$fake_repo"
     [ "$status" -eq 0 ]
@@ -532,7 +532,7 @@ teardown() {
     export BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/curl-requests.log"
     command touch "$BL_MOCK_REQUEST_LOG"
     bl_curator_mock_add_route '/v1/files' 'setup-file-create-success.json' 201
-    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-success.json' 200
+    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-cas-success.json' 200
     run "$BL_SOURCE" setup --sync
     rm -rf "$fake_repo"
     [ "$status" -eq 0 ]
@@ -836,7 +836,7 @@ teardown() {
     bl_curator_mock_add_route '/v1/files' 'setup-file-create-success.json' 201
     bl_curator_mock_add_route '/v1/skills$' 'setup-skill-create-success.json' 201
     bl_curator_mock_add_route '/v1/skills/' 'setup-skill-create-success.json' 200
-    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-success.json' 200
+    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-cas-success.json' 200
     # Acquire flock externally before invoking bl setup --sync with -w 0 timeout
     local lock_file="$BL_VAR_DIR/state/state.json.lock"
     mkdir -p "$BL_VAR_DIR/state"
@@ -967,4 +967,67 @@ teardown() {
     [[ "$output" == *"aborting reset"* ]]
     # state.json untouched: agent.id still present
     [ "$(jq -r '.agent.id' "$BL_STATE_DIR/state.json")" = "agent_M8_TEST" ]
+}
+
+# ---------------------------------------------------------------------------
+# P4 (M15): CAS agent update (F9)
+# ---------------------------------------------------------------------------
+
+@test "bl setup --sync: existing agent → CAS update succeeds, version bumps" {
+    local fake_repo
+    fake_repo=$(mktemp -d)
+    _make_fake_repo "$fake_repo"
+    mkdir -p "$fake_repo/routing-skills/skill-x"
+    printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
+    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    local ds bs
+    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
+    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
+    _state_json_seeded
+    # Pre-seed skill sha so seed_skills is a no-op; only ensure_agent fires
+    jq --arg ds "$ds" --arg bs "$bs" \
+        '.skills["skill-x"] = {id:"skill_P6FIXTURE001",version:"1",
+            description_sha256:$ds,body_sha256:$bs}
+         | .agent.skill_versions["skill-x"] = "1"' \
+        "$BL_STATE_DIR/state.json" > "$BL_STATE_DIR/state.json.tmp"
+    command mv "$BL_STATE_DIR/state.json.tmp" "$BL_STATE_DIR/state.json"
+    export BL_REPO_ROOT="$fake_repo"
+    bl_curator_mock_add_route 'POST.*v1/agents/[^/]*$' 'setup-agent-update-cas-success.json' 200
+    run "$BL_SOURCE" setup --sync
+    rm -rf "$fake_repo"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"agent updated"* ]]
+    # version bumped 3 → 4
+    [ "$(jq -r '.agent.version' "$BL_STATE_DIR/state.json")" = "4" ]
+}
+
+@test "bl setup --sync: existing agent → 409 conflict triggers refetch + retry" {
+    local fake_repo
+    fake_repo=$(mktemp -d)
+    _make_fake_repo "$fake_repo"
+    mkdir -p "$fake_repo/routing-skills/skill-x"
+    printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
+    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    local ds bs
+    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
+    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
+    _state_json_seeded
+    # Pre-seed skill sha so seed_skills is a no-op; only ensure_agent fires
+    jq --arg ds "$ds" --arg bs "$bs" \
+        '.skills["skill-x"] = {id:"skill_P6FIXTURE001",version:"1",
+            description_sha256:$ds,body_sha256:$bs}
+         | .agent.skill_versions["skill-x"] = "1"' \
+        "$BL_STATE_DIR/state.json" > "$BL_STATE_DIR/state.json.tmp"
+    command mv "$BL_STATE_DIR/state.json.tmp" "$BL_STATE_DIR/state.json"
+    export BL_REPO_ROOT="$fake_repo"
+    # First POST returns 409; GET returns version 5 (drift); second POST succeeds at v5→v6
+    bl_curator_mock_add_route_sequence 'POST.*v1/agents/[^/]*$' \
+        'setup-agent-update-cas-conflict.json:409' \
+        'setup-agent-update-cas-retry-success.json:200'
+    bl_curator_mock_add_route 'GET.*v1/agents/[^/]*$' 'setup-agent-fetch-v5.json' 200
+    run "$BL_SOURCE" setup --sync
+    rm -rf "$fake_repo"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"refetching version"* ]]
+    [ "$(jq -r '.agent.version' "$BL_STATE_DIR/state.json")" = "6" ]
 }

@@ -4,6 +4,20 @@ https://github.com/rfxn/blacklight
 
 === M15 — API correctness against live Anthropic Managed Agents ===
 
+M15 P4 (2026-04-26)
+  [Fix] bl_setup_ensure_agent apply branch replaces PATCH /v1/agents/<id>
+        (HTTP 404 against the live API) with POST /v1/agents/<id> body
+        {version: <current>, ...} CAS. New helper bl_setup_update_agent_cas
+        handles 409 conflicts via refetch + retry once. Update body includes
+        system: $prompt — fixes silent prompt drift (F3, F9).
+  [New] bl_setup_compose_agent_update_body — delegates to
+        bl_setup_compose_agent_body for full body composition, then merges
+        in {version: <current>} via jq pass.
+  [New] CAS-related test fixtures + tests covering happy path and conflict
+        retry. tests/helpers/curator-mock.bash gains
+        bl_curator_mock_add_route_sequence for sequential-response routes.
+  [Change] Previous PATCH-target tests repointed to CAS fixtures.
+
 M15 P3 (2026-04-26)
   [Fix] bl_setup_reset uses POST /v1/agents/<id>/archive (the verb the live API
         actually exposes) instead of DELETE /v1/agents/<id>; aborts the reset on
