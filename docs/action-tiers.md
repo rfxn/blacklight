@@ -109,6 +109,54 @@ Per-tier wrapper contract. Cites `DESIGN.md §6` + `DESIGN.md §11` (remediation
 - **Audit:** ledger entry written regardless of run/deny, with `reason: unknown-tier-override-<yes|no>`. Regulator and operator both see every `unknown` attempt.
 - **Discouraged:** the `--unsafe` path is for emergency operator-known-better situations (e.g., a new verb under active development). Production use should resolve by adding the verb to `schemas/step.json` enum + the dispatcher's verb class.
 
+### 5.6 Unattended-mode gate overrides
+
+When `bl_is_unattended` returns true (M14 G5 tier policy, `src/bl.d/60-run.sh`), the wrapper
+modifies gate behavior for `suggested` and `destructive` tiers. `read-only` and `auto` tiers are
+unaffected — they execute normally regardless of unattended state.
+
+**Detection (`bl_is_unattended`, `src/bl.d/30-preflight.sh`).**
+Five-layer resolution chain (most-explicit-wins):
+
+1. `--unattended` CLI flag (caller sets `BL_UNATTENDED_FLAG=1` before invoking `bl_run_step`)
+2. `BL_UNATTENDED=1` environment variable
+3. `unattended_mode="1"` in `/etc/blacklight/blacklight.conf` (exported as `BL_UNATTENDED_MODE`)
+4. `BL_INVOKED_BY` non-empty (set by `bl-lmd-hook`, cron launchers, and future hook adapters)
+5. No controlling TTY on both stdin and stdout (`[[ ! -t 0 ]] && [[ ! -t 1 ]]`)
+
+Any layer returning true short-circuits the chain. The chain is evaluated at call time — the wrapper
+does not cache the result across steps.
+
+**Unattended tier policy table.**
+
+| Tier | Verb | Unattended behavior | Exit |
+|------|------|---------------------|------|
+| `destructive` | any | Queue to `queued/` + `operator_decline` ledger event (`policy:"unattended"`) + `bl_notify` warn — even if `--yes` was passed | 68 |
+| `suggested` | any except `defend.modsec` | Queue to `queued/` + `operator_decline` ledger event (`policy:"unattended"`) + `bl_notify` warn | 68 |
+| `suggested` | `defend.modsec` only | Preflight gate already passed (§5.3); auto-apply without prompt | 0 |
+| `read-only` | any | No change — execute immediately | 0 |
+| `auto` | any | No change — execute with 15-minute veto window | 0 |
+
+**Queue-to-outbox semantic (`bl_run_queue_unattended`, `src/bl.d/60-run.sh`).**
+Queued steps are written to `bl-case/<case-id>/actions/queued/<step_id>.json` in the memstore via
+`bl_mem_patch`. The pending entry at `actions/pending/<step_id>.json` is removed (best-effort — the
+entry may be transient). The operator drains queued steps via `bl run --batch <step_id> --yes` in an
+interactive session. The `operator_decline` ledger event carries `policy:"unattended"` to distinguish
+unattended queuing from an operator explicitly declining in an interactive session.
+
+**Downgrade rules.**
+The unattended gate fires AFTER the tier-specific preflight (§5.3 preflight for `suggested`,
+§5.4 backup-write for `destructive`) completes and BEFORE the interactive prompt. If preflight fails,
+exit 68 is returned from the preflight path — the unattended queue path is not reached. The
+`defend.modsec` auto-apply exception is the only downgrade: `suggested → execute-without-prompt` when
+unattended and preflight passes.
+
+**Escape hatch.**
+Set `unattended_mode="0"` in `/etc/blacklight/blacklight.conf` to force interactive mode even when
+invoked from a hook or cron. This overrides layers 4 and 5 but NOT layers 1 or 2 (explicit CLI flag
+and `BL_UNATTENDED=1` always win). The `blacklight.conf.default` ships with `unattended_mode="0"`
+so operator configuration is required to enable unattended behavior.
+
 ---
 
 ## 6. Fail-closed contract for `unknown`

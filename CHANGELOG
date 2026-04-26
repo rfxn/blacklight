@@ -2,7 +2,7 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
-=== Unreleased — M14 substrate-hook (closed-loop response layer) ===
+=== M14 — Substrate-hook (closed-loop response layer) — 2026-04-26 ===
 
 [New] M14 P11 — skill bundles: bl-capabilities (always-load capability map), lmd-triggers (hook router + backwalk + quarantine discipline), cpanel-easyapache (EA4 substrate router + apply-path discipline); description-routed; skills/INDEX.md not modified (retired M13 P10)
 [Change] M14 P10 — install.sh — /etc/blacklight/ directory tree provisioning: creates /etc/blacklight/, notify.d/, hooks/ with chmod 0750; cp -n copies blacklight.conf.default (preserves operator conf on upgrade); installs bl-lmd-hook into hooks/ with chmod 0755
