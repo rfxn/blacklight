@@ -6542,10 +6542,13 @@ bl_consult_create_session() {
         ' "$state_file")
     local body_file
     body_file=$(command mktemp)
+    # F12 fix — live API rejects agent_id with "Did you mean 'agent'?".
+    # Field name in sessions.create body is 'agent', not 'agent_id'. The
+    # response shape is unrelated and may still carry agent_id.
     jq -n \
         --arg aid "$agent_id" \
         --argjson rs "$resources_json" \
-        '{agent_id: $aid, resources: $rs}' > "$body_file"
+        '{agent: $aid, resources: $rs}' > "$body_file"
     local resp rc session_id
     resp=$(bl_api_call POST "/v1/sessions" "$body_file")
     rc=$?

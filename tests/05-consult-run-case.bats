@@ -573,3 +573,41 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == "true" ]]
 }
+
+# ---------------------------------------------------------------------------
+# F12 regression: sessions.create request body uses 'agent' field, not 'agent_id'
+# ---------------------------------------------------------------------------
+
+@test "bl consult: session-create body uses 'agent' field name (F12 regression)" {
+    # Seed state dir and state.json with agent.id = "agent_M8_TEST" so
+    # bl_consult_create_session reads it when POSTing /v1/sessions.
+    mkdir -p "$BL_VAR_DIR/state"
+    cp "$BATS_TEST_DIRNAME/fixtures/state-json-baseline.json" "$BL_VAR_DIR/state/state.json"
+    # Overwrite agent.id in state.json to the known sentinel value
+    local updated
+    updated=$(jq '.agent.id = "agent_M8_TEST"' "$BL_VAR_DIR/state/state.json")
+    printf '%s\n' "$updated" > "$BL_VAR_DIR/state/state.json"
+    printf 'agent_M8_TEST' > "$BL_VAR_DIR/state/agent-id"
+    printf 'memstore_test_stub' > "$BL_VAR_DIR/state/memstore-case-id"
+    # Capture every curl invocation (method + URL + compact body)
+    export BL_MOCK_REQUEST_LOG
+    BL_MOCK_REQUEST_LOG=$(mktemp)
+    # Route sessions.create → fixture; catch-all for memstore uploads
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    bl_curator_mock_add_route 'v1/sessions$' 'sessions-create.json' 200
+    bl_curator_mock_add_route 'memories/bl-case%2FINDEX' 'memstore-case-not-found.json' 404
+    local trigger
+    trigger=$(mktemp)
+    printf 'f12-regression-trigger' > "$trigger"
+    # Unset BL_SESSION_ID to force Path C (create-then-register) in bl_consult_register_curator
+    unset BL_SESSION_ID
+    run "$BL_SOURCE" consult --new --trigger "$trigger"
+    rm -f "$trigger"
+    export BL_SESSION_ID="sesn_test_stub"   # restore for teardown safety
+    # Inspect captured request log for the POST /v1/sessions body
+    grep -E '"agent":"agent_M8_TEST"' "$BL_MOCK_REQUEST_LOG"
+    [ "$?" -eq 0 ]
+    # Anti-assertion: the wrong field name must NOT appear in the request body
+    ! grep -E '"agent_id":"agent_M8_TEST"' "$BL_MOCK_REQUEST_LOG"
+    rm -f "$BL_MOCK_REQUEST_LOG"
+}

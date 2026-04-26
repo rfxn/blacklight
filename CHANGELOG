@@ -4,6 +4,13 @@ https://github.com/rfxn/blacklight
 
 === M15 — API correctness against live Anthropic Managed Agents ===
 
+M15 P5 (2026-04-26)
+  [Fix] bl_consult_create_session sessions.create body field renamed
+        agent_id → agent (the live API rejects agent_id with "Did you mean
+        'agent'?"). Was a silent fail on every consult (F12).
+  [New] tests/05-consult-run-case.bats — F12 regression test asserting
+        request body field name via BL_MOCK_REQUEST_LOG capture.
+
 M15 P4 (2026-04-26)
   [Fix] bl_setup_ensure_agent apply branch replaces PATCH /v1/agents/<id>
         (HTTP 404 against the live API) with POST /v1/agents/<id> body
