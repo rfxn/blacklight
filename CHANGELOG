@@ -11,6 +11,13 @@ https://github.com/rfxn/blacklight
 [Change] M14 P6 — src/bl.d/50-consult.sh — bl_consult_new dual-mode argv (positional preserved; flag-form adds --fingerprint and --dedup-window-hours)
 [New] M14 P6 — bl_consult_new — trigger_dedup_attached ledger event on within-window dedup match
 [Change] M14 P6 — bl regenerated
+[New] M14 P4 — src/bl.d/28-notify.sh — bl_notify multi-channel wrapper over alert_lib (subject+body+severity API; per-channel template dir; notify_dispatched + notify_failed ledger emission)
+[New] M14 P4 — _bl_notify_register_channels — gates channels by file presence + chmod 0600 (R5 mitigation); syslog registered locally (not in alert_lib); email/slack/telegram/discord enable-only (pre-registered by vendor)
+[New] M14 P4 — _bl_notify_export_from_file — notify.d/<file> → ALERT_* env transcoding with metacharacter allowlist
+[New] M14 P4 — _bl_notify_handle_syslog — local syslog channel handler via logger(1)
+[New] M14 P4 — tests/14-notify.bats — register, dispatch, severity-floor, fail+outbox, R5 perm-check, metacharacter-reject tests (12 tests; 2 skipped pending P9)
+[New] M14 P4 — tests/fixtures/lmd-conf-maldet-sample.conf — sample LMD conf for --import-from-lmd (reused by P9)
+[Change] M14 P4 — bl regenerated with slot 28
 [New] M14 P3 — src/bl.d/05-vendor-alert.sh — vendored alert_lib v1.0.6 (multi-channel notify substrate)
 [New] M14 P3 — src/bl.d/06-vendor-tlog.sh — vendored tlog_lib v2.0.5 (incremental log reads with cursor state)
 [Change] M14 P3 — src/bl.d/15-workdir.sh — bl_init_workdir creates baserun/ subdir for tlog_lib cursor state
