@@ -65,19 +65,33 @@ main() {
         trigger)  shift; bl_trigger  "$@"; return $? ;;
         flush)
             shift
-            local flush_target=""
+            local flush_target="" flush_case_id=""
             while (( $# > 0 )); do
                 case "$1" in
-                    --outbox) flush_target="outbox"; shift ;;
+                    --outbox)         flush_target="outbox"; shift ;;
+                    --session-events) flush_target="session-events"; shift ;;
+                    --case)           flush_case_id="$2"; shift 2 ;;
                     *) bl_error_envelope flush "unknown flag: $1"; return "$BL_EX_USAGE" ;;
                 esac
             done
-            if [[ "$flush_target" == "outbox" ]]; then
-                bl_outbox_drain
-                return $?
-            fi
-            bl_error_envelope flush "missing --outbox (nothing else to flush in M9)"
-            return "$BL_EX_USAGE"
+            case "$flush_target" in
+                outbox)
+                    bl_outbox_drain
+                    return $?
+                    ;;
+                session-events)
+                    if [[ -n "$flush_case_id" ]]; then
+                        bl_bridge_session_to_memstore "$flush_case_id"
+                    else
+                        bl_bridge_flush_all_open_cases
+                    fi
+                    return $?
+                    ;;
+                "")
+                    bl_error_envelope flush "missing target (--outbox or --session-events [--case <id>])"
+                    return "$BL_EX_USAGE"
+                    ;;
+            esac
             ;;
         *)
             bl_error_envelope usage "unknown command: $1" "(use \`bl --help\` for a list of commands)"

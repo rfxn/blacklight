@@ -1,0 +1,74 @@
+{
+  "data": [
+    {
+      "type": "session.status_running",
+      "id": "sevt_run01",
+      "processed_at": "2026-04-26T00:00:00.000Z"
+    },
+    {
+      "type": "agent.thinking",
+      "id": "sevt_thnk01",
+      "processed_at": "2026-04-26T00:00:01.000Z"
+    },
+    {
+      "type": "agent.custom_tool_use",
+      "id": "sevt_01TestStep0001AAAAAAAA",
+      "name": "report_step",
+      "input": {
+        "step_id": "s-0001",
+        "verb": "observe.fs_mtime_since",
+        "action_tier": "read-only",
+        "reasoning": "fixture step 1",
+        "args": [{"key": "since", "value": "72h"}, {"key": "under", "value": "/var/www"}],
+        "diff": "",
+        "patch": ""
+      },
+      "processed_at": "2026-04-26T00:00:02.000Z"
+    },
+    {
+      "type": "agent.tool_use",
+      "id": "sevt_bash01",
+      "name": "bash",
+      "input": {"command": "ls /tmp"},
+      "processed_at": "2026-04-26T00:00:03.000Z"
+    },
+    {
+      "type": "agent.custom_tool_use",
+      "id": "sevt_01TestStep0002BBBBBBBB",
+      "name": "report_step",
+      "input": {
+        "step_id": "s-0002",
+        "verb": "observe.htaccess",
+        "action_tier": "read-only",
+        "reasoning": "fixture step 2",
+        "args": [{"key": "root", "value": "/var/www"}],
+        "diff": "",
+        "patch": ""
+      },
+      "processed_at": "2026-04-26T00:00:04.000Z"
+    },
+    {
+      "type": "agent.custom_tool_use",
+      "id": "sevt_01TestStep0003CCCCCCCC",
+      "name": "report_step",
+      "input": {
+        "step_id": "s-0003",
+        "verb": "observe.cron",
+        "action_tier": "read-only",
+        "reasoning": "fixture step 3",
+        "args": [{"key": "system", "value": "true"}],
+        "diff": "",
+        "patch": ""
+      },
+      "processed_at": "2026-04-26T00:00:05.000Z"
+    },
+    {
+      "type": "agent.custom_tool_use",
+      "id": "sevt_01OtherTool0001DDDDDDDD",
+      "name": "some_other_custom_tool",
+      "input": {"foo": "bar"},
+      "processed_at": "2026-04-26T00:00:06.000Z"
+    }
+  ],
+  "next_page": "page_fixture_cursor_aaa"
+}

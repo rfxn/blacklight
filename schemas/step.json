@@ -65,6 +65,10 @@
     },
     "patch": {
       "type": ["string", "null"]
+    },
+    "custom_tool_use_id": {
+      "type": "string",
+      "pattern": "^sevt_[A-Za-z0-9]+$"
     }
   }
 }

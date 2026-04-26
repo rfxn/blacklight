@@ -366,11 +366,18 @@ HELP_EOF
 
 bl_help_flush() {
     command cat <<'HELP_EOF'
-bl flush — drain queued outbox records.
+bl flush — drain queued outbox records / sync session events to memstore.
 
 Usage: bl flush --outbox
+       bl flush --session-events [--case <id>]
 
-Best-effort cron-driven drain of /var/lib/bl/outbox against the
-curator's memory-store API. Safe to invoke manually.
+--outbox: cron-driven drain of /var/lib/bl/outbox against the curator's
+  memory-store API. Safe to invoke manually.
+
+--session-events: pull new agent.custom_tool_use(report_step) events from
+  the curator's session and post them to memstore bl-case/<case>/pending/
+  so `bl run <step-id>` can dispatch them. Without --case, flushes every
+  case in state.json.session_ids. Idempotent (cursor advances; 409
+  conflicts on already-posted steps are treated as success).
 HELP_EOF
 }

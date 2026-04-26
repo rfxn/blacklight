@@ -2,6 +2,49 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== M16 P3 — 2026-04-26 (session-event → memstore-pending bridge; v0.6.0) ===
+
+Closes the M12.5 session-creation gap noted in MEMORY.md. The curator emits
+report_step custom-tool calls inside its session; the operator-facing run-step
+contract reads from memstore bl-case/<case>/pending/. Without this bridge,
+those two stores were disconnected — `bl run <step-id>` against a
+curator-prescribed step returned 72 (not found) until the operator manually
+posted the step body via curl/jq glue.
+
+[New] src/bl.d/33-bridge.sh — bl_bridge_session_to_memstore <case-id> pulls
+      agent.custom_tool_use(name=report_step) events from the case's session,
+      enriches each step body with custom_tool_use_id (the session-event id),
+      and POSTs to bl-case/<case>/pending/<step-id>.json. Idempotent: 409
+      conflicts on already-posted steps are caught and converted to success
+      (already_posted accounting). Cursor advance via state.json.session_
+      cursors[case-id] using the API's opaque ?page= pagination — there is
+      no ?after=<event-id> primitive (probed; rejected). Non-report_step
+      custom-tool calls and non-custom-tool events are skipped silently.
+[New] src/bl.d/33-bridge.sh — bl_bridge_flush_all_open_cases iterates every
+      case in state.json.session_ids and bridges each. First non-zero rc is
+      surfaced; subsequent cases still attempted (best-effort drain).
+[Change] src/bl.d/90-main.sh — `bl flush --session-events [--case <id>]` route
+      added. Without --case, flushes every open case from session_ids. Mirrors
+      the existing `bl flush --outbox` operator entry point.
+[Change] src/bl.d/30-preflight.sh — bl_help_flush rewritten with both targets.
+[Change] schemas/step.json — `properties.custom_tool_use_id` (string, optional)
+      added so bl_jq_schema_check --strict accepts bridge-enriched bodies.
+      Pattern is documentary (jq-check honors required/enum/additionalProperties
+      only — pattern is not enforced runtime). No per-field `description` —
+      Anthropic agents API rejects that keyword inside input_schema.
+[Change] schemas/step.md — full doc for custom_tool_use_id including the
+      curator-vs-bridge authorship boundary.
+[Change] src/bl.d/00-header.sh — BL_VERSION 0.5.2 → 0.6.0 (architecture
+      addition: bridge becomes a first-class operator-invokable verb).
+[New] tests/03-bridge.bats — 12 tests covering report_step extraction,
+      custom_tool_use_id enrichment, cursor advance + reuse, idempotent
+      re-post (409→success), non-report_step skip, no-session no-op,
+      missing/malformed case-id, and bl flush --session-events dispatch.
+[New] tests/fixtures/sessions-events-bridge-*.json — 2 mock session-event
+      fixtures (3-report-steps + empty) for bridge BATS coverage.
+[New] tests/fixtures/memstore-bridge-step-post-ok.json — mock memstore POST
+      response shape.
+
 === M16 P2 — 2026-04-26 (cron --from-file fixture-mode adapter) ===
 
 [New] src/bl.d/41-observe-collectors.sh — bl_observe_cron `--from-file <path>`

@@ -104,6 +104,16 @@ Payload body:
 
 Null for observe, clean, case verbs. Cross-check: a `clean.htaccess` step carries its file edit in `diff`, not `patch`. A `defend.modsec` step carries its rule text in `patch`, not `diff`.
 
+### `custom_tool_use_id` (string, optional, M16 P3+)
+
+Session-event id of the `agent.custom_tool_use(report_step)` event that produced this step. Set by `bl_bridge_session_to_memstore` (M16 P3) when the step crosses from session.events into memstore pending/ via `bl flush --session-events`.
+
+When present, `bl_run_writeback_result` (M16 P4+) emits `user.custom_tool_result` against this id to unblock the curator session. When absent — legacy step paths, mocked-step BATS tests pre-dating the bridge, manually-staged pending entries — writeback falls back to `user.message`.
+
+Pattern: `^sevt_[A-Za-z0-9]+$`. Note: the wrapper's local `bl_jq_schema_check` honors only `required` / `enum` / `additionalProperties` (top-level only) — per-field `pattern` is **documentary, not enforced runtime**.
+
+This field is in the `properties` block, so it's part of the curator's `input_schema` for the `report_step` tool. The curator system prompt does not instruct it to populate this field, and curator emissions are observed never to carry it. The bridge enriches the step body with `custom_tool_use_id` AFTER the event lands in session.events, then writes the enriched body to memstore pending/. If the curator ever does emit it, the value is overwritten by the bridge with the actual event id — no harm.
+
 ---
 
 ## Why no `additionalProperties: false`, no per-property `description`
