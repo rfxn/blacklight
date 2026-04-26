@@ -400,6 +400,47 @@ teardown() {
     [ "$actual" -le "$((expected + 5))" ]   # allow minor slack
 }
 
+# ---------------------------------------------------------------------------
+# S13 (M13 P5): state.json schema validation
+# Validates the reference fixture carries schema_version=1 and all required keys.
+# ---------------------------------------------------------------------------
+
+@test "state.json schema_version=1 + all required keys present" {
+    local state_dir="$BATS_TEST_TMPDIR/state"
+    mkdir -p "$state_dir"
+    cp "${BATS_TEST_DIRNAME}/fixtures/state-json-baseline.json" "$state_dir/state.json"
+    run jq -e '.schema_version == 1' "$state_dir/state.json"
+    [ "$status" -eq 0 ]
+    run jq -e 'keys | contains(["agent","case_current","case_files","case_id_counter","case_memstores","env_id","files","files_pending_deletion","last_sync","schema_version","session_ids","skills"])' "$state_dir/state.json"
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# S14 (M13 P5): first-run migration — per-key state files folded into state.json
+# Regression-case for Path C state-shape change with explicit migration test.
+# ---------------------------------------------------------------------------
+
+@test "first-run migration: per-key state files folded into state.json" {
+    export BL_VAR_DIR="$BATS_TEST_TMPDIR/var"
+    export BL_STATE_DIR="$BL_VAR_DIR/state"
+    mkdir -p "$BL_STATE_DIR"
+    cp "${BATS_TEST_DIRNAME}/fixtures/state-old-per-key"/* "$BL_STATE_DIR/"
+    [ -f "$BL_STATE_DIR/agent-id" ]
+    [ -f "$BL_STATE_DIR/env-id" ]
+    [ ! -f "$BL_STATE_DIR/state.json" ]
+    run bash -c ". \"$BL_SOURCE\"; bl_setup_load_state"
+    [ "$status" -eq 0 ]
+    [ -f "$BL_STATE_DIR/state.json" ]
+    [ ! -f "$BL_STATE_DIR/agent-id" ]
+    [ ! -f "$BL_STATE_DIR/env-id" ]
+    [ ! -f "$BL_STATE_DIR/memstore-skills-id" ]
+    [ ! -f "$BL_STATE_DIR/memstore-case-id" ]
+    run jq -r '.agent.id' "$BL_STATE_DIR/state.json"
+    [ "$output" = "agent_01OLDFIXTURE" ]
+    run jq -r '.env_id' "$BL_STATE_DIR/state.json"
+    [ "$output" = "env_01OLDFIXTURE" ]
+}
+
 _bl_M8_synth_current_manifest() {
     # Mirrors bl_setup_compute_manifest exactly so the no-op sync test sees a
     # remote MANIFEST that matches local. jq emits the {path,sha256} entries and

@@ -50,6 +50,132 @@ bl_setup_local_preflight() {
     return "$BL_EX_OK"
 }
 
+# bl_setup_load_state — populate BL_STATE_* shell vars from state.json.
+# First-run migration: if state.json absent AND any per-key files exist,
+# read each, populate state.json, atomically delete old files. One-time per workspace.
+# Returns 0 on success, 65 on malformed state.json.
+# shellcheck disable=SC2034  # BL_STATE_LAST_SYNC consumed by Phase 6 callers
+bl_setup_load_state() {
+    local state_file="$BL_STATE_DIR/state.json"
+    command mkdir -p "$BL_STATE_DIR" 2>/dev/null || {   # RO fs / perms
+        bl_error_envelope setup "$BL_VAR_DIR not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    if [[ -f "$state_file" ]]; then
+        # Validate JSON shape
+        if ! jq -e '.schema_version == 1' "$state_file" >/dev/null 2>&1; then   # 2>/dev/null: jq diagnostic vs schema mismatch — both surface as malformed
+            bl_error_envelope setup "state.json malformed or schema_version != 1: $state_file"
+            return "$BL_EX_PREFLIGHT_FAIL"
+        fi
+        BL_STATE_AGENT_ID=$(jq -r '.agent.id // empty' "$state_file")
+        BL_STATE_AGENT_VERSION=$(jq -r '.agent.version // 0' "$state_file")
+        BL_STATE_ENV_ID=$(jq -r '.env_id // empty' "$state_file")
+        BL_STATE_MEMSTORE_CASE_ID=$(jq -r '.case_memstores | to_entries[0].value // empty' "$state_file")
+        BL_STATE_LAST_SYNC=$(jq -r '.last_sync // empty' "$state_file")
+        return "$BL_EX_OK"
+    fi
+    # First-run migration path — read old per-key files if present
+    local old_agent old_env old_skills old_case old_counter old_current
+    old_agent=$(command cat "$BL_STATE_DIR/agent-id" 2>/dev/null || printf '')          # missing → empty (new workspace)
+    old_env=$(command cat "$BL_STATE_DIR/env-id" 2>/dev/null || printf '')              # missing → empty (new workspace)
+    old_skills=$(command cat "$BL_STATE_DIR/memstore-skills-id" 2>/dev/null || printf '') # missing → empty (new workspace)
+    old_case=$(command cat "$BL_STATE_DIR/memstore-case-id" 2>/dev/null || printf '')   # missing → empty (new workspace)
+    old_counter=$(command cat "$BL_STATE_DIR/case-id-counter" 2>/dev/null || printf '') # missing → empty (new workspace)
+    old_current=$(command cat "$BL_STATE_DIR/case.current" 2>/dev/null || printf '')    # missing → empty (new workspace)
+    if [[ -z "$old_agent" && -z "$old_env" && -z "$old_skills" && -z "$old_case" ]]; then
+        # Truly fresh workspace — initialize empty state.json
+        BL_STATE_AGENT_ID=""
+        BL_STATE_AGENT_VERSION=0
+        BL_STATE_ENV_ID=""
+        BL_STATE_MEMSTORE_CASE_ID=""
+        BL_STATE_LAST_SYNC=""
+        bl_setup_save_state || return $?
+        return "$BL_EX_OK"
+    fi
+    # Migrate: populate shell vars from old files, write state.json, delete old files atomically
+    bl_info "bl setup: migrating per-key state files → state.json"
+    BL_STATE_AGENT_ID="$old_agent"
+    BL_STATE_AGENT_VERSION=0   # version unknown pre-Path C; first --sync will probe
+    BL_STATE_ENV_ID="$old_env"
+    BL_STATE_MEMSTORE_CASE_ID="$old_case"
+    BL_STATE_LAST_SYNC=""
+    # Build state.json with both old fields preserved
+    local tmp_state="$state_file.tmp.$$"
+    jq -n \
+        --arg aid "$old_agent" \
+        --arg env "$old_env" \
+        --arg cmid "$old_case" \
+        --arg cur "$old_current" \
+        --argjson counter "${old_counter:-{}}" \
+        '{
+            schema_version: 1,
+            agent: {id: $aid, version: 0, skill_versions: {}},
+            env_id: $env,
+            skills: {},
+            files: {},
+            files_pending_deletion: [],
+            case_memstores: (if $cmid != "" then {"_legacy": $cmid} else {} end),
+            case_files: {},
+            case_id_counter: $counter,
+            case_current: $cur,
+            session_ids: {},
+            last_sync: ""
+        }' > "$tmp_state"
+    command mv "$tmp_state" "$state_file"
+    # Delete old per-key files (skills-id is intentionally orphaned — bl-skills memstore retired)
+    command rm -f "$BL_STATE_DIR/agent-id" "$BL_STATE_DIR/env-id" \
+                  "$BL_STATE_DIR/memstore-skills-id" "$BL_STATE_DIR/memstore-case-id" \
+                  "$BL_STATE_DIR/case-id-counter" "$BL_STATE_DIR/case.current"
+    bl_info "bl setup: state migrated; old per-key files removed"
+    return "$BL_EX_OK"
+}
+
+# bl_setup_save_state — atomically write current BL_STATE_* shell vars to state.json.
+# Caller must have populated BL_STATE_* (load_state initializes empty if first-run).
+bl_setup_save_state() {
+    local state_file="$BL_STATE_DIR/state.json"
+    local tmp_state="$state_file.tmp.$$"
+    local now
+    now=$(command date -u +%Y-%m-%dT%H:%M:%SZ)
+    # Preserve existing skills/files/files_pending_deletion/case_files/session_ids/case_id_counter/case_current
+    # if state.json already exists; only overwrite top-level identity fields here.
+    local existing="{}"
+    [[ -f "$state_file" ]] && existing=$(command cat "$state_file")
+    jq -n \
+        --arg aid "${BL_STATE_AGENT_ID:-}" \
+        --argjson av "${BL_STATE_AGENT_VERSION:-0}" \
+        --arg env "${BL_STATE_ENV_ID:-}" \
+        --arg cmid "${BL_STATE_MEMSTORE_CASE_ID:-}" \
+        --arg ts "$now" \
+        --argjson existing "$existing" \
+        '{
+            schema_version: 1,
+            agent: {
+                id: $aid,
+                version: $av,
+                skill_versions: ($existing.agent.skill_versions // {})
+            },
+            env_id: $env,
+            skills: ($existing.skills // {}),
+            files: ($existing.files // {}),
+            files_pending_deletion: ($existing.files_pending_deletion // []),
+            case_memstores: (
+                if $cmid != "" then
+                    ($existing.case_memstores // {}) + {"_legacy": $cmid}
+                else
+                    ($existing.case_memstores // {})
+                end
+            ),
+            case_files: ($existing.case_files // {}),
+            case_id_counter: ($existing.case_id_counter // {}),
+            case_current: ($existing.case_current // ""),
+            session_ids: ($existing.session_ids // {}),
+            last_sync: $ts
+        }' > "$tmp_state"
+    command mv "$tmp_state" "$state_file"
+    return "$BL_EX_OK"
+}
+
 bl_setup_provision() {
     # Per setup-flow.md §3 happy path, idempotent per §5.
     # Snapshot state-completeness BEFORE any ensure_* writes id files. Without

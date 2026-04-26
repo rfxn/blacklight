@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "agent": {
+    "id": "agent_01ABCFIXTUREAGT",
+    "version": 0,
+    "skill_versions": {}
+  },
+  "env_id": "env_01ABCFIXTUREENV",
+  "skills": {},
+  "files": {},
+  "files_pending_deletion": [],
+  "case_memstores": {
+    "_legacy": "memstore_01ABCFIXTURECASE"
+  },
+  "case_files": {},
+  "case_id_counter": {},
+  "case_current": "",
+  "session_ids": {},
+  "last_sync": "2025-04-24T10:00:00Z"
+}
