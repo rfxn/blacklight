@@ -5,7 +5,7 @@
 # ----------------------------------------------------------------------------
 
 bl_init_workdir() {
-    # Creates 5 subdirs under $BL_VAR_DIR. state/ is preflight's job.
+    # Creates 6 subdirs under $BL_VAR_DIR. state/ is preflight's job.
     # Returns 0 on success, 65 on writability failure.
     if ! command mkdir -p "$BL_VAR_DIR" 2>/dev/null; then   # RO filesystem / perms
         bl_error_envelope preflight "$BL_VAR_DIR not writable"
@@ -17,7 +17,7 @@ bl_init_workdir() {
     fi
     command rm -f "$BL_VAR_DIR/.wtest"
     local d
-    for d in backups quarantine fp-corpus outbox ledger; do
+    for d in backups quarantine fp-corpus outbox ledger baserun; do
         command mkdir -p "$BL_VAR_DIR/$d"
         bl_debug "bl_init_workdir: ensured $BL_VAR_DIR/$d"
     done

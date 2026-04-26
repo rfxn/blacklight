@@ -131,6 +131,19 @@ teardown() {
     [[ "$output" == *"outbox has aged entries"* ]] || [[ "$output" == *"draining"* ]]
 }
 
+# ---------------------------------------------------------------------------
+# M14 P3: bl_init_workdir creates baserun/ subdir for tlog_lib cursor state
+# ---------------------------------------------------------------------------
+
+@test "bl_init_workdir creates baserun/ subdir for tlog_lib cursor state" {
+    local td
+    td=$(mktemp -d)
+    BL_VAR_DIR="$td" run bash -c 'source ./bl; bl_init_workdir'
+    [ "$status" -eq 0 ]
+    [ -d "$td/baserun" ]
+    command rm -rf "$td"
+}
+
 @test "bl on bash <4.1 exits 65 with 'bash 4.1+ required' (best-effort source-under-patched-VERSINFO)" {
     # Attempt to source bl under a patched BASH_VERSINFO simulating bash 3.2.
     # If the patched assignment does not propagate, skip the test.

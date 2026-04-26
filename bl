@@ -79,6 +79,1984 @@ readonly BL_CASE_CURRENT_FILE="$BL_STATE_DIR/case.current"
 # ----------------------------------------------------------------------------
 
 
+# --- src/bl.d/05-vendor-alert.sh ---
+# Pinned via git submodule. Regenerate via: make vendor-libs-pull
+
+[[ -n "${_ALERT_LIB_LOADED:-}" ]] && return 0 2>/dev/null
+_ALERT_LIB_LOADED=1
+
+# shellcheck disable=SC2034
+ALERT_LIB_VERSION="1.0.6"
+
+# Channel registry — consuming projects populate via alert_channel_register()
+# Uses parallel indexed arrays instead of declare -A to avoid scope issues
+# when sourced from inside a function (e.g., BATS load, wrapper functions).
+# Simple array assignment creates globals; declare -A creates locals in functions.
+_ALERT_CHANNEL_NAMES=()
+_ALERT_CHANNEL_HANDLERS=()
+_ALERT_CHANNEL_ENABLED=()
+
+# Configurable defaults — consuming projects override via environment
+ALERT_CURL_TIMEOUT="${ALERT_CURL_TIMEOUT:-30}"
+ALERT_CURL_MAX_TIME="${ALERT_CURL_MAX_TIME:-120}"
+ALERT_TMPDIR="${ALERT_TMPDIR:-${TMPDIR:-/tmp}}"
+
+# ---------------------------------------------------------------------------
+# Channel Registry
+# ---------------------------------------------------------------------------
+
+# _alert_channel_find name — locate channel index by name
+# Linear scan of _ALERT_CHANNEL_NAMES. Sets _ALERT_CHANNEL_IDX on success
+# (avoids subshell fork from stdout return, same pattern as _ALERT_TPL_RESOLVED).
+# Returns 0 if found, 1 if not found.
+_alert_channel_find() {
+	local name="$1"
+	local i
+	_ALERT_CHANNEL_IDX=-1
+	for i in "${!_ALERT_CHANNEL_NAMES[@]}"; do
+		if [ "${_ALERT_CHANNEL_NAMES[$i]}" = "$name" ]; then
+			_ALERT_CHANNEL_IDX=$i
+			return 0
+		fi
+	done
+	return 1
+}
+
+# alert_channel_register name handler_fn — register a delivery channel
+# Appends to parallel indexed arrays. Channel starts disabled (enabled=0).
+# Returns 1 if name is empty, handler_fn is empty, or name already registered.
+alert_channel_register() {
+	local name="$1" handler_fn="$2"
+	if [ -z "$name" ]; then
+		echo "alert_lib: channel name cannot be empty." >&2
+		return 1
+	fi
+	if [ -z "$handler_fn" ]; then
+		echo "alert_lib: handler function cannot be empty for channel '$name'." >&2
+		return 1
+	fi
+	if _alert_channel_find "$name"; then
+		echo "alert_lib: channel '$name' already registered." >&2
+		return 1
+	fi
+	_ALERT_CHANNEL_NAMES+=("$name")
+	_ALERT_CHANNEL_HANDLERS+=("$handler_fn")
+	_ALERT_CHANNEL_ENABLED+=("0")
+	return 0
+}
+
+# alert_channel_enable name — mark channel as active
+# Returns 1 if channel not registered.
+alert_channel_enable() {
+	local name="$1"
+	if ! _alert_channel_find "$name"; then
+		echo "alert_lib: channel '$name' not registered." >&2
+		return 1
+	fi
+	_ALERT_CHANNEL_ENABLED[_ALERT_CHANNEL_IDX]=1
+	return 0
+}
+
+# alert_channel_disable name — mark channel as inactive
+# Returns 1 if channel not registered.
+alert_channel_disable() {
+	local name="$1"
+	if ! _alert_channel_find "$name"; then
+		echo "alert_lib: channel '$name' not registered." >&2
+		return 1
+	fi
+	_ALERT_CHANNEL_ENABLED[_ALERT_CHANNEL_IDX]=0
+	return 0
+}
+
+# alert_channel_enabled name — check if channel is active
+# Returns 0 if enabled, 1 if disabled or not found.
+alert_channel_enabled() {
+	local name="$1"
+	if ! _alert_channel_find "$name"; then
+		return 1
+	fi
+	[ "${_ALERT_CHANNEL_ENABLED[_ALERT_CHANNEL_IDX]}" = "1" ]
+}
+
+# ---------------------------------------------------------------------------
+# Template Engine
+# ---------------------------------------------------------------------------
+
+# _alert_tpl_render template_file — render template by replacing {{VAR}} tokens
+# with values from exported environment variables. Single-pass awk using
+# ENVIRON array. Unknown/unset tokens become empty strings.
+# Safe: no shell code execution, no eval, mawk-compatible.
+# Output goes to stdout.
+_alert_tpl_render() {
+	local template_file="$1"
+	if [ ! -f "$template_file" ]; then
+		return 1
+	fi
+	awk '{
+		line = $0
+		while (match(line, /\{\{[A-Z_][A-Z0-9_]*\}\}/)) {
+			token = substr(line, RSTART + 2, RLENGTH - 4)
+			val = ENVIRON[token]
+			line = substr(line, 1, RSTART - 1) val substr(line, RSTART + RLENGTH)
+		}
+		print line
+	}' "$template_file"
+}
+
+# _alert_tpl_resolve template_dir template_name — resolve template with custom.d/ override
+# If $template_dir/custom.d/$template_name exists, uses that path (user override).
+# Otherwise uses $template_dir/$template_name (shipped default).
+# Sets _ALERT_TPL_RESOLVED (avoids subshell fork from stdout return).
+_alert_tpl_resolve() {
+	local template_dir="$1" template_name="$2"
+	_ALERT_TPL_RESOLVED="$template_dir/$template_name"
+	if [ -f "$template_dir/custom.d/$template_name" ]; then
+		_ALERT_TPL_RESOLVED="$template_dir/custom.d/$template_name"
+	fi
+}
+
+# ---------------------------------------------------------------------------
+# Escaping Functions
+# ---------------------------------------------------------------------------
+
+# _alert_html_escape str — escape HTML special characters for safe embedding
+# Handles: & < > " ' (& first to avoid double-escaping)
+# Uses sed for portable behavior across bash versions (bash 5.2 changed
+# & semantics in ${var//pat/rep} to act as a backreference).
+# Output goes to stdout.
+_alert_html_escape() {
+	if [ -z "$1" ]; then
+		printf ''
+		return 0
+	fi
+	printf '%s' "$1" | sed \
+		-e 's/&/\&amp;/g' \
+		-e 's/</\&lt;/g' \
+		-e 's/>/\&gt;/g' \
+		-e 's/"/\&quot;/g' \
+		-e "s/'/\\&#39;/g"
+}
+
+# _alert_json_escape str — escape special characters for safe JSON string embedding
+# Handles: \ " newline tab carriage-return (\ first to avoid double-escaping)
+# Uses ${var//} parameter expansion — no & in replacements, safe on all bash versions.
+# Output goes to stdout (no trailing newline).
+_alert_json_escape() {
+	local s="$1"
+	s="${s//\\/\\\\}"
+	s="${s//\"/\\\"}"
+	s="${s//$'\n'/\\n}"
+	s="${s//$'\t'/\\t}"
+	s="${s//$'\r'/\\r}"
+	printf '%s' "$s"
+}
+
+# _alert_telegram_escape str — escape Telegram MarkdownV2 special characters
+# Handles: \ _ * [ ] ( ) ~ ` > # + - = | { } . ! (\ first to avoid double-escaping)
+# Character list per Telegram Bot API: https://core.telegram.org/bots/api#markdownv2-style
+# Uses sed for consistent escaping approach across all alert_lib escape functions.
+# Output goes to stdout.
+_alert_telegram_escape() {
+	if [ -z "$1" ]; then
+		printf ''
+		return 0
+	fi
+	# Escape backslash first, then all MarkdownV2 special chars via BRE character class.
+	# Class layout: ] first (BRE literal), [ next, remaining chars, - last (BRE literal).
+	printf '%s' "$1" | sed \
+		-e 's/\\/\\\\/g' \
+		-e 's/[][_*()~`>#+=|{}.!-]/\\&/g'
+}
+
+# _alert_slack_escape str — escape Slack mrkdwn special characters
+# Handles: & < > → &amp; &lt; &gt; (& first to avoid double-escaping)
+# Uses sed because replacement strings contain & (bash 5.2 backreference issue).
+# Output goes to stdout.
+_alert_slack_escape() {
+	if [ -z "$1" ]; then
+		printf ''
+		return 0
+	fi
+	printf '%s' "$1" | sed \
+		-e 's/&/\&amp;/g' \
+		-e 's/</\&lt;/g' \
+		-e 's/>/\&gt;/g'
+}
+
+# ---------------------------------------------------------------------------
+# HTTP Utilities
+# ---------------------------------------------------------------------------
+
+# _alert_validate_url url — validate URL has http:// or https:// scheme
+# Returns 0 if valid, 1 otherwise.
+_alert_validate_url() {
+	case "${1:-}" in
+		http://*|https://*) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+# _alert_redact_url url — redact embedded tokens from webhook URLs
+# Slack webhooks: https://hooks.slack.com/services/T.../B.../TOKEN → .../[REDACTED]
+# Discord webhooks: https://discord.com/api/webhooks/ID/TOKEN → .../[REDACTED]
+# Non-secret URLs passed through unchanged.
+_alert_redact_url() {
+	local url="$1"
+	if [[ "$url" == *"hooks.slack.com/services/"* ]]; then
+		printf '%s' "${url%/*}/[REDACTED]"
+	elif [[ "$url" == *"discord.com/api/webhooks/"* ]] || [[ "$url" == *"discordapp.com/api/webhooks/"* ]]; then
+		printf '%s' "${url%/*}/[REDACTED]"
+	else
+		printf '%s' "$url"
+	fi
+}
+
+# _alert_curl_post url [curl_flags...] — HTTP POST via curl with standard timeouts
+# Discovers curl via command -v. Adds -s, --connect-timeout, --max-time, -X POST.
+# Remaining arguments pass through as extra curl flags (caller provides -d/-H/-F).
+# Stdout: curl response body (caller captures via $()).
+# Stderr: error detail on failure.
+# Returns 0 on success, 1 on failure.
+_alert_curl_post() {
+	local url="$1"
+	shift
+	local curl_bin
+	curl_bin=$(command -v curl 2>/dev/null || true)
+	if [ -z "$curl_bin" ]; then
+		echo "alert_lib: curl not found, cannot POST to $(_alert_redact_url "$url")." >&2
+		return 1
+	fi
+	local rc=0 curl_stderr
+	curl_stderr=$(mktemp "${ALERT_TMPDIR}/alert_curl_err.XXXXXX")
+	"$curl_bin" -s --connect-timeout "$ALERT_CURL_TIMEOUT" --max-time "$ALERT_CURL_MAX_TIME" \
+		-X POST "$url" "$@" 2>"$curl_stderr" || rc=$?
+	if [ "$rc" -ne 0 ]; then
+		local _err_detail
+		_err_detail=$(head -5 "$curl_stderr" | tr '\n' ' ')
+		echo "alert_lib: POST to $(_alert_redact_url "$url") failed (curl exit $rc): $_err_detail" >&2
+		command rm -f "$curl_stderr"
+		return 1
+	fi
+	command rm -f "$curl_stderr"
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# MIME Builder
+# ---------------------------------------------------------------------------
+
+# _alert_build_mime text_body html_body — construct multipart/alternative MIME message
+# Writes MIME headers and both text and HTML parts to stdout.
+# Caller is responsible for adding Subject/To/From headers before this output.
+# The boundary uses epoch + random suffix for uniqueness.
+_alert_build_mime() {
+	local text_body="$1" html_body="$2"
+	local boundary
+	# Use /dev/urandom for unpredictable boundary suffix; fall back to PID
+	# if /dev/urandom is unavailable (sufficient for per-message uniqueness)
+	boundary="ALERT_$(date +%s)_$(tr -dc 'A-Za-z0-9' < /dev/urandom 2>/dev/null | head -c 8 || echo "$$")"
+
+	echo "MIME-Version: 1.0"
+	echo "Content-Type: multipart/alternative; boundary=\"$boundary\""
+	echo ""
+	echo "--$boundary"
+	echo "Content-Type: text/plain; charset=UTF-8"
+	echo "Content-Transfer-Encoding: 8bit"
+	echo ""
+	echo "$text_body"
+	echo ""
+	echo "--$boundary"
+	echo "Content-Type: text/html; charset=UTF-8"
+	echo "Content-Transfer-Encoding: base64"
+	echo ""
+	# base64 wraps at 76 chars, satisfying RFC 5321 998-char line limit
+	printf '%s\n' "$html_body" | base64
+	echo ""
+	echo "--${boundary}--"
+}
+
+# ---------------------------------------------------------------------------
+# Email Delivery
+# ---------------------------------------------------------------------------
+
+# _alert_email_local recip subject text_file html_file format
+# Send alert via local MTA (mail/sendmail). Format: text, html, or both.
+# Returns 0 on success, 1 on failure.
+_alert_email_local() {
+	local recip="$1" subject="$2" text_file="$3" html_file="$4" format="${5:-text}"
+	local from="${ALERT_SMTP_FROM:-root@$(hostname -f 2>/dev/null || hostname)}"
+	# Defense-in-depth: strip CR/LF from all values used in email headers
+	recip="${recip//$'\r'/}"
+	recip="${recip//$'\n'/}"
+	subject="${subject//$'\r'/}"
+	subject="${subject//$'\n'/}"
+	from="${from//$'\r'/}"
+	from="${from//$'\n'/}"
+	local reply_to="${ALERT_EMAIL_REPLY_TO:-}"
+	reply_to="${reply_to//$'\r'/}"
+	reply_to="${reply_to//$'\n'/}"
+
+	local sendmail_bin mail_bin
+	sendmail_bin=$(command -v sendmail 2>/dev/null || true)
+	mail_bin=$(command -v mail 2>/dev/null || true)
+
+	case "$format" in
+		text)
+			if [ -n "$mail_bin" ]; then
+				"$mail_bin" -s "$subject" "$recip" < "$text_file"
+				return $?
+			fi
+			# mail not available — fall back to sendmail
+			if [ -n "$sendmail_bin" ]; then
+				local _tmpmail
+				_tmpmail=$(mktemp "${ALERT_TMPDIR}/alert_text_msg.XXXXXX")
+				{
+					echo "From: $from"
+					echo "To: $recip"
+					echo "Subject: $subject"
+					if [ -n "$reply_to" ]; then
+						echo "Reply-To: $reply_to"
+					fi
+					echo ""
+					cat "$text_file"
+				} > "$_tmpmail"
+				"$sendmail_bin" -t -oi < "$_tmpmail"
+				local _rc=$?
+				command rm -f "$_tmpmail"
+				return $_rc
+			fi
+			echo "alert_lib: mail binary not found, cannot send alert to $recip." >&2
+			return 1
+			;;
+		html)
+			if [ -n "$sendmail_bin" ]; then
+				{
+					echo "From: $from"
+					echo "To: $recip"
+					echo "Subject: $subject"
+					if [ -n "$reply_to" ]; then
+						echo "Reply-To: $reply_to"
+					fi
+					echo "Content-Type: text/html; charset=UTF-8"
+					echo "Content-Transfer-Encoding: base64"
+					echo ""
+					# base64 wraps at 76 chars, satisfying RFC 5321 998-char line limit
+					base64 < "$html_file"
+				} | "$sendmail_bin" -t -oi
+				return $?
+			fi
+			# sendmail not available — fall back to text via mail
+			echo "alert_lib: warning: sendmail not found, falling back to text-only alert for $recip." >&2
+			if [ -z "$mail_bin" ]; then
+				echo "alert_lib: mail binary not found, cannot send alert to $recip." >&2
+				return 1
+			fi
+			"$mail_bin" -s "$subject" "$recip" < "$text_file"
+			return $?
+			;;
+		both)
+			if [ -n "$sendmail_bin" ]; then
+				local text_body html_body
+				text_body=$(cat "$text_file")
+				html_body=$(cat "$html_file")
+				{
+					echo "From: $from"
+					echo "To: $recip"
+					echo "Subject: $subject"
+					if [ -n "$reply_to" ]; then
+						echo "Reply-To: $reply_to"
+					fi
+					_alert_build_mime "$text_body" "$html_body"
+				} | "$sendmail_bin" -t -oi
+				return $?
+			fi
+			# sendmail not available — fall back to text via mail
+			echo "alert_lib: warning: sendmail not found, falling back to text-only alert for $recip." >&2
+			if [ -z "$mail_bin" ]; then
+				echo "alert_lib: mail binary not found, cannot send alert to $recip." >&2
+				return 1
+			fi
+			"$mail_bin" -s "$subject" "$recip" < "$text_file"
+			return $?
+			;;
+		*)
+			echo "alert_lib: unknown format '$format', cannot send alert." >&2
+			return 1
+			;;
+	esac
+}
+
+# _alert_email_relay recip subject msg_file — send via authenticated SMTP relay
+# msg_file must be a complete RFC 822 message (headers + body).
+# TLS handling: smtps:// always uses implicit TLS; smtp://:587 requires STARTTLS;
+# smtp://:25 connects plaintext (for internal relays). Credentials are optional
+# to support auth-free internal relays.
+# Returns 0 on success, 1 on failure.
+_alert_email_relay() {
+	local recip="$1" subject="$2" msg_file="$3"
+
+	if [ -z "${ALERT_SMTP_FROM:-}" ]; then
+		echo "alert_lib: ALERT_SMTP_FROM not set, cannot send relay alert to $recip." >&2
+		return 1
+	fi
+	local curl_bin
+	curl_bin=$(command -v curl 2>/dev/null || true)
+	if [ -z "$curl_bin" ]; then
+		echo "alert_lib: curl not found, cannot send relay alert to $recip." >&2
+		return 1
+	fi
+
+	# build curl arguments
+	local -a curl_args=("-s" "--url" "$ALERT_SMTP_RELAY")
+
+	# TLS: smtps:// and smtp://:587 require TLS; smtp://:25 is plain
+	case "$ALERT_SMTP_RELAY" in
+		smtps://*|smtp://*:587|smtp://*:587/*) curl_args+=("--ssl-reqd") ;;
+		smtp://*:25|smtp://*:25/*) ;;  # plain — no TLS for internal relays
+		*) curl_args+=("--ssl-reqd") ;;  # default: require TLS for safety
+	esac
+
+	curl_args+=("--mail-from" "$ALERT_SMTP_FROM" "--mail-rcpt" "$recip")
+
+	# credentials via -K config file to keep them out of process listing
+	# (same pattern as _alert_telegram_api)
+	local smtp_cfg=""
+	if [ -n "${ALERT_SMTP_USER:-}" ] && [ -n "${ALERT_SMTP_PASS:-}" ]; then
+		smtp_cfg=$(mktemp "${ALERT_TMPDIR}/alert_smtp_auth.XXXXXX")
+		chmod 600 "$smtp_cfg"
+		printf 'user = "%s:%s"\n' "$ALERT_SMTP_USER" "$ALERT_SMTP_PASS" > "$smtp_cfg"
+		curl_args+=("-K" "$smtp_cfg")
+	fi
+
+	curl_args+=("--upload-file" "$msg_file")
+
+	local rc=0 curl_stderr
+	curl_stderr=$(mktemp "${ALERT_TMPDIR}/alert_curl_err.XXXXXX")
+	"$curl_bin" "${curl_args[@]}" 2>"$curl_stderr" || rc=$?
+	if [ "$rc" -ne 0 ]; then
+		local _err_detail
+		_err_detail=$(head -5 "$curl_stderr" | tr '\n' ' ')
+		echo "alert_lib: SMTP relay to $recip failed (curl exit $rc): $_err_detail" >&2
+		command rm -f "$curl_stderr" "$smtp_cfg"
+		return 1
+	fi
+	command rm -f "$curl_stderr" "$smtp_cfg"
+	return 0
+}
+
+# _alert_deliver_email recip subject text_file html_file format
+# Router: ALERT_SMTP_RELAY set -> relay path, else -> local MTA.
+# NOTE: The relay path always builds a full multipart/alternative MIME message
+# regardless of the format parameter. The format parameter only affects the
+# local MTA path (_alert_email_local). This is by design — relay delivery
+# constructs RFC 822 messages via _alert_build_mime which requires both parts.
+# Returns 0 on success, 1 on failure.
+_alert_deliver_email() {
+	local recip="$1" subject="$2" text_file="$3" html_file="$4" format="${5:-text}"
+
+	if [ -z "$recip" ]; then
+		echo "alert_lib: email recipient is required." >&2
+		return 1
+	fi
+
+	# Strip CR/LF to prevent email header injection
+	subject="${subject//$'\r'/}"
+	subject="${subject//$'\n'/}"
+
+	if [ -n "${ALERT_SMTP_RELAY:-}" ]; then
+		# relay path: always build full multipart MIME message
+		local from="${ALERT_SMTP_FROM:-root@$(hostname -f 2>/dev/null || hostname)}"
+		# Defense-in-depth: strip CR/LF from all header values to prevent injection
+		recip="${recip//$'\r'/}"
+		recip="${recip//$'\n'/}"
+		from="${from//$'\r'/}"
+		from="${from//$'\n'/}"
+		local reply_to="${ALERT_EMAIL_REPLY_TO:-}"
+		reply_to="${reply_to//$'\r'/}"
+		reply_to="${reply_to//$'\n'/}"
+		local text_body html_body
+		text_body=$(cat "$text_file")
+		html_body=$(cat "$html_file")
+		local msg_file
+		msg_file=$(mktemp "${ALERT_TMPDIR}/alert_relay_msg.XXXXXX")
+		{
+			echo "From: $from"
+			echo "To: $recip"
+			echo "Subject: $subject"
+			if [ -n "$reply_to" ]; then
+				echo "Reply-To: $reply_to"
+			fi
+			echo "Date: $(date -R 2>/dev/null || date)"
+			_alert_build_mime "$text_body" "$html_body"
+		} > "$msg_file"
+		_alert_email_relay "$recip" "$subject" "$msg_file"
+		local rc=$?
+		command rm -f "$msg_file"
+		return $rc
+	fi
+
+	# local MTA path
+	_alert_email_local "$recip" "$subject" "$text_file" "$html_file" "$format"
+}
+
+# ---------------------------------------------------------------------------
+# Email Channel Handler
+# ---------------------------------------------------------------------------
+
+# _alert_handle_email subject text_file html_file [attachment]
+# Standardized handler wrapper for the email channel. Reads delivery config
+# from environment variables and delegates to _alert_deliver_email.
+# ALERT_EMAIL_TO: recipient address (default: root)
+# ALERT_EMAIL_FORMAT: text, html, or both (default: text)
+_alert_handle_email() {
+	local subject="$1" text_file="$2" html_file="$3"
+	local recip="${ALERT_EMAIL_TO:-root}"
+	local format="${ALERT_EMAIL_FORMAT:-text}"
+	_alert_deliver_email "$recip" "$subject" "$text_file" "$html_file" "$format"
+}
+
+# ---------------------------------------------------------------------------
+# Slack Delivery
+# ---------------------------------------------------------------------------
+
+# _alert_slack_webhook payload_file webhook_url — POST JSON to Slack incoming webhook
+# Returns 0 on success, 1 on failure.
+_alert_slack_webhook() {
+	local payload_file="$1" webhook_url="$2"
+	if [ -z "$webhook_url" ] || ! _alert_validate_url "$webhook_url"; then
+		echo "alert_lib: invalid or empty Slack webhook URL." >&2
+		return 1
+	fi
+	local response
+	response=$(_alert_curl_post "$webhook_url" \
+		-H "Content-Type: application/json" -d @"$payload_file") || return 1
+	# Slack webhooks return "ok" on success, error string on failure
+	if [ "$response" != "ok" ]; then
+		echo "alert_lib: Slack webhook error: $response" >&2
+		return 1
+	fi
+	return 0
+}
+
+# _alert_slack_post_message payload_file token channel — POST to chat.postMessage API
+# Injects "channel" field into JSON payload, sends to Slack Web API.
+# Token is written to a chmod 600 config file and passed via curl -K to keep
+# it out of the process listing (/proc/PID/cmdline).
+# Returns 0 on success, 1 on failure.
+_alert_slack_post_message() {
+	local payload_file="$1" token="$2" channel="$3"
+	if [ -z "$token" ]; then
+		echo "alert_lib: Slack token is required for bot mode." >&2
+		return 1
+	fi
+	if [ -z "$channel" ]; then
+		echo "alert_lib: Slack channel is required for bot mode." >&2
+		return 1
+	fi
+	if [ ! -f "$payload_file" ]; then
+		echo "alert_lib: payload file not found: ${payload_file:-<empty>}" >&2
+		return 1
+	fi
+	# Inject "channel" field after opening brace
+	# Uses awk instead of sed to avoid delimiter collision if channel
+	# contains / or & (sed s/// treats both as special characters)
+	local modified_payload escaped_channel
+	modified_payload=$(mktemp "${ALERT_TMPDIR}/alert_slack_msg.XXXXXX")
+	escaped_channel=$(_alert_json_escape "$channel")
+	ch="$escaped_channel" awk 'NR==1 && /^\{/ { print "{\"channel\":\"" ENVIRON["ch"] "\"," substr($0,2); next } { print }' \
+		"$payload_file" > "$modified_payload"
+	# Write token to config file — keeps it out of /proc/PID/cmdline
+	local auth_cfg
+	auth_cfg=$(mktemp "${ALERT_TMPDIR}/alert_sl_auth.XXXXXX")
+	chmod 600 "$auth_cfg"
+	printf 'header = "Authorization: Bearer %s"\n' "$token" > "$auth_cfg"
+	local response
+	response=$(_alert_curl_post "https://slack.com/api/chat.postMessage" \
+		-K "$auth_cfg" \
+		-H "Content-Type: application/json" \
+		-d @"$modified_payload") || { command rm -f "$modified_payload" "$auth_cfg"; return 1; }
+	command rm -f "$modified_payload" "$auth_cfg"
+	# Slack API returns {"ok":true,...} on success
+	case "$response" in
+		*'"ok":true'*) return 0 ;;
+	esac
+	local api_err
+	api_err=$(printf '%s' "$response" | sed -n 's/.*"error" *: *"\([^"]*\)".*/\1/p')
+	echo "alert_lib: Slack chat.postMessage error${api_err:+: $api_err}" >&2
+	return 1
+}
+
+# _alert_slack_upload file_path title token channels — 3-step Slack file upload
+# Step 1: files.getUploadURLExternal → get upload_url + file_id
+# Step 2: POST file to upload_url
+# Step 3: files.completeUploadExternal → finalize and share to channels
+# Token is written to a chmod 600 config file and passed via curl -K to keep
+# it out of the process listing (/proc/PID/cmdline).
+# Returns 0 on success, 1 on failure.
+_alert_slack_upload() {
+	local file_path="$1" title="$2" token="$3" channels="$4"
+	if [ ! -f "$file_path" ]; then
+		echo "alert_lib: file not found: $file_path" >&2
+		return 1
+	fi
+	if [ -z "$token" ]; then
+		echo "alert_lib: Slack token is required for file upload." >&2
+		return 1
+	fi
+	local fsize filename
+	fsize=$(wc -c < "$file_path")
+	fsize="${fsize##* }"  # trim whitespace (some wc implementations pad)
+	filename="${file_path##*/}"
+
+	# Write token to config file — keeps it out of /proc/PID/cmdline
+	local auth_cfg
+	auth_cfg=$(mktemp "${ALERT_TMPDIR}/alert_sl_auth.XXXXXX")
+	chmod 600 "$auth_cfg"
+	printf 'header = "Authorization: Bearer %s"\n' "$token" > "$auth_cfg"
+
+	# Step 1: get upload URL
+	local url_response upload_url file_id
+	url_response=$(_alert_curl_post "https://slack.com/api/files.getUploadURLExternal" \
+		-K "$auth_cfg" \
+		--data-urlencode "filename=$filename" \
+		-d "length=$fsize") || { command rm -f "$auth_cfg"; return 1; }
+	case "$url_response" in
+		*'"ok":true'*) ;;
+		*)
+			local api_err
+			api_err=$(printf '%s' "$url_response" | sed -n 's/.*"error" *: *"\([^"]*\)".*/\1/p')
+			echo "alert_lib: Slack getUploadURLExternal error${api_err:+: $api_err}" >&2
+			command rm -f "$auth_cfg"
+			return 1
+			;;
+	esac
+	upload_url=$(printf '%s' "$url_response" | sed -n 's/.*"upload_url" *: *"\([^"]*\)".*/\1/p')
+	file_id=$(printf '%s' "$url_response" | sed -n 's/.*"file_id" *: *"\([^"]*\)".*/\1/p')
+
+	# Validate upload URL is HTTPS (defense-in-depth: reject http, file, ftp, etc.)
+	# Case-insensitive match: MITM attacker could use any casing (${var,,} prohibited on bash 4.1)
+	case "$upload_url" in
+		[hH][tT][tT][pP][sS]://*)
+			;;
+		*)
+			echo "alert_lib: Slack upload URL rejected (not https): ${upload_url:-(empty)}" >&2
+			command rm -f "$auth_cfg"
+			return 1
+			;;
+	esac
+
+	# Step 2: upload file content to presigned URL (no auth header needed)
+	_alert_curl_post "$upload_url" -F "file=@$file_path" > /dev/null || {
+		echo "alert_lib: Slack file upload to presigned URL failed." >&2
+		command rm -f "$auth_cfg"
+		return 1
+	}
+
+	# Step 3: complete upload and share to channels
+	local escaped_title escaped_channels escaped_file_id complete_response
+	escaped_title=$(_alert_json_escape "$title")
+	escaped_channels=$(_alert_json_escape "$channels")
+	escaped_file_id=$(_alert_json_escape "$file_id")
+	complete_response=$(_alert_curl_post "https://slack.com/api/files.completeUploadExternal" \
+		-K "$auth_cfg" \
+		-H "Content-Type: application/json" \
+		-d "{\"files\":[{\"id\":\"$escaped_file_id\",\"title\":\"$escaped_title\"}],\"channels\":\"$escaped_channels\"}") || { command rm -f "$auth_cfg"; return 1; }
+	command rm -f "$auth_cfg"
+	case "$complete_response" in
+		*'"ok":true'*) return 0 ;;
+	esac
+	local complete_err
+	complete_err=$(printf '%s' "$complete_response" | sed -n 's/.*"error" *: *"\([^"]*\)".*/\1/p')
+	echo "alert_lib: Slack completeUploadExternal error${complete_err:+: $complete_err}" >&2
+	return 1
+}
+
+# _alert_deliver_slack payload_file [attachment_file] — route Slack delivery
+# ALERT_SLACK_MODE: webhook (default) or bot.
+# webhook mode: uses ALERT_SLACK_WEBHOOK_URL
+# bot mode: uses ALERT_SLACK_TOKEN + ALERT_SLACK_CHANNEL
+# Returns 0 on success, 1 on failure.
+_alert_deliver_slack() {
+	local payload_file="$1" attachment="${2:-}"
+	local mode="${ALERT_SLACK_MODE:-webhook}"
+
+	case "$mode" in
+		webhook)
+			if [ -z "${ALERT_SLACK_WEBHOOK_URL:-}" ]; then
+				echo "alert_lib: ALERT_SLACK_WEBHOOK_URL not set." >&2
+				return 1
+			fi
+			if [ -n "$attachment" ]; then
+				echo "alert_lib: warning: Slack webhooks cannot upload files, attachment skipped." >&2
+			fi
+			_alert_slack_webhook "$payload_file" "$ALERT_SLACK_WEBHOOK_URL"
+			;;
+		bot)
+			if [ -z "${ALERT_SLACK_TOKEN:-}" ]; then
+				echo "alert_lib: ALERT_SLACK_TOKEN not set." >&2
+				return 1
+			fi
+			if [ -z "${ALERT_SLACK_CHANNEL:-}" ]; then
+				echo "alert_lib: ALERT_SLACK_CHANNEL not set." >&2
+				return 1
+			fi
+			_alert_slack_post_message "$payload_file" "$ALERT_SLACK_TOKEN" "$ALERT_SLACK_CHANNEL" || return 1
+			if [ -n "$attachment" ] && [ -f "$attachment" ]; then
+				_alert_slack_upload "$attachment" "${attachment##*/}" "$ALERT_SLACK_TOKEN" "$ALERT_SLACK_CHANNEL" || return 1
+			fi
+			return 0
+			;;
+		*)
+			echo "alert_lib: unknown ALERT_SLACK_MODE '$mode'." >&2
+			return 1
+			;;
+	esac
+}
+
+# ---------------------------------------------------------------------------
+# Slack Channel Handler
+# ---------------------------------------------------------------------------
+
+# _alert_handle_slack subject text_file html_file [attachment]
+# Standardized handler wrapper for the Slack channel. The rendered text_file
+# (from slack.text.tpl or slack.message.tpl) is the JSON payload for Slack.
+# Ignores subject and html_file (already baked into rendered template).
+_alert_handle_slack() {
+	local text_file="$2" attachment="${4:-}"
+	_alert_deliver_slack "$text_file" "$attachment"
+}
+
+# ---------------------------------------------------------------------------
+# Telegram Delivery
+# ---------------------------------------------------------------------------
+
+# _alert_telegram_api endpoint bot_token [curl_flags...] — shared Bot API helper
+# Uses curl -K (config file) to keep bot token out of the process listing.
+# Config file created with chmod 600, removed immediately after curl returns.
+# Stdout: API response body on success. Stderr: error detail on failure.
+# Returns 0 on success, 1 on failure.
+_alert_telegram_api() {
+	local endpoint="$1" bot_token="$2"
+	shift 2
+	local curl_bin
+	curl_bin=$(command -v curl 2>/dev/null || true)
+	if [ -z "$curl_bin" ]; then
+		echo "alert_lib: curl not found, cannot call Telegram API." >&2
+		return 1
+	fi
+	local cfg
+	cfg=$(mktemp "${ALERT_TMPDIR}/alert_tg_curl.XXXXXX")
+	chmod 600 "$cfg"
+	printf 'url = "https://api.telegram.org/bot%s/%s"\n' "$bot_token" "$endpoint" > "$cfg"
+	local rc=0 response
+	# 2>/dev/null on curl: -K config file interacts with stderr capture;
+	# API response JSON contains all diagnostic info needed
+	response=$("$curl_bin" -s --connect-timeout "$ALERT_CURL_TIMEOUT" \
+		--max-time "$ALERT_CURL_MAX_TIME" -K "$cfg" "$@" 2>/dev/null) || rc=$?
+	command rm -f "$cfg"
+	if [ "$rc" -ne 0 ]; then
+		echo "alert_lib: Telegram API curl failed (exit $rc)." >&2
+		return 1
+	fi
+	# Check API response for success
+	case "$response" in
+		*'"ok":true'*)
+			printf '%s' "$response"
+			return 0
+			;;
+	esac
+	local api_err
+	api_err=$(printf '%s' "$response" | sed -n 's/.*"description" *: *"\([^"]*\)".*/\1/p')
+	echo "alert_lib: Telegram API error${api_err:+: $api_err}" >&2
+	return 1
+}
+
+# _alert_telegram_message text bot_token chat_id — send text via sendMessage
+# Uses MarkdownV2 parse mode. All parameters passed as form fields (-F).
+# Returns 0 on success, 1 on failure.
+_alert_telegram_message() {
+	local text="$1" bot_token="$2" chat_id="$3"
+	if [ -z "$bot_token" ]; then
+		echo "alert_lib: Telegram bot token is required." >&2
+		return 1
+	fi
+	if [ -z "$chat_id" ]; then
+		echo "alert_lib: Telegram chat_id is required." >&2
+		return 1
+	fi
+	if [ -z "$text" ]; then
+		echo "alert_lib: Telegram message text cannot be empty." >&2
+		return 1
+	fi
+	_alert_telegram_api "sendMessage" "$bot_token" \
+		-F "chat_id=$chat_id" \
+		-F "text=$text" \
+		-F "parse_mode=MarkdownV2" > /dev/null
+}
+
+# _alert_telegram_document file_path caption bot_token chat_id — send file via sendDocument
+# Extracted from LMD inline Telegram code. Caption conditionally included.
+# Returns 0 on success, 1 on failure.
+_alert_telegram_document() {
+	local file_path="$1" caption="$2" bot_token="$3" chat_id="$4"
+	if [ ! -f "$file_path" ]; then
+		echo "alert_lib: file not found: $file_path" >&2
+		return 1
+	fi
+	if [ -z "$bot_token" ]; then
+		echo "alert_lib: Telegram bot token is required." >&2
+		return 1
+	fi
+	if [ -z "$chat_id" ]; then
+		echo "alert_lib: Telegram chat_id is required." >&2
+		return 1
+	fi
+	if [ -n "$caption" ]; then
+		_alert_telegram_api "sendDocument" "$bot_token" \
+			-F "chat_id=$chat_id" \
+			-F "document=@$file_path" \
+			-F "caption=$caption" > /dev/null
+	else
+		_alert_telegram_api "sendDocument" "$bot_token" \
+			-F "chat_id=$chat_id" \
+			-F "document=@$file_path" > /dev/null
+	fi
+}
+
+# _alert_deliver_telegram payload_file [attachment_file] — route Telegram delivery
+# Reads payload_file content as message text. Sends message first, then optional
+# document attachment. Message failure stops before document attempt.
+# Nonexistent attachment file silently skipped (matches Slack pattern).
+# Returns 0 on success, 1 on failure.
+_alert_deliver_telegram() {
+	local payload_file="$1" attachment="${2:-}"
+	if [ -z "${ALERT_TELEGRAM_BOT_TOKEN:-}" ]; then
+		echo "alert_lib: ALERT_TELEGRAM_BOT_TOKEN not set." >&2
+		return 1
+	fi
+	if [ -z "${ALERT_TELEGRAM_CHAT_ID:-}" ]; then
+		echo "alert_lib: ALERT_TELEGRAM_CHAT_ID not set." >&2
+		return 1
+	fi
+	local text
+	text=$(cat "$payload_file")
+	_alert_telegram_message "$text" "$ALERT_TELEGRAM_BOT_TOKEN" "$ALERT_TELEGRAM_CHAT_ID" || return 1
+	if [ -n "$attachment" ] && [ -f "$attachment" ]; then
+		_alert_telegram_document "$attachment" "" "$ALERT_TELEGRAM_BOT_TOKEN" "$ALERT_TELEGRAM_CHAT_ID" || return 1
+	fi
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# Telegram Channel Handler
+# ---------------------------------------------------------------------------
+
+# _alert_handle_telegram subject text_file html_file [attachment]
+# Standardized handler wrapper for the Telegram channel. Passes text_file
+# as payload and attachment through to _alert_deliver_telegram.
+# Ignores subject and html_file (baked into rendered template).
+_alert_handle_telegram() {
+	local text_file="$2" attachment="${4:-}"
+	_alert_deliver_telegram "$text_file" "$attachment"
+}
+
+# ---------------------------------------------------------------------------
+# Discord Delivery
+# ---------------------------------------------------------------------------
+
+# _alert_discord_webhook payload_file webhook_url — POST JSON to Discord webhook
+# Discord returns HTTP 204 with empty body on success (no ?wait=true).
+# Returns 0 on success, 1 on failure.
+_alert_discord_webhook() {
+	local payload_file="$1" webhook_url="$2"
+	if [ -z "$webhook_url" ] || ! _alert_validate_url "$webhook_url"; then
+		echo "alert_lib: invalid or empty Discord webhook URL." >&2
+		return 1
+	fi
+	local response
+	response=$(_alert_curl_post "$webhook_url" \
+		-H "Content-Type: application/json" -d @"$payload_file") || return 1
+	# Discord webhooks return HTTP 204 (empty body) on success,
+	# or a message object with "id": when returning content
+	case "$response" in
+		""|*'"id":'*) return 0 ;;
+	esac
+	local api_err
+	api_err=$(printf '%s' "$response" | sed -n 's/.*"message" *: *"\([^"]*\)".*/\1/p')
+	echo "alert_lib: Discord webhook error${api_err:+: $api_err}" >&2
+	return 1
+}
+
+# _alert_discord_upload file_path payload_file webhook_url — multipart file upload
+# Single POST with payload_json + files[0] (unlike Slack's 3-step flow).
+# Returns 0 on success, 1 on failure.
+_alert_discord_upload() {
+	local file_path="$1" payload_file="$2" webhook_url="$3"
+	if [ ! -f "$file_path" ]; then
+		echo "alert_lib: file not found: $file_path" >&2
+		return 1
+	fi
+	if [ -z "$webhook_url" ] || ! _alert_validate_url "$webhook_url"; then
+		echo "alert_lib: invalid or empty Discord webhook URL." >&2
+		return 1
+	fi
+	local response
+	response=$(_alert_curl_post "$webhook_url" \
+		-F "payload_json=<$payload_file" -F "files[0]=@$file_path") || return 1
+	# Same success detection as webhook: empty body or message object
+	case "$response" in
+		""|*'"id":'*) return 0 ;;
+	esac
+	local api_err
+	api_err=$(printf '%s' "$response" | sed -n 's/.*"message" *: *"\([^"]*\)".*/\1/p')
+	echo "alert_lib: Discord upload error${api_err:+: $api_err}" >&2
+	return 1
+}
+
+# _alert_deliver_discord payload_file [attachment_file] — route Discord delivery
+# Uses ALERT_DISCORD_WEBHOOK_URL env var. If attachment exists, uses multipart
+# upload; otherwise plain JSON webhook POST.
+# Returns 0 on success, 1 on failure.
+_alert_deliver_discord() {
+	local payload_file="$1" attachment="${2:-}"
+	if [ -z "${ALERT_DISCORD_WEBHOOK_URL:-}" ]; then
+		echo "alert_lib: ALERT_DISCORD_WEBHOOK_URL not set." >&2
+		return 1
+	fi
+	if [ -n "$attachment" ] && [ -f "$attachment" ]; then
+		_alert_discord_upload "$attachment" "$payload_file" "$ALERT_DISCORD_WEBHOOK_URL"
+	else
+		_alert_discord_webhook "$payload_file" "$ALERT_DISCORD_WEBHOOK_URL"
+	fi
+}
+
+# ---------------------------------------------------------------------------
+# Discord Channel Handler
+# ---------------------------------------------------------------------------
+
+# _alert_handle_discord subject text_file html_file [attachment]
+# Standardized handler wrapper for the Discord channel. Passes text_file
+# as payload and attachment through to _alert_deliver_discord.
+# Ignores subject and html_file (baked into rendered template).
+_alert_handle_discord() {
+	local text_file="$2" attachment="${4:-}"
+	_alert_deliver_discord "$text_file" "$attachment"
+}
+
+# ---------------------------------------------------------------------------
+# Digest/Spool System
+# ---------------------------------------------------------------------------
+
+# _alert_spool_append data_file spool_file — append timestamped entries to digest spool
+# Prepends current epoch to each non-blank line of data_file and appends to
+# spool_file under exclusive flock (10s timeout).
+# No-op if data_file is empty or missing (not an error condition).
+# Returns 0 on success, 1 on failure.
+_alert_spool_append() {
+	local data_file="$1" spool_file="$2"
+	if [ ! -f "$data_file" ] || [ ! -s "$data_file" ]; then
+		return 0
+	fi
+	if [ -z "$spool_file" ]; then
+		echo "alert_lib: spool_file argument is required." >&2
+		return 1
+	fi
+	local flock_bin
+	flock_bin=$(command -v flock 2>/dev/null || true)
+	if [ -z "$flock_bin" ]; then
+		echo "alert_lib: flock not found, cannot append to spool." >&2
+		return 1
+	fi
+	local now lock_file
+	now=$(date +%s)
+	lock_file="${spool_file}.lock"
+	(
+		"$flock_bin" -x -w 10 200 || {
+			echo "alert_lib: spool lock timeout, skipping append." >&2
+			exit 1
+		}
+		while IFS= read -r _line; do
+			[ -z "$_line" ] && continue
+			echo "${now}|${_line}"
+		done < "$data_file" >> "$spool_file"
+	) 200>"$lock_file"
+}
+
+# _alert_digest_check spool_file interval flush_callback — flush spool if age >= interval
+# Reads first line's epoch for age check (optimistic, no lock needed — worst
+# case is delayed flush). If age >= interval seconds, calls _alert_digest_flush.
+# No-op if spool is empty, missing, or has no valid epoch.
+# Returns 0 on success (including no-op), propagates flush exit code on flush.
+_alert_digest_check() {
+	local spool_file="$1" interval="$2" flush_callback="$3"
+	if [ -z "$spool_file" ]; then
+		echo "alert_lib: spool_file argument is required." >&2
+		return 1
+	fi
+	if [ -z "$interval" ]; then
+		echo "alert_lib: interval argument is required." >&2
+		return 1
+	fi
+	if [ -z "$flush_callback" ]; then
+		echo "alert_lib: flush_callback argument is required." >&2
+		return 1
+	fi
+	if [ ! -f "$spool_file" ] || [ ! -s "$spool_file" ]; then
+		return 0
+	fi
+	local first_epoch
+	IFS='|' read -r first_epoch _ < "$spool_file"
+	if [ -z "$first_epoch" ]; then
+		return 0
+	fi
+	local now
+	now=$(date +%s)
+	if [ $((now - first_epoch)) -ge "$interval" ]; then
+		_alert_digest_flush "$spool_file" "$flush_callback"
+		return $?
+	fi
+	return 0
+}
+
+# _alert_digest_flush spool_file flush_callback — force-flush accumulated entries
+# Under exclusive flock: strips epoch prefix (cut -d'|' -f2-), copies to temp
+# flush file, truncates spool (preserves inode). Releases lock before calling
+# flush_callback to avoid holding flock during delivery.
+# Callback receives one argument: path to temp file with flushed entries.
+# No-op if spool is empty or missing.
+# Returns callback's exit code (0 on success, non-zero on failure).
+_alert_digest_flush() {
+	local spool_file="$1" flush_callback="$2"
+	if [ -z "$spool_file" ]; then
+		echo "alert_lib: spool_file argument is required." >&2
+		return 1
+	fi
+	if [ -z "$flush_callback" ]; then
+		echo "alert_lib: flush_callback argument is required." >&2
+		return 1
+	fi
+	if [ ! -f "$spool_file" ] || [ ! -s "$spool_file" ]; then
+		return 0
+	fi
+	local flock_bin
+	flock_bin=$(command -v flock 2>/dev/null || true)
+	if [ -z "$flock_bin" ]; then
+		echo "alert_lib: flock not found, cannot flush digest." >&2
+		return 1
+	fi
+	local lock_file flush_file
+	lock_file="${spool_file}.lock"
+	flush_file=$(mktemp "${ALERT_TMPDIR}/alert_digest_flush.XXXXXX")
+	(
+		"$flock_bin" -x -w 10 200 || {
+			echo "alert_lib: digest flush lock timeout." >&2
+			exit 1
+		}
+		# Re-check spool non-empty under lock (another process may have flushed)
+		if [ ! -s "$spool_file" ]; then
+			exit 0
+		fi
+		# Strip epoch prefix — callback expects original data format
+		cut -d'|' -f2- "$spool_file" > "$flush_file"
+		# Truncate spool (preserves inode for inotifywait/tail -f consumers)
+		: > "$spool_file"
+	) 200>"$lock_file"
+	local sub_rc=$?
+	if [ "$sub_rc" -ne 0 ]; then
+		command rm -f "$flush_file"
+		return "$sub_rc"
+	fi
+	# Call callback OUTSIDE lock to avoid holding flock during delivery
+	local rc=0
+	if [ -s "$flush_file" ]; then
+		"$flush_callback" "$flush_file" || rc=$?
+	fi
+	command rm -f "$flush_file"
+	return $rc
+}
+
+# ---------------------------------------------------------------------------
+# Multi-Channel Dispatch
+# ---------------------------------------------------------------------------
+
+# alert_dispatch template_dir subject [channels] [attachment_file]
+# Render per-channel templates and dispatch to all enabled channels.
+# channels: comma-separated channel names or "all" (default: "all").
+# For each enabled channel, resolves $channel.text.tpl (falling back to
+# $channel.message.tpl) and $channel.html.tpl from template_dir, renders
+# via _alert_tpl_render, then calls the channel handler with:
+#   handler_fn subject text_file html_file [attachment]
+# Channels with no matching templates are skipped with a warning.
+# Returns 0 if all dispatched channels succeed, 1 if any fail.
+# Continues dispatching after individual channel failures.
+alert_dispatch() {
+	local template_dir="$1" subject="$2" channels="${3:-all}" attachment="${4:-}"
+	local rc=0
+	local i name handler enabled
+	local text_file html_file
+
+	for i in "${!_ALERT_CHANNEL_NAMES[@]}"; do
+		name="${_ALERT_CHANNEL_NAMES[$i]}"
+		handler="${_ALERT_CHANNEL_HANDLERS[$i]}"
+		enabled="${_ALERT_CHANNEL_ENABLED[$i]}"
+
+		# Skip disabled channels
+		[ "$enabled" = "1" ] || continue
+
+		# Filter by channel name (unless "all")
+		if [ "$channels" != "all" ]; then
+			case ",$channels," in
+				*",$name,"*) ;;
+				*) continue ;;
+			esac
+		fi
+
+		# Resolve text template: try $channel.text.tpl, fall back to $channel.message.tpl
+		text_file=""
+		_alert_tpl_resolve "$template_dir" "${name}.text.tpl"
+		if [ -f "$_ALERT_TPL_RESOLVED" ]; then
+			text_file=$(mktemp "${ALERT_TMPDIR}/alert_${name}_text.XXXXXX")
+			_alert_tpl_render "$_ALERT_TPL_RESOLVED" > "$text_file"
+		else
+			_alert_tpl_resolve "$template_dir" "${name}.message.tpl"
+			if [ -f "$_ALERT_TPL_RESOLVED" ]; then
+				text_file=$(mktemp "${ALERT_TMPDIR}/alert_${name}_text.XXXXXX")
+				_alert_tpl_render "$_ALERT_TPL_RESOLVED" > "$text_file"
+			fi
+		fi
+
+		# Resolve html template (optional)
+		html_file=""
+		_alert_tpl_resolve "$template_dir" "${name}.html.tpl"
+		if [ -f "$_ALERT_TPL_RESOLVED" ]; then
+			html_file=$(mktemp "${ALERT_TMPDIR}/alert_${name}_html.XXXXXX")
+			_alert_tpl_render "$_ALERT_TPL_RESOLVED" > "$html_file"
+		fi
+
+		# Skip channels with no templates
+		if [ -z "$text_file" ] && [ -z "$html_file" ]; then
+			echo "alert_lib: no templates found for channel '$name', skipping." >&2
+			continue
+		fi
+
+		# Create empty placeholders for missing variants so handlers get valid paths
+		if [ -z "$text_file" ]; then
+			text_file=$(mktemp "${ALERT_TMPDIR}/alert_${name}_text.XXXXXX")
+		fi
+		if [ -z "$html_file" ]; then
+			html_file=$(mktemp "${ALERT_TMPDIR}/alert_${name}_html.XXXXXX")
+		fi
+
+		# Call handler
+		if ! "$handler" "$subject" "$text_file" "$html_file" "$attachment"; then
+			echo "alert_lib: channel '$name' delivery failed." >&2
+			rc=1
+		fi
+
+		# Clean up rendered temp files
+		command rm -f "$text_file" "$html_file"
+	done
+
+	return $rc
+}
+
+# ---------------------------------------------------------------------------
+# Built-in Channel Registration
+# ---------------------------------------------------------------------------
+
+# Register built-in channels — consumers enable via alert_channel_enable "<name>"
+# All built-in channels start disabled. Consuming projects enable the ones they need.
+alert_channel_register "email" "_alert_handle_email"
+alert_channel_register "slack" "_alert_handle_slack"
+alert_channel_register "telegram" "_alert_handle_telegram"
+alert_channel_register "discord" "_alert_handle_discord"
+
+# --- src/bl.d/06-vendor-tlog.sh ---
+# Pinned via git submodule. Regenerate via: make vendor-libs-pull
+
+[[ -n "${_TLOG_LIB_LOADED:-}" ]] && return 0 2>/dev/null  # return may fail at top-level; not an error
+_TLOG_LIB_LOADED=1
+
+# shellcheck disable=SC2034
+TLOG_LIB_VERSION="2.0.5"
+
+# Journal filter registry — consuming projects populate via tlog_journal_register()
+# Uses parallel indexed arrays instead of declare -A to avoid scope issues
+# when sourced from inside a function (e.g., BATS load, wrapper functions).
+# Simple array assignment creates globals; declare -A creates locals in functions.
+_TLOG_JOURNAL_NAMES=()
+_TLOG_JOURNAL_FILTERS=()
+
+# Numeric validation pattern — shared across cursor, size, and timestamp checks
+_TLOG_NUMERIC_PAT='^[0-9]+$'
+
+###########################################################################
+# Internal helpers
+###########################################################################
+
+# _tlog_validate_name(tlog_name)
+# Reject names that could escape baserun via path traversal.
+# Names must be plain identifiers — no slashes, no . or .. components.
+# Returns 1 on invalid (library context — never exit).
+_tlog_validate_name() {
+	local name="$1"
+	if [[ -z "$name" ]] || [[ "$name" == "." ]] || [[ "$name" == ".." ]] || [[ "$name" == *"/"* ]]; then
+		echo "tlog: invalid tlog_name: '$name'" >&2
+		return 1
+	fi
+	return 0
+}
+
+# _tlog_check_baserun_perms(baserun)
+# Advisory warning if baserun directory is world-writable.
+# Always returns 0 — never fatal.
+_tlog_check_baserun_perms() {
+	local baserun="$1"
+	local perms world_bits
+	perms=$(stat -c '%a' "$baserun" 2>/dev/null) || return 0  # stat fails if dir removed; advisory check
+	world_bits="${perms: -1}"
+	if [[ $((world_bits & 2)) -ne 0 ]]; then
+		echo "tlog: warning: baserun directory '$baserun' is world-writable" >&2
+	fi
+	return 0
+}
+
+# _tlog_parse_cursor(tlog_name, baserun)
+# Read and validate cursor file.
+# Out-parameters (set in caller scope before return):
+#   _tlog_cursor_value  Numeric cursor position, or "" on first-run/corrupt.
+#   _tlog_cursor_mode   "bytes" or "lines", or "" on first-run/corrupt.
+# Returns 0 on success/first-run, 2 on corrupt cursor (auto-reset).
+_tlog_parse_cursor() {
+	local tlog_name="$1" baserun="$2"
+	local cursor_file="$baserun/$tlog_name"
+	local raw_value=""
+
+	# shellcheck disable=SC2034
+	_tlog_cursor_value=""
+	# shellcheck disable=SC2034
+	_tlog_cursor_mode=""
+
+	# No cursor file → first run
+	if [[ ! -f "$cursor_file" ]]; then
+		return 0
+	fi
+
+	# Symlink guard — cursor files must be regular files, not symlinks
+	if [[ -L "$cursor_file" ]]; then
+		echo "tlog: symlink detected for cursor $cursor_file, resetting" >&2
+		return 2
+	fi
+
+	read -r raw_value < "$cursor_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
+
+	# Empty content → first run
+	if [[ -z "$raw_value" ]]; then
+		return 0
+	fi
+
+	# Detect mode from prefix
+	if [[ "$raw_value" == L:* ]]; then
+		# shellcheck disable=SC2034
+		_tlog_cursor_mode="lines"
+		# shellcheck disable=SC2034
+		_tlog_cursor_value="${raw_value#L:}"
+	else
+		# shellcheck disable=SC2034
+		_tlog_cursor_mode="bytes"
+		# shellcheck disable=SC2034
+		_tlog_cursor_value="$raw_value"
+	fi
+
+	# Validate numeric
+	if [[ ! "$_tlog_cursor_value" =~ $_TLOG_NUMERIC_PAT ]]; then
+		echo "tlog: corrupt cursor $cursor_file: '$raw_value'" >&2
+		# shellcheck disable=SC2034
+		_tlog_cursor_value=""
+		# shellcheck disable=SC2034
+		_tlog_cursor_mode=""
+		return 2
+	fi
+
+	return 0
+}
+
+# _tlog_write_cursor(tlog_name, baserun, value, mode)
+# Atomic cursor write via mktemp + mv -f.
+# Mode dispatch: lines → L:N, bytes → bare N, raw → verbatim.
+_tlog_write_cursor() {
+	local tlog_name="$1" baserun="$2" value="$3" mode="$4"
+	local cursor_file="$baserun/$tlog_name"
+	local tmp_file formatted
+
+	case "$mode" in
+		bytes) formatted="$value" ;;
+		lines) formatted="L:${value}" ;;
+		raw)   formatted="$value" ;;
+		*)
+			echo "tlog: warning: _tlog_write_cursor: invalid mode '$mode' for $tlog_name" >&2
+			return 1
+			;;
+	esac
+
+	tmp_file=$(mktemp "$baserun/.${tlog_name}.XXXXXX") || {
+		echo "tlog: warning: cursor write failed for $tlog_name (mktemp)" >&2
+		return 1
+	}
+	printf '%s\n' "$formatted" > "$tmp_file"
+
+	if ! command mv -f "$tmp_file" "$cursor_file"; then
+		echo "tlog: warning: cursor write failed for $tlog_name (rename)" >&2
+		command rm -f "$tmp_file"
+		return 1
+	fi
+
+	return 0
+}
+
+# _tlog_get_size(file, mode)
+# Dispatch: bytes → stat -c %s (fallback wc -c), lines → wc -l.
+# Outputs size on stdout.
+_tlog_get_size() {
+	local file="$1" mode="$2"
+	local size
+
+	case "$mode" in
+		lines)
+			size=$(wc -l < "$file")
+			size="${size## }"
+			;;
+		*)
+			tlog_get_file_size "$file"
+			return $?
+			;;
+	esac
+
+	printf '%s' "$size"
+}
+
+# _tlog_output_content(file, delta, mode)
+# Dispatch: bytes → tail -c, lines → tail -n.
+# Guards delta <= 0 (prevents undefined tail behavior).
+_tlog_output_content() {
+	local file="$1" delta="$2" mode="$3"
+
+	if [[ "$delta" -le 0 ]]; then
+		return 0
+	fi
+
+	case "$mode" in
+		lines) tail -n "$delta" "$file" ;;
+		*)     tail -c "$delta" "$file" ;;
+	esac
+}
+
+# _tlog_is_compressed(file)
+# Returns 0 if file has a known compressed extension.
+# Pure case match — no I/O.
+_tlog_is_compressed() {
+	case "$1" in
+		*.gz|*.xz|*.bz2|*.zst|*.lz4) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+# _tlog_cat_file(file)
+# Stream decompressed content to stdout via TOOL -dc pattern.
+# Falls back to cat for uncompressed files.
+_tlog_cat_file() {
+	local file="$1"
+	case "$file" in
+		# suppress corrupt-archive stderr; exit code propagates to caller
+		*.gz)  gzip -dc "$file" 2>/dev/null ;;
+		*.xz)  xz -dc "$file" 2>/dev/null ;;
+		*.bz2) bzip2 -dc "$file" 2>/dev/null ;;
+		*.zst) zstd -dc "$file" 2>/dev/null ;;
+		*.lz4) lz4 -dc "$file" 2>/dev/null ;;
+		*)     cat "$file" ;;
+	esac
+}
+
+# _tlog_find_rotated(file)
+# Locate rotated log file in priority order: uncompressed .1 first,
+# then compressed variants (.gz, .xz, .bz2, .zst, .lz4).
+# Compressed variants only returned if the decompression tool is available.
+# Outputs path on stdout, returns 1 if not found.
+_tlog_find_rotated() {
+	local file="$1"
+	local ext tool
+
+	# Uncompressed — always preferred, no tool needed
+	if [[ -f "${file}.1" ]]; then
+		printf '%s' "${file}.1"
+		return 0
+	fi
+
+	# Compressed variants — check tool availability before returning
+	for ext in gz xz bz2 zst lz4; do
+		if [[ -f "${file}.1.${ext}" ]]; then
+			case "$ext" in
+				gz)  tool="gzip" ;;
+				xz)  tool="xz" ;;
+				bz2) tool="bzip2" ;;
+				zst) tool="zstd" ;;
+				lz4) tool="lz4" ;;
+			esac
+			if command -v "$tool" >/dev/null 2>&1; then
+				printf '%s' "${file}.1.${ext}"
+				return 0
+			fi
+		fi
+	done
+
+	return 1
+}
+
+# _tlog_rotation_via_pipe(rtfile, cursor_size, mode)
+# Pipe-based fallback for compressed rotation: decompress twice (size + content)
+# without requiring disk space. Used when temp-file approach fails (low disk,
+# quota, permissions, corrupt archive).
+_tlog_rotation_via_pipe() {
+	local rtfile="$1" cursor_size="$2" mode="$3"
+	local rtsize rt_delta
+
+	if [[ "$mode" == "lines" ]]; then
+		rtsize=$(_tlog_cat_file "$rtfile" | wc -l)
+	else
+		rtsize=$(_tlog_cat_file "$rtfile" | wc -c)
+	fi
+	rtsize="${rtsize## }"
+
+	if [[ "$rtsize" -ge "$cursor_size" ]]; then
+		rt_delta=$((rtsize - cursor_size))
+		if [[ "$rt_delta" -gt 0 ]]; then
+			if [[ "$mode" == "lines" ]]; then
+				_tlog_cat_file "$rtfile" | tail -n "$rt_delta"
+			else
+				_tlog_cat_file "$rtfile" | tail -c "$rt_delta"
+			fi
+		fi
+	fi
+}
+
+# _tlog_handle_rotation(rtfile, cursor_size, mode, tlog_name, baserun)
+# Output tail content from a rotated log file newer than cursor_size.
+# Compressed files: try temp-file approach (single decompress, faster);
+# on any failure (mktemp, write, corrupt), fall back to pipe-based
+# decompression via _tlog_rotation_via_pipe() to preserve data.
+# Uncompressed files: read directly via _tlog_output_content().
+_tlog_handle_rotation() {
+	local rtfile="$1" cursor_size="$2" mode="$3"
+	local tlog_name="$4" baserun="$5"
+	local rtsize rt_delta tmp_decomp=""
+
+	if _tlog_is_compressed "$rtfile"; then
+		# Try temp-file path: mktemp + decompress + read from temp
+		tmp_decomp=$(mktemp "$baserun/.${tlog_name}.XXXXXX" 2>/dev/null) || tmp_decomp=""  # fallback to pipe path on failure
+		if [[ -n "$tmp_decomp" ]] && _tlog_cat_file "$rtfile" > "$tmp_decomp"; then
+			rtsize=$(_tlog_get_size "$tmp_decomp" "$mode")
+		else
+			# Temp approach failed — clean up and fall back to pipe
+			[[ -n "$tmp_decomp" ]] && command rm -f "$tmp_decomp"
+			echo "tlog: warning: rotation temp file failed for $tlog_name, using pipe fallback" >&2
+			_tlog_rotation_via_pipe "$rtfile" "$cursor_size" "$mode"
+			return 0
+		fi
+	else
+		rtsize=$(_tlog_get_size "$rtfile" "$mode")
+	fi
+
+	if [[ "$rtsize" -ge "$cursor_size" ]]; then
+		rt_delta=$((rtsize - cursor_size))
+		if [[ "$rt_delta" -gt 0 ]]; then
+			if [[ -n "$tmp_decomp" ]]; then
+				_tlog_output_content "$tmp_decomp" "$rt_delta" "$mode"
+			else
+				_tlog_output_content "$rtfile" "$rt_delta" "$mode"
+			fi
+		fi
+	fi
+
+	[[ -n "$tmp_decomp" ]] && command rm -f "$tmp_decomp"
+	return 0
+}
+
+###########################################################################
+# Public utility functions
+###########################################################################
+
+# tlog_get_file_size(file)
+# Byte size via stat -c %s, fallback wc -c. Outputs on stdout.
+tlog_get_file_size() {
+	local file="$1" size
+
+	if [[ ! -f "$file" ]]; then
+		return 1
+	fi
+
+	size=$(stat -c %s "$file" 2>/dev/null) || size=$(wc -c < "$file")  # stat unavailable on some platforms; wc fallback
+	size="${size## }"
+	printf '%s' "$size"
+}
+
+# tlog_get_line_count(file)
+# Line count via wc -l. Outputs on stdout.
+tlog_get_line_count() {
+	local file="$1" count
+
+	if [[ ! -f "$file" ]]; then
+		return 1
+	fi
+
+	count=$(wc -l < "$file")
+	count="${count## }"
+	printf '%s' "$count"
+}
+
+###########################################################################
+# Core API
+###########################################################################
+
+# tlog_read(file, tlog_name, baserun [, mode])
+# Core delta reader with mode-selectable tracking.
+# Mode resolution: explicit arg > TLOG_MODE env > bytes default.
+# Returns: 0=success, 1=file/path error, 2=cursor corrupt (auto-reset),
+#          3=journal unavailable, 4=lock acquisition failed.
+tlog_read() {
+	local file="$1" tlog_name="$2" baserun="$3"
+	local mode="${4:-${TLOG_MODE:-bytes}}"
+	local newsize delta size rtfile _tlog_fd
+	local cursor_corrupt=0 rc=0
+	local stored_mode parse_rc
+
+	# Mode validation — reject typos before any I/O
+	if [[ "$mode" != "bytes" ]] && [[ "$mode" != "lines" ]]; then
+		echo "tlog: invalid mode '$mode' (must be 'bytes' or 'lines')" >&2
+		return 1
+	fi
+
+	# Name validation — reject path traversal before any file I/O
+	_tlog_validate_name "$tlog_name" || return 1
+
+	# Baserun validation — check BEFORE journal dispatch (F-010)
+	if [[ ! -d "$baserun" ]]; then
+		echo "tlog: baserun directory not found: $baserun" >&2
+		return 1
+	fi
+	_tlog_check_baserun_perms "$baserun"
+
+	# Journal dispatch: file missing and journal not disabled
+	if [[ ! -f "$file" ]] && [[ "${LOG_SOURCE}" != "file" ]]; then
+		tlog_journal_read "$tlog_name" "$baserun"
+		return $?
+	fi
+
+	# Validation
+	if [[ ! -f "$file" ]]; then
+		echo "tlog: file not found: $file" >&2
+		return 1
+	fi
+
+	# Optional flock
+	if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+		exec {_tlog_fd}>"$baserun/${tlog_name}.lock"
+		if ! flock -x -w 5 "$_tlog_fd"; then
+			exec {_tlog_fd}>&-
+			return 4
+		fi
+	fi
+
+	# Parse cursor
+	_tlog_parse_cursor "$tlog_name" "$baserun"
+	parse_rc=$?
+	if [[ $parse_rc -eq 2 ]]; then
+		cursor_corrupt=1
+	fi
+
+	size="${_tlog_cursor_value}"
+	stored_mode="${_tlog_cursor_mode}"
+
+	# Mode mismatch → reset
+	if [[ -n "$stored_mode" ]] && [[ "$stored_mode" != "$mode" ]]; then
+		echo "tlog: mode mismatch for $tlog_name: stored=$stored_mode requested=$mode, resetting" >&2
+		size=""
+		cursor_corrupt=1
+	fi
+
+	# Get current size
+	newsize=$(_tlog_get_size "$file" "$mode")
+
+	# First run (no cursor or corrupt)
+	if [[ -z "$size" ]]; then
+		_tlog_write_cursor "$tlog_name" "$baserun" "$newsize" "$mode"
+
+		if [[ "${TLOG_FIRST_RUN:-skip}" == "full" ]] && [[ "$newsize" -gt 0 ]]; then
+			_tlog_output_content "$file" "$newsize" "$mode"
+		fi
+
+		if [[ $cursor_corrupt -eq 1 ]]; then
+			rc=2
+		fi
+
+	# Growth: newsize > size
+	elif [[ "$newsize" -gt "$size" ]]; then
+		delta=$((newsize - size))
+		_tlog_output_content "$file" "$delta" "$mode"
+		_tlog_write_cursor "$tlog_name" "$baserun" "$newsize" "$mode"
+
+	# Rotation: newsize < size
+	elif [[ "$newsize" -lt "$size" ]]; then
+		rtfile=$(_tlog_find_rotated "$file") || true  # exit 1 = not found; [[ -n "$rtfile" ]] guards use
+		if [[ -n "$rtfile" ]]; then
+			_tlog_handle_rotation "$rtfile" "$size" "$mode" "$tlog_name" "$baserun"
+		fi
+
+		# Output current file content if any
+		if [[ "$newsize" -gt 0 ]]; then
+			_tlog_output_content "$file" "$newsize" "$mode"
+		fi
+
+		_tlog_write_cursor "$tlog_name" "$baserun" "$newsize" "$mode"
+	fi
+	# No change (newsize == size): no output, no cursor write
+
+	# Stale protection — update cursor mtime on every call (skip symlinks)
+	[[ ! -L "$baserun/$tlog_name" ]] && touch "$baserun/$tlog_name"
+
+	# Release lock
+	if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+		exec {_tlog_fd}>&-
+	fi
+
+	return $rc
+}
+
+# tlog_read_full(file, max_lines)
+# Full file read without cursor tracking (scan mode).
+# max_lines > 0 → tail -n, else cat.
+tlog_read_full() {
+	local file="$1" max_lines="${2:-0}"
+
+	if [[ ! -f "$file" ]]; then
+		return 1
+	fi
+
+	# Validate max_lines is numeric — non-numeric defaults to 0 (full output)
+	if [[ -n "$max_lines" ]] && [[ ! "$max_lines" =~ $_TLOG_NUMERIC_PAT ]]; then
+		echo "tlog: tlog_read_full: invalid max_lines: '$max_lines'" >&2
+		max_lines="0"
+	fi
+
+	if [[ "$max_lines" -gt 0 ]]; then
+		tail -n "$max_lines" "$file"
+	else
+		cat "$file"
+	fi
+
+	return 0
+}
+
+# tlog_adjust_cursor(tlog_name, baserun, delta_removed)
+# Mode-aware cursor subtraction for log trim operations.
+# Detects mode from stored cursor. Clamps to 0.
+tlog_adjust_cursor() {
+	local tlog_name="$1" baserun="$2" delta_removed="$3"
+	local new_value mode
+
+	# Name validation — reject path traversal
+	_tlog_validate_name "$tlog_name" || return 1
+
+	# Validate delta is numeric
+	if [[ ! "$delta_removed" =~ $_TLOG_NUMERIC_PAT ]]; then
+		echo "tlog: invalid delta: $delta_removed" >&2
+		return 1
+	fi
+
+	# Parse current cursor
+	_tlog_parse_cursor "$tlog_name" "$baserun"
+	if [[ -z "$_tlog_cursor_value" ]]; then
+		return 0
+	fi
+
+	mode="${_tlog_cursor_mode:-bytes}"
+
+	# Subtract and clamp to 0
+	new_value=$((_tlog_cursor_value - delta_removed))
+	if [[ "$new_value" -lt 0 ]]; then
+		new_value=0
+	fi
+
+	_tlog_write_cursor "$tlog_name" "$baserun" "$new_value" "$mode"
+}
+
+# tlog_advance_cursors(baserun, log_pairs)
+# Fast-forward cursors for multiple files. Processes FILE|TAG pairs
+# (newline-separated). For existing files, records current size.
+# For journal-capable tags, captures journal cursor position.
+tlog_advance_cursors() {
+	local baserun="$1" log_pairs="$2"
+	local file tag newsize cursor_line jfilter
+	local mode="${TLOG_MODE:-bytes}"
+
+	# Mode validation — reject invalid before any I/O
+	if [[ "$mode" != "bytes" ]] && [[ "$mode" != "lines" ]]; then
+		echo "tlog: tlog_advance_cursors: invalid mode '$mode' (must be 'bytes' or 'lines')" >&2
+		return 1
+	fi
+
+	# Baserun validation (F-010)
+	if [[ ! -d "$baserun" ]]; then
+		echo "tlog: tlog_advance_cursors: baserun directory not found: $baserun" >&2
+		return 1
+	fi
+	_tlog_check_baserun_perms "$baserun"
+
+	# Check journalctl availability once, outside the loop
+	local have_journalctl=0
+	command -v journalctl >/dev/null 2>&1 && have_journalctl=1
+
+	while IFS='|' read -r file tag; do
+		[[ -z "$tag" ]] && continue
+		_tlog_validate_name "$tag" || continue
+
+		if [[ -f "$file" ]]; then
+			# File cursor: record current size
+			newsize=$(_tlog_get_size "$file" "$mode")
+			_tlog_write_cursor "$tag" "$baserun" "$newsize" "$mode"
+		elif [[ "$have_journalctl" -eq 1 ]]; then
+			jfilter=$(tlog_journal_filter "$tag") || continue
+			# Journal cursor: capture current per-service position
+			cursor_line=$(_tlog_journal_get_cursor "$jfilter")
+			if [[ -n "$cursor_line" ]]; then
+				_tlog_write_cursor "$tag" "$baserun" "$cursor_line" "raw"
+				_tlog_write_cursor "${tag}.jts" "$baserun" "$(date +%s)" "raw"
+			fi
+		fi
+	done <<< "$log_pairs"
+
+	return 0
+}
+
+###########################################################################
+# Journal functions
+###########################################################################
+
+# _tlog_journal_get_cursor(jfilter)
+# Capture current journal cursor position for the given filter.
+# Outputs cursor string on stdout, or nothing if unavailable.
+# $jfilter intentionally unquoted: multi-token filters require word-splitting.
+_tlog_journal_get_cursor() {
+	local jfilter="$1"
+	# suppress journalctl informational stderr; only stdout entries needed
+	# shellcheck disable=SC2086
+	journalctl $jfilter -n 0 --show-cursor 2>/dev/null \
+		| grep -E '^-- cursor:' | sed 's/^-- cursor: //'
+}
+
+# tlog_journal_register(tlog_name, jfilter)
+# Register a service-to-journalctl filter mapping. Consuming projects
+# call this after sourcing tlog_lib.sh to define their service mappings.
+tlog_journal_register() {
+	_TLOG_JOURNAL_NAMES+=("$1")
+	_TLOG_JOURNAL_FILTERS+=("$2")
+}
+
+# tlog_journal_filter(tlog_name)
+# Look up journalctl filter string for a service tag.
+# Returns filter on stdout, exit 1 for unknown/unregistered service.
+tlog_journal_filter() {
+	local tlog_name="$1"
+	local i
+	for i in "${!_TLOG_JOURNAL_NAMES[@]}"; do
+		if [[ "${_TLOG_JOURNAL_NAMES[$i]}" == "$tlog_name" ]]; then
+			printf '%s' "${_TLOG_JOURNAL_FILTERS[$i]}"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# tlog_journal_read(tlog_name, baserun)
+# Cursor-based journal reader with timestamp fallback.
+# First run: capture cursor, output nothing.
+# Returns: 0=success, 1=unknown service/path error, 3=journal unavailable,
+#          4=lock acquisition failed (TLOG_FLOCK=1 only).
+tlog_journal_read() {
+	local tlog_name="$1" baserun="$2"
+	local cursor_file="$baserun/$tlog_name"
+	local jts_file="$baserun/${tlog_name}.jts"
+	local jfilter stored_cursor stored_jts new_cursor new_jts
+	local output_data _tlog_fd
+
+	# Name validation — reject path traversal
+	_tlog_validate_name "$tlog_name" || return 1
+
+	# Baserun validation (F-010) — defense in depth for direct callers
+	if [[ ! -d "$baserun" ]]; then
+		echo "tlog: baserun directory not found: $baserun" >&2
+		return 1
+	fi
+	_tlog_check_baserun_perms "$baserun"
+
+	# Check journalctl available
+	if ! command -v journalctl >/dev/null 2>&1; then
+		return 3
+	fi
+
+	# Get filter for this service
+	jfilter=$(tlog_journal_filter "$tlog_name") || return 1
+
+	# Optional flock — protect journal cursor operations (F-008)
+	if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+		exec {_tlog_fd}>"$baserun/${tlog_name}.lock"
+		if ! flock -x -w 5 "$_tlog_fd"; then
+			exec {_tlog_fd}>&-
+			return 4
+		fi
+	fi
+
+	# Read stored cursor
+	stored_cursor=""
+	if [[ -f "$cursor_file" ]] && [[ ! -L "$cursor_file" ]]; then
+		read -r stored_cursor < "$cursor_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
+	elif [[ -L "$cursor_file" ]]; then
+		echo "tlog: symlink detected for journal cursor $cursor_file, resetting" >&2
+	fi
+
+	# Validate cursor format — allowlist covers real systemd cursor tokens
+	# (s=<hex>;i=<hex>;...) and rejects shell metacharacters
+	local _jcursor_pat='^[a-zA-Z0-9=;_:-]+$'
+	if [[ -n "$stored_cursor" ]] && [[ ! "$stored_cursor" =~ $_jcursor_pat ]]; then
+		echo "tlog: corrupt journal cursor for $tlog_name, resetting" >&2
+		stored_cursor=""
+	fi
+
+	# Read stored journal timestamp
+	stored_jts=""
+	if [[ -f "$jts_file" ]] && [[ ! -L "$jts_file" ]]; then
+		read -r stored_jts < "$jts_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
+	elif [[ -L "$jts_file" ]]; then
+		echo "tlog: symlink detected for journal timestamp $jts_file, resetting" >&2
+	fi
+
+	# Validate timestamp is numeric
+	if [[ -n "$stored_jts" ]] && [[ ! "$stored_jts" =~ $_TLOG_NUMERIC_PAT ]]; then
+		echo "tlog: corrupt journal timestamp for $tlog_name, resetting" >&2
+		stored_jts=""
+	fi
+
+	# First run: capture position, output nothing
+	if [[ -z "$stored_cursor" ]] && [[ -z "$stored_jts" ]]; then
+		new_cursor=$(_tlog_journal_get_cursor "$jfilter")
+		new_jts=$(date +%s)
+
+		if [[ -n "$new_cursor" ]]; then
+			_tlog_write_cursor "$tlog_name" "$baserun" "$new_cursor" "raw"
+		fi
+		_tlog_write_cursor "${tlog_name}.jts" "$baserun" "$new_jts" "raw"
+
+		[[ ! -L "$baserun/$tlog_name" ]] && touch "$baserun/$tlog_name"
+		# Release lock
+		if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+			exec {_tlog_fd}>&-
+		fi
+		return 0
+	fi
+
+	# Subsequent run: try cursor first, fallback to timestamp
+	if [[ -n "$stored_cursor" ]]; then
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
+		# shellcheck disable=SC2086
+		if ! output_data=$(journalctl $jfilter --after-cursor="$stored_cursor" --no-pager 2>/dev/null); then  # suppress journalctl informational stderr
+			if [[ -n "$stored_jts" ]]; then
+				# $jfilter intentionally unquoted: multi-token filters require word-splitting
+				# shellcheck disable=SC2086
+				output_data=$(journalctl $jfilter --since="@${stored_jts}" --no-pager 2>/dev/null) || true  # non-zero when no entries; empty output handled below
+			fi
+		fi
+	elif [[ -n "$stored_jts" ]]; then
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
+		# shellcheck disable=SC2086
+		output_data=$(journalctl $jfilter --since="@${stored_jts}" --no-pager 2>/dev/null) || true  # non-zero when no entries; empty output handled below
+	fi
+
+	# Output if any data
+	if [[ -n "$output_data" ]]; then
+		printf '%s\n' "$output_data"
+	fi
+
+	# Capture new cursor + timestamp
+	new_cursor=$(_tlog_journal_get_cursor "$jfilter")
+	new_jts=$(date +%s)
+
+	if [[ -n "$new_cursor" ]]; then
+		_tlog_write_cursor "$tlog_name" "$baserun" "$new_cursor" "raw"
+	fi
+	_tlog_write_cursor "${tlog_name}.jts" "$baserun" "$new_jts" "raw"
+
+	# Stale protection (skip symlinks)
+	[[ ! -L "$baserun/$tlog_name" ]] && touch "$baserun/$tlog_name"
+
+	# Release lock
+	if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+		exec {_tlog_fd}>&-
+	fi
+
+	return 0
+}
+
+# tlog_journal_read_full(tlog_name, scan_timeout, max_lines)
+# Full journal read without cursor tracking.
+# Returns: 0=success, 1=unknown service, 3=journal unavailable.
+tlog_journal_read_full() {
+	local tlog_name="$1"
+	local scan_timeout="${2:-${SCAN_TIMEOUT:-0}}"
+	local max_lines="${3:-${SCAN_MAX_LINES:-0}}"
+	local jfilter
+	local cmd_args=()
+
+	# Name validation — reject path traversal
+	_tlog_validate_name "$tlog_name" || return 1
+
+	# Validate scan_timeout is numeric — non-numeric defaults to 0 (no timeout)
+	if [[ -n "$scan_timeout" ]] && [[ ! "$scan_timeout" =~ $_TLOG_NUMERIC_PAT ]]; then
+		echo "tlog: tlog_journal_read_full: invalid scan_timeout: '$scan_timeout'" >&2
+		scan_timeout="0"
+	fi
+
+	# Validate max_lines is numeric — non-numeric defaults to 0 (no limit)
+	if [[ -n "$max_lines" ]] && [[ ! "$max_lines" =~ $_TLOG_NUMERIC_PAT ]]; then
+		echo "tlog: tlog_journal_read_full: invalid max_lines: '$max_lines'" >&2
+		max_lines="0"
+	fi
+
+	# Check journalctl available
+	if ! command -v journalctl >/dev/null 2>&1; then
+		return 3
+	fi
+
+	# Get filter for this service
+	jfilter=$(tlog_journal_filter "$tlog_name") || return 1
+
+	if [[ "$max_lines" -gt 0 ]]; then
+		cmd_args+=(-n "$max_lines")
+	fi
+	cmd_args+=(--no-pager)
+
+	if [[ "$scan_timeout" -gt 0 ]] && command -v timeout >/dev/null 2>&1; then
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
+		# shellcheck disable=SC2086
+		timeout "$scan_timeout" journalctl $jfilter "${cmd_args[@]}" 2>/dev/null  # suppress journalctl informational stderr
+	else
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
+		# shellcheck disable=SC2086
+		journalctl $jfilter "${cmd_args[@]}" 2>/dev/null  # suppress journalctl informational stderr
+	fi
+
+	return 0
+}
+
 # --- src/bl.d/10-log.sh ---
 _bl_log_level_allows() {
     # $1 = message level (debug|info|warn|error)
@@ -116,7 +2094,7 @@ bl_error_envelope() {
 # ----------------------------------------------------------------------------
 
 bl_init_workdir() {
-    # Creates 5 subdirs under $BL_VAR_DIR. state/ is preflight's job.
+    # Creates 6 subdirs under $BL_VAR_DIR. state/ is preflight's job.
     # Returns 0 on success, 65 on writability failure.
     if ! command mkdir -p "$BL_VAR_DIR" 2>/dev/null; then   # RO filesystem / perms
         bl_error_envelope preflight "$BL_VAR_DIR not writable"
@@ -128,7 +2106,7 @@ bl_init_workdir() {
     fi
     command rm -f "$BL_VAR_DIR/.wtest"
     local d
-    for d in backups quarantine fp-corpus outbox ledger; do
+    for d in backups quarantine fp-corpus outbox ledger baserun; do
         command mkdir -p "$BL_VAR_DIR/$d"
         bl_debug "bl_init_workdir: ensured $BL_VAR_DIR/$d"
     done

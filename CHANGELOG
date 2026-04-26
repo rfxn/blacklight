@@ -11,6 +11,11 @@ https://github.com/rfxn/blacklight
 [Change] M14 P6 — src/bl.d/50-consult.sh — bl_consult_new dual-mode argv (positional preserved; flag-form adds --fingerprint and --dedup-window-hours)
 [New] M14 P6 — bl_consult_new — trigger_dedup_attached ledger event on within-window dedup match
 [Change] M14 P6 — bl regenerated
+[New] M14 P3 — src/bl.d/05-vendor-alert.sh — vendored alert_lib v1.0.6 (multi-channel notify substrate)
+[New] M14 P3 — src/bl.d/06-vendor-tlog.sh — vendored tlog_lib v2.0.5 (incremental log reads with cursor state)
+[Change] M14 P3 — src/bl.d/15-workdir.sh — bl_init_workdir creates baserun/ subdir for tlog_lib cursor state
+[Change] M14 P3 — tests/02-preflight.bats — assert baserun/ subdir created
+[Change] M14 P3 — bl regenerated with vendor parts at slot 05/06
 
 === M13 — Skills primitive realignment (Path C) — 2026-04-26 ===
 
