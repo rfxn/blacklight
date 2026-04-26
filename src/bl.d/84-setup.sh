@@ -171,14 +171,41 @@ bl_setup_load_state() {
     BL_STATE_ENV_ID="$old_env"
     BL_STATE_MEMSTORE_CASE_ID="$old_case"
     BL_STATE_LAST_SYNC=""
+
+    # F1 fix — defence in depth: copy legacy files to a timestamped backup
+    # BEFORE any destructive cleanup. Recovery anchor if migration fails.
+    local backup_dir
+    backup_dir="$BL_STATE_DIR/migration-backup-$(command date -u +%s)"
+    command mkdir -p "$backup_dir" 2>/dev/null || {   # 2>/dev/null: RO fs / perms — fail-fast surfaces below as malformed-state
+        bl_error_envelope setup "$BL_STATE_DIR/migration-backup not writable"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    local legacy
+    for legacy in agent-id env-id memstore-skills-id memstore-case-id case-id-counter case.current; do
+        [[ -f "$BL_STATE_DIR/$legacy" ]] && command cp "$BL_STATE_DIR/$legacy" "$backup_dir/" 2>/dev/null   # 2>/dev/null: missing → skip; backup is best-effort recovery anchor
+    done
+
+    # F1 fix — validate counter content before --argjson; bash brace-default
+    # ${var:-{}} alone is fragile because the file's normal payload
+    # ({"year":2026,"n":2}) reaches jq through unpredictable bash quoting.
+    # Validate explicitly; substitute empty object on any parse failure.
+    local counter_validated='{}'
+    if [[ -n "$old_counter" ]]; then
+        if printf '%s' "$old_counter" | jq -e '.' >/dev/null 2>&1; then   # 2>/dev/null: jq diagnostic redundant; the validator's only signal is exit code
+            counter_validated="$old_counter"
+        else
+            bl_warn "bl setup: case-id-counter content rejected by jq; substituting {} (counter resets to 0 on next case open)"
+        fi
+    fi
+
     # Build state.json with both old fields preserved
     local tmp_state="$state_file.tmp.$$"
-    jq -n \
+    if ! jq -n \
         --arg aid "$old_agent" \
         --arg env "$old_env" \
         --arg cmid "$old_case" \
         --arg cur "$old_current" \
-        --argjson counter "${old_counter:-{}}" \
+        --argjson counter "$counter_validated" \
         '{
             schema_version: 1,
             agent: {id: $aid, version: 0, skill_versions: {}},
@@ -192,13 +219,26 @@ bl_setup_load_state() {
             case_current: $cur,
             session_ids: {},
             last_sync: ""
-        }' > "$tmp_state"
+        }' > "$tmp_state"; then
+        # F1 fix — abort migration cleanly: do NOT mv tmp into place, do NOT delete legacy files
+        command rm -f "$tmp_state" 2>/dev/null   # 2>/dev/null: tmp may not exist if jq failed before creating it
+        bl_error_envelope setup "state.json compose failed during migration; legacy files preserved at $BL_STATE_DIR (backup at $backup_dir)"
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
+    # F1 fix — verify the composed state.json is parseable before committing it
+    if ! jq -e '.schema_version == 1' "$tmp_state" >/dev/null 2>&1; then   # 2>/dev/null: jq diagnostic redundant in pass/fail check
+        command rm -f "$tmp_state" 2>/dev/null   # 2>/dev/null: best-effort; tmp existence already proven by jq -n above
+        bl_error_envelope setup "composed state.json failed schema_version check; legacy files preserved (backup at $backup_dir)"
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
     command mv "$tmp_state" "$state_file"
-    # Delete old per-key files (skills-id is intentionally orphaned — bl-skills memstore retired)
+
+    # Delete old per-key files only AFTER state.json is committed and validated
+    # (skills-id is intentionally orphaned — bl-skills memstore retired)
     command rm -f "$BL_STATE_DIR/agent-id" "$BL_STATE_DIR/env-id" \
                   "$BL_STATE_DIR/memstore-skills-id" "$BL_STATE_DIR/memstore-case-id" \
                   "$BL_STATE_DIR/case-id-counter" "$BL_STATE_DIR/case.current"
-    bl_info "bl setup: state migrated; old per-key files removed"
+    bl_info "bl setup: state migrated; legacy files removed (backup at $backup_dir)"
     return "$BL_EX_OK"
 }
 

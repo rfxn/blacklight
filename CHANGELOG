@@ -2,6 +2,13 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== M15 — API correctness against live Anthropic Managed Agents ===
+
+M15 P1 (2026-04-26)
+  [Fix] bl_setup_load_state migration is now backup-then-validate-then-commit;
+        legacy state files are preserved on any failure during the move to state.json
+        (F1 P0 — previous behavior could leave a 0-byte state.json + lost legacy files).
+
 === M14 — Substrate-hook (closed-loop response layer) — 2026-04-26 ===
 
 [New] M14 P11 — skill bundles: bl-capabilities (always-load capability map), lmd-triggers (hook router + backwalk + quarantine discipline), cpanel-easyapache (EA4 substrate router + apply-path discipline); description-routed; skills/INDEX.md not modified (retired M13 P10)
