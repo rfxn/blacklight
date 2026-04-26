@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-extracting-1",
+    "evidence_summary": "Apache access log contains entries with raw IPs (198.51.100.44, 198.51.100.45, 203.0.113.22), a User-Agent string 'zgrab/0.x', and a URI path /api/checkout/paypal/token. Operator asks curator to extract and normalize all IOCs (IPs, user-agent, URI pattern) into a deduped JSON list with type labels.",
+    "expected_skill": "extracting-iocs",
+    "expected_resource_reads": ["/skills/extracting-iocs-corpus.md"],
+    "min_correlation_streams": 1
+}

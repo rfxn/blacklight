@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-synthesizing-3",
+    "evidence_summary": "Operator provides three distinct evidence streams: (1) crontab diff showing a new @reboot entry added at 01:02 UTC running a base64-encoded curl pipe, (2) APF firewall log recording an outbound connection to 198.51.100.44:4444 at 01:03 UTC, (3) ps aux output showing a bash process with a /tmp/.X11-unix parent. Streams span cron, network, and process. Cross-stream correlation required to establish kill chain.",
+    "expected_skill": "synthesizing-evidence",
+    "expected_resource_reads": ["/skills/synthesizing-evidence-corpus.md"],
+    "min_correlation_streams": 3
+}

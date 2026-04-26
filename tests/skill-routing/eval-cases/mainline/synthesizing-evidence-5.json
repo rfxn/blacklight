@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-synthesizing-5",
+    "evidence_summary": "APSB25-94 style incident: bl observe output includes PHP process tree with suspicious --allow-url-fopen flag, ModSec audit log with two rule 941160 hits (HTML injection) originating from the same referrer, and journalctl showing an OOMKill event on the httpd service at 04:28 UTC. The operator requests a unified timeline correlating these three streams to confirm exploitation sequence.",
+    "expected_skill": "synthesizing-evidence",
+    "expected_resource_reads": ["/skills/synthesizing-evidence-corpus.md"],
+    "min_correlation_streams": 3
+}

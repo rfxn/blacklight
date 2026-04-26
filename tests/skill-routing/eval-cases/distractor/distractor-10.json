@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-10",
+    "evidence_summary": "Operator asks: 'Correlate our Apache log with the ModSec audit log to find the attack.' Both files are on disk and the operator wants a unified timeline. However, the Apache log covers the last 30 days and contains 4 million lines with no targeted time window given.",
+    "expected_no_skill": "synthesizing-evidence",
+    "rationale": "Without a targeted time window, synthesizing 30 days × 4M lines is unbounded scope — the correct response is to request a focused time window or a filtered evidence extract before routing to synthesizing-evidence. The Skill requires actionable stream segments, not raw full-history dumps."
+}

@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-14",
+    "evidence_summary": "Operator runs 'bl case list' and sees five cases. They ask: 'Synthesize these five cases into a trend report.' Trend analysis across multiple historical cases is not the same as cross-stream correlation within a single incident.",
+    "expected_no_skill": "synthesizing-evidence",
+    "rationale": "Synthesizing-evidence operates on evidence streams within a single active case (Apache+ModSec+journal). A cross-case trend analysis is a different analytical task (aggregation across closed cases), which falls outside the synthesizing-evidence Skill's scope of per-case timeline reconstruction."
+}

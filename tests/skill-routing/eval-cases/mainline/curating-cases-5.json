@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-curating-5",
+    "evidence_summary": "Operator asks for the agentic-minutes of CASE-2026-0004: a chronological log of every curator decision, step emitted, and evidence read during the session. Curator must render the minutes from the case memstore timeline section in descending timestamp order.",
+    "expected_skill": "curating-cases",
+    "expected_resource_reads": ["/skills/curating-cases-corpus.md"],
+    "min_correlation_streams": 1
+}

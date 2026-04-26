@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-prescribing-2",
+    "evidence_summary": "LMD has quarantined three webshell files under /var/www/html/media/. The operator asks the curator to generate a YARA rule that matches the obfuscation pattern present in the quarantined samples (eval+base64_decode+str_rot13 chain), calibrated to avoid false-positive hits on Magento core files.",
+    "expected_skill": "prescribing-defensive-payloads",
+    "expected_resource_reads": ["/skills/prescribing-defensive-payloads-corpus.md"],
+    "min_correlation_streams": 1
+}

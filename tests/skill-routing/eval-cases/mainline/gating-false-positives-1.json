@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-gating-1",
+    "evidence_summary": "ModSec rule 942100 fired on POST /rest/V1/customers/search?searchCriteria[filter_groups][0][filters][0][value]=admin%25. The payload is a legitimate Magento REST API admin search using a URL-encoded percent wildcard. Operator asks whether this alert should be suppressed for the /rest/V1/ endpoint.",
+    "expected_skill": "gating-false-positives",
+    "expected_resource_reads": ["/skills/gating-false-positives-corpus.md"],
+    "min_correlation_streams": 1
+}

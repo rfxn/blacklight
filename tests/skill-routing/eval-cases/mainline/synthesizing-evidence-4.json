@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-synthesizing-4",
+    "evidence_summary": "Apache combined access log contains 47 requests to /api/checkout/session/placeOrder from six distinct IPs within 90 seconds (Magento checkout endpoint). ModSec engine records rule 913101 (scanner detection) for two of those IPs. ClamAV freshclam log shows a signature update completed 2 minutes before the first hit. The curator is asked to reconstruct the attack timeline and identify whether the IPs are coordinated.",
+    "expected_skill": "synthesizing-evidence",
+    "expected_resource_reads": ["/skills/synthesizing-evidence-corpus.md"],
+    "min_correlation_streams": 2
+}

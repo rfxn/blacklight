@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-synthesizing-1",
+    "evidence_summary": "Apache access.log shows repeated POST /index.php/admin/dashboard at 03:14 UTC. ModSec audit log records rule 941100 (XSS) and 942100 (SQLi) triggers against the same source IP within a 4-minute window. journalctl records PHP-FPM worker restarts coinciding with the first POST.",
+    "expected_skill": "synthesizing-evidence",
+    "expected_resource_reads": ["/skills/synthesizing-evidence-corpus.md"],
+    "min_correlation_streams": 3
+}

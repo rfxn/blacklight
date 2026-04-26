@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-01",
+    "evidence_summary": "Single Apache access log line: POST /index.php/admin/dashboard 200 from 198.51.100.44. No other streams available. Operator asks for timeline reconstruction.",
+    "expected_no_skill": "synthesizing-evidence",
+    "rationale": "Evidence is single-stream (one log line). Cross-stream correlation is the synthesizing-evidence trigger; with only one source stream no synthesis is warranted. Correct routing: ask operator for additional evidence streams before routing."
+}

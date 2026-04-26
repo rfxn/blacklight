@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-13",
+    "evidence_summary": "Operator provides a YARA rule written by the curator two sessions ago and says 'this rule isn't matching the samples I have now — please update it.' The request is to revise an existing defensive payload based on new sample feedback, not to author a fresh one.",
+    "expected_no_skill": "prescribing-defensive-payloads",
+    "rationale": "Revising an existing YARA rule based on new non-matching samples is a calibration task. If the rule now generates FPs or misses TPs, the correct routing is gating-false-positives to adjudicate the mismatch before prescribing a revised payload. Jumping to prescribing-defensive-payloads without adjudication risks producing a worse rule."
+}

@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-extracting-3",
+    "evidence_summary": "ModSec audit log body section contains a raw POST payload with a base64-encoded string: dXNlcjpwYXNz followed by an eval() wrapper and a curl command to http://198.51.100.99/d/payload.sh. Curator is asked to decode the base64, extract the embedded URL and any credentials, and output as normalized IOCs.",
+    "expected_skill": "extracting-iocs",
+    "expected_resource_reads": ["/skills/extracting-iocs-corpus.md"],
+    "min_correlation_streams": 1
+}

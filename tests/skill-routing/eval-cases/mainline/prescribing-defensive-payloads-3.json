@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-prescribing-3",
+    "evidence_summary": "APF firewall shows 1,200 inbound connections from 198.51.100.0/24 in the last 10 minutes, all to port 80. The operator needs an APF deny_hosts.rules entry to block that CIDR with a 24-hour TTL, and an LMD signature update to scan any files dropped by that IP range in the last hour.",
+    "expected_skill": "prescribing-defensive-payloads",
+    "expected_resource_reads": ["/skills/prescribing-defensive-payloads-corpus.md"],
+    "min_correlation_streams": 1
+}

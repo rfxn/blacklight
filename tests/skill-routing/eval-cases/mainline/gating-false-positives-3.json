@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-gating-3",
+    "evidence_summary": "APF fired on 203.0.113.55 after 8 failed SSH logins, but audit log confirms those logins are from the operator's own monitoring agent (Nagios) using a certificate that expired yesterday. Operator asks curator to adjudicate: suppress the APF block for this IP, or allow it and fix the cert?",
+    "expected_skill": "gating-false-positives",
+    "expected_resource_reads": ["/skills/gating-false-positives-corpus.md"],
+    "min_correlation_streams": 1
+}

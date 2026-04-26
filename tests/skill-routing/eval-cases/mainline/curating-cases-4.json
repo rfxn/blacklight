@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-curating-4",
+    "evidence_summary": "Operator has two concurrent cases open (CASE-2026-0001 and CASE-2026-0002) and wants to switch context to CASE-2026-0002. Curator must update case_current in state.json, confirm the switch with a brief summary of CASE-2026-0002's current status (open, steps count, last activity timestamp).",
+    "expected_skill": "curating-cases",
+    "expected_resource_reads": ["/skills/curating-cases-corpus.md"],
+    "min_correlation_streams": 1
+}

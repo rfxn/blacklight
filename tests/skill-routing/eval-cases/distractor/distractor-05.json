@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-05",
+    "evidence_summary": "Operator provides three log streams (Apache, ModSec, journalctl) but then immediately says 'based on these three logs, write a YARA rule to detect this pattern.' No synthesis step was requested explicitly.",
+    "expected_no_skill": "synthesizing-evidence",
+    "rationale": "Despite multi-stream evidence being present, the operator's intent is rule authoring, not timeline reconstruction. Correct routing: prescribing-defensive-payloads for the YARA rule request. Synthesis is implied context, not the primary skill needed."
+}

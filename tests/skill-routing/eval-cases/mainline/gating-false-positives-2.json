@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-gating-2",
+    "evidence_summary": "LMD flagged /var/www/html/app/code/Company/Module/Model/ResourceModel/Grid/Collection.php as hex-obfuscated. The file is a vendor-signed module from the Magento Marketplace (SHA256 matches the module's published release). Operator requests a suppress decision for this specific file hash.",
+    "expected_skill": "gating-false-positives",
+    "expected_resource_reads": ["/skills/gating-false-positives-corpus.md"],
+    "min_correlation_streams": 1
+}

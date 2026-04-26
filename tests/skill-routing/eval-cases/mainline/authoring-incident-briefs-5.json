@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-briefs-5",
+    "evidence_summary": "Operator is drafting a PCI-DSS incident disclosure for CASE-2026-0005 (card-data-adjacent server compromise). The brief must meet PCI-DSS Requirement 12.10.1 format: incident description, cardholder data systems affected (yes/no), timeline, containment actions, and remediation status. Curator must author the disclosure body using only confirmed evidence from the case memstore.",
+    "expected_skill": "authoring-incident-briefs",
+    "expected_resource_reads": ["/skills/authoring-incident-briefs-corpus.md"],
+    "min_correlation_streams": 1
+}

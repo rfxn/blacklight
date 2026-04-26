@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-12",
+    "evidence_summary": "A ModSec rule the operator authored last month is now triggering on what appears to be legitimate traffic. The operator wants to understand why it is triggering and asks curator to 'extract the IOC from the triggering request'. The request body is a standard Magento admin form submission.",
+    "expected_no_skill": "extracting-iocs",
+    "rationale": "The triggering request is legitimate — there are no IOCs to extract. The correct routing is gating-false-positives: evaluate whether the rule is over-matching legitimate requests. Applying extracting-iocs to a non-malicious form submission would generate phantom IOCs."
+}

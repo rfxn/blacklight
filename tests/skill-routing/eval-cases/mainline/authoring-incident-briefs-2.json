@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-briefs-2",
+    "evidence_summary": "Operator requests a tenant-facing brief for a shared-hosting customer whose Magento store was part of CASE-2026-0002. The brief must be in non-technical language: what happened, what was done, what the customer should do next (change admin credentials, re-apply patches). Must not reveal internal IOC lists or raw log data.",
+    "expected_skill": "authoring-incident-briefs",
+    "expected_resource_reads": ["/skills/authoring-incident-briefs-corpus.md"],
+    "min_correlation_streams": 1
+}

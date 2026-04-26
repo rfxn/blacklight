@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-15",
+    "evidence_summary": "Operator asks: 'For CASE-2026-0008, write the incident brief now — the case is still open and remediation is ongoing.' Brief authoring before case closure is premature.",
+    "expected_no_skill": "authoring-incident-briefs",
+    "rationale": "Incident briefs are close-out artifacts. Authoring a brief before the case is closed and remediation confirmed produces an incomplete document. Correct routing: curating-cases to check that all steps are recorded and confirmed before authorizing brief authoring."
+}

@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-ambiguous-02",
+    "evidence_summary": "ModSec rule 942100 fired on a PUT /rest/V1/orders/items request. The value looks like a UNION SELECT clause but is a legitimate ERP system integration payload from a known internal IP. Operator asks whether to suppress the alert and, if so, write a ModSec exclusion.",
+    "candidate_skills": ["gating-false-positives", "prescribing-defensive-payloads"],
+    "rationale": "Adjudicating whether to suppress is gating-false-positives. If the answer is 'suppress', writing the exclusion rule is prescribing-defensive-payloads. Both skills apply sequentially, but which fires first depends on whether the operator has already made the adjudication decision."
+}

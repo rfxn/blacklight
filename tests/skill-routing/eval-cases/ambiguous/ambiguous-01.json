@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-ambiguous-01",
+    "evidence_summary": "LMD scan found a suspicious file at /var/www/html/media/catalog/x.php. The file contains one IP address (203.0.113.5) and one URL (http://203.0.113.5/payload.sh). The operator simultaneously asks: (1) extract the IOCs, and (2) synthesize with the Apache log to confirm the IP was used in a request.",
+    "candidate_skills": ["extracting-iocs", "synthesizing-evidence"],
+    "rationale": "Single-file IOC extraction can satisfy request (1) alone. Request (2) requires cross-stream correlation. Both skills are legitimately triggered. Ambiguous because the operator may want sequential application: extract first, then synthesize."
+}

@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-ambiguous-03",
+    "evidence_summary": "Operator is closing CASE-2026-0009 after a successful Magento webshell remediation. They ask: 'Write a brief and extract the final IOC list for the brief.' Two explicit actions: brief authoring and IOC extraction are both required, and the IOC list should be embedded in the brief.",
+    "candidate_skills": ["authoring-incident-briefs", "extracting-iocs"],
+    "rationale": "IOC extraction feeds the brief. Both skills are needed. The question is which is the primary skill for routing: the brief is the final output, but extracting-iocs must complete first. Ambiguous on ordering, not on applicability."
+}

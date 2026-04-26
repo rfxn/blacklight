@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-11",
+    "evidence_summary": "Operator says: 'I need a brief for our SOC team explaining what synthesizing-evidence does.' This is a documentation request about a blacklight Skill, not an incident brief for a real case.",
+    "expected_no_skill": "authoring-incident-briefs",
+    "rationale": "Authoring-incident-briefs targets close-out briefs for real incidents. A request to explain what a Skill does is an orientation question requiring a different response (explaining blacklight's capabilities), not an incident brief. No case context is present."
+}

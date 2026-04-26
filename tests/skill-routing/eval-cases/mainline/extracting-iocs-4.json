@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-extracting-4",
+    "evidence_summary": "YARA scan output identifies three files matching rule PolyshellDropper_v1: /var/www/html/media/catalog/product/cache/shell.gif (content-type mismatch: PHP), /tmp/sess_xy89, /var/www/html/index.php.bak. Operator requests a deduplicated IOC list (paths + inferred file type + rule match) for use in APF blocklist and LMD signature extension.",
+    "expected_skill": "extracting-iocs",
+    "expected_resource_reads": ["/skills/extracting-iocs-corpus.md"],
+    "min_correlation_streams": 1
+}

@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-prescribing-1",
+    "evidence_summary": "Operator has confirmed a POST-based SQLi attempt against /index.php/catalogsearch/result/ using UNION SELECT payload. Asks curator to author a ModSecurity rule that blocks UNION-based SQLi in the q= parameter without triggering on legitimate catalog search queries containing product codes.",
+    "expected_skill": "prescribing-defensive-payloads",
+    "expected_resource_reads": ["/skills/prescribing-defensive-payloads-corpus.md"],
+    "min_correlation_streams": 1
+}

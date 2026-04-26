@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-07",
+    "evidence_summary": "Operator asks to close CASE-2026-0007 and generate a brief simultaneously in a single command. The case has open sub-tasks not yet recorded in the memstore. Correct curator response: refuse to close until sub-tasks are resolved; do not route to authoring-incident-briefs until close is clean.",
+    "expected_no_skill": "authoring-incident-briefs",
+    "rationale": "Case closure with unresolved sub-tasks requires curating-cases Skill to handle the workflow gate. Brief authoring is downstream of clean closure — routing to authoring-incident-briefs before curating-cases completes would skip the lifecycle gate."
+}

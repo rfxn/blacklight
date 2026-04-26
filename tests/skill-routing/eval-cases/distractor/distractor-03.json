@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-03",
+    "evidence_summary": "LMD scan identifies a suspicious file at /var/www/html/media/tmp/upload.php. The file has a single IP address (198.51.100.5) and a URL (http://198.51.100.5/c2/beacon) embedded in its body. Operator says 'extract the IOCs from this file' and then 'open a new case for it'.",
+    "expected_no_skill": "extracting-iocs",
+    "rationale": "The operator's composite request ends with a case lifecycle action (open a case). Correct routing: curating-cases for the open action. IOC extraction is a sub-step but the primary intent is case management."
+}

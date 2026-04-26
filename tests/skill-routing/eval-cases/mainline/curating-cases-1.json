@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-curating-1",
+    "evidence_summary": "Operator issues: 'bl case open --title \"Suspected webshell drop via Adobe Commerce upload\"'. Curator must allocate a new CASE-YYYY-NNNN identifier, create the case memstore skeleton (sections: timeline, ioc-list, steps-taken, brief-draft), and confirm the case is open in state.json.",
+    "expected_skill": "curating-cases",
+    "expected_resource_reads": ["/skills/curating-cases-corpus.md"],
+    "min_correlation_streams": 1
+}

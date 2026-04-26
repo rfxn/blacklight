@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-06",
+    "evidence_summary": "Operator provides an IP address list from APF block log and asks: 'Are these IPs known bad actors?' This is a reputation query, not an IOC extraction task. No file paths, URLs, or encoded payloads are present.",
+    "expected_no_skill": "extracting-iocs",
+    "rationale": "IOC extraction normalizes and deduplicates IOCs from raw evidence blobs. A reputation query against a pre-formed IP list is not IOC extraction — it requires threat-intel lookup context, which is outside the extracting-iocs Skill scope."
+}

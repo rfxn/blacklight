@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-prescribing-4",
+    "evidence_summary": "ModSec detected a polyglot payload in the X-Forwarded-For header exploiting CVE-2025-XXXX class injection. The operator asks for a ModSecurity rule using REQUEST_HEADERS:X-Forwarded-For that rejects requests where the value contains pipe, semicolon, or backtick characters but preserves legitimate proxy chains of IPv4 and IPv6 addresses.",
+    "expected_skill": "prescribing-defensive-payloads",
+    "expected_resource_reads": ["/skills/prescribing-defensive-payloads-corpus.md"],
+    "min_correlation_streams": 1
+}

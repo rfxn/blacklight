@@ -31,3 +31,9 @@ test-quick:
 # Use during inner-loop iteration on routing-skills/ content.
 test-skill-routing-smoke:
 	$(BATSMAN_RUN_TESTS) -- /opt/tests/skill-routing/smoke.bats
+
+# M13 P11: live promotion eval gate — opt-in only (BL_EVAL_LIVE=1 required).
+# NOT wired into test / test-quick / test-rocky9 / test-all — operator-triggered.
+# Usage: BL_EVAL_LIVE=1 ANTHROPIC_API_KEY=... make -C tests test-skill-routing-eval
+test-skill-routing-eval:
+	$(BATSMAN_RUN_TESTS) -- /opt/tests/skill-routing/eval-runner.bats

@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-synthesizing-2",
+    "evidence_summary": "LMD scan log records malware hit on /var/www/html/media/wysiwyg/shell.php at 22:47 UTC. Apache error.log shows eval() forbidden notice for the same path at 22:49. find output from BL_OBSERVE lists the file with mtime matching a 20-minute cluster of similarly-named .php drops. Timeline reconstruction needed.",
+    "expected_skill": "synthesizing-evidence",
+    "expected_resource_reads": ["/skills/synthesizing-evidence-corpus.md"],
+    "min_correlation_streams": 3
+}

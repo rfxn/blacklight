@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-02",
+    "evidence_summary": "ModSec rule 942100 fired on a product search query. Operator has already confirmed this is a false positive (legitimate Magento search with URL-encoded percent wildcard) and asks curator to write a ModSec rule exclusion for this endpoint.",
+    "expected_no_skill": "gating-false-positives",
+    "rationale": "Adjudication is already done by the operator. The request is to author a defensive payload (rule exclusion). Correct routing: prescribing-defensive-payloads, not gating-false-positives."
+}

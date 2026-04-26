@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-briefs-1",
+    "evidence_summary": "CASE-2026-0001 remediation is complete. Operator issues 'bl case brief' for a closed case involving a Magento webshell drop via APSB25-94 class file-upload bypass. Curator must render a close-out brief with sections: Summary, Timeline, Root Cause, IOCs, Remediation Steps, and Recurrence Prevention.",
+    "expected_skill": "authoring-incident-briefs",
+    "expected_resource_reads": ["/skills/authoring-incident-briefs-corpus.md"],
+    "min_correlation_streams": 1
+}

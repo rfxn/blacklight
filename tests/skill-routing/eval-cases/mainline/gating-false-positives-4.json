@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-gating-4",
+    "evidence_summary": "ModSec anomaly score exceeded threshold (≥10) on a legitimate Magento admin session due to rule 920170 (GET with body) and 921110 (HTTP request smuggling). The admin user is performing bulk product import via the Magento admin panel, which sends a GET with JSON body. Curator asked to issue a per-location rule exclusion for /admin/catalog/product/massAction/ only.",
+    "expected_skill": "gating-false-positives",
+    "expected_resource_reads": ["/skills/gating-false-positives-corpus.md"],
+    "min_correlation_streams": 1
+}

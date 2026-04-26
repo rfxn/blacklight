@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-ambiguous-05",
+    "evidence_summary": "Operator has an IOC list with 12 entries (IPs, file hashes, URLs) gathered from a previous session. They say: 'Add these IOCs to the current case and also open a new sub-case for the C2 infrastructure.' Adding to the current case is curating-cases; opening a sub-case is also curating-cases; but the underlying IOC list came from extracting-iocs work that is already done.",
+    "candidate_skills": ["extracting-iocs", "curating-cases"],
+    "rationale": "The IOC list is already extracted — extracting-iocs work is done. The primary intent is case management: recording IOCs in the memstore and allocating a sub-case ID. Curating-cases is the primary skill; extracting-iocs is historical context, not an active request."
+}

@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-ambiguous-04",
+    "evidence_summary": "Three log streams (Apache, ModSec, journalctl) show suspicious activity. Curator synthesizes the timeline and identifies a clear attack pattern. Operator then says: 'Based on what you found, write the YARA rule to detect the dropper.' Synthesis is already complete; now the operator wants a defensive payload.",
+    "candidate_skills": ["synthesizing-evidence", "prescribing-defensive-payloads"],
+    "rationale": "Synthesis was the active skill in the prior turn. The current operator message is a pivot to prescribing-defensive-payloads. The curator must correctly identify the turn-level intent switch — the evidence synthesis result is now context for the rule authoring, not the primary task."
+}

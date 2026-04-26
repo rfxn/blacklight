@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-04",
+    "evidence_summary": "Operator asks: 'Write me an incident brief for a ModSec false-positive suppression we did last week.' No open case exists. The brief would be entirely about a FP suppression decision, not a confirmed compromise.",
+    "expected_no_skill": "authoring-incident-briefs",
+    "rationale": "No incident occurred — only a FP adjudication. Authoring-incident-briefs is for confirmed compromise close-outs. Correct routing: gating-false-positives to review the historical suppression, not brief authoring."
+}

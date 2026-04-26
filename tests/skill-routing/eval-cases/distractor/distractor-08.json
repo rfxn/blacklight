@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-08",
+    "evidence_summary": "ClamAV scan returned a hit on a Magento core file. Operator provides the ClamAV signature name and asks curator to 'extract the IOC from this signature name'. The signature name is a CLAMAV internal identifier, not raw evidence containing embedded IOCs.",
+    "expected_no_skill": "extracting-iocs",
+    "rationale": "A ClamAV signature name is a pre-classified label, not raw evidence. IOC extraction applies to raw blobs (logs, file bodies, encoded strings). Correct routing: gating-false-positives to adjudicate whether the ClamAV hit is a TP or FP for a Magento vendor file."
+}

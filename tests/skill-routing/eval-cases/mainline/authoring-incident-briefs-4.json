@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-briefs-4",
+    "evidence_summary": "After closing CASE-2026-0004 (APF-blocked botnet sweep, no confirmed compromise), operator asks for a brief structured as: 'No breach confirmed — here is what we saw and blocked.' Curator must frame the brief in affirmative language (what was defended successfully), include the blocked IP count and time window, and note the monitoring posture going forward.",
+    "expected_skill": "authoring-incident-briefs",
+    "expected_resource_reads": ["/skills/authoring-incident-briefs-corpus.md"],
+    "min_correlation_streams": 1
+}

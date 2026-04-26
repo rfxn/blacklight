@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-extracting-2",
+    "evidence_summary": "LMD quarantine manifest includes three filenames: /var/www/html/media/wysiwyg/img/x.php, /var/www/html/pub/static/.htaccess.bak, and /tmp/.ICE-unix/sess_abc123. Each file has a SHA256 in the manifest. Operator asks for IOC normalization of paths and hashes, with mtime clustering context from find output.",
+    "expected_skill": "extracting-iocs",
+    "expected_resource_reads": ["/skills/extracting-iocs-corpus.md"],
+    "min_correlation_streams": 1
+}

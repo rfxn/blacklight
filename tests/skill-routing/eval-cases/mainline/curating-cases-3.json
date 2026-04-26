@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-curating-3",
+    "evidence_summary": "After containment and remediation steps have been recorded, operator asks to close CASE-2026-0003 and advance to brief drafting. Curator must update case status to 'closed', record closed_at timestamp in the memstore, and confirm that 'bl case close' is the next command in the workflow.",
+    "expected_skill": "curating-cases",
+    "expected_resource_reads": ["/skills/curating-cases-corpus.md"],
+    "min_correlation_streams": 1
+}

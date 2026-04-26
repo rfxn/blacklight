@@ -6609,7 +6609,7 @@ CLEAN_USAGE_EOF
 #   bl setup --sync [--dry-run]   — provision + Skills + Files (idempotent)
 #   bl setup --reset [--force]    — delete agent + Skills + workspace Files
 #   bl setup --gc                 — delete files_pending_deletion
-#   bl setup --eval [--promote]   — live promotion eval (stub until P11)
+#   bl setup --eval [--promote]   — live promotion eval (M13 P11: real implementation)
 #   bl setup --check              — print state.json snapshot
 #   bl setup --help               — usage text
 # Bypasses bl_preflight (90-main.sh routes setup pre-preflight). Carries its
@@ -7092,13 +7092,48 @@ bl_setup_gc() {
 
 bl_setup_eval() {
     local promote="${1:-0}"
-    # Wired up in M13 P11. For P6 this is a stub that emits the expected JSON shape
-    # so the verb dispatcher contract is testable without the live runner present.
-    bl_warn "bl setup --eval: live runner stubbed in P6; full implementation lands in M13 P11 — set BL_EVAL_LIVE=1 with M13 P11 deployed"
-    printf '%s\n' '{"per_skill_precision":{},"cross_skill_recall":0,"distractor_specificity":0,"promotion_pass":false,"below_bar":["P11 not yet implemented"]}'
-    if (( promote == 1 )); then
-        bl_error_envelope setup "promotion bar not met (eval not implemented)"
+    local fixtures_dir="${BL_REPO_ROOT:-$(pwd)}/tests/skill-routing/eval-cases"
+    [[ -d "$fixtures_dir" ]] || {
+        bl_error_envelope setup "eval fixtures missing: $fixtures_dir"
         return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    local mainline_count distractor_count ambiguous_count
+    mainline_count=$(find "$fixtures_dir/mainline" -name '*.json' 2>/dev/null | wc -l)   # 2>/dev/null: missing subdir → 0 (handled by sum below)
+    distractor_count=$(find "$fixtures_dir/distractor" -name '*.json' 2>/dev/null | wc -l)   # 2>/dev/null: missing subdir → 0
+    ambiguous_count=$(find "$fixtures_dir/ambiguous" -name '*.json' 2>/dev/null | wc -l)   # 2>/dev/null: missing subdir → 0
+    bl_info "bl setup --eval: loading $((mainline_count + distractor_count + ambiguous_count)) case fixtures ($mainline_count mainline / $distractor_count distractor / $ambiguous_count ambiguous)"
+    # Communicate metrics out of bats via a tmp file. bats 1.13.0 formatters are
+    # pretty/tap/tap13/junit only — structured JSON output cannot ride bats stdout.
+    # eval-runner.bats's final test writes the metrics blob to $BL_EVAL_REPORT_FILE which we set here.
+    local report_file
+    report_file="$BL_STATE_DIR/eval-$(command date -u +%Y-%m-%dT%H:%MZ).json"
+    export BL_EVAL_REPORT_FILE="$report_file"
+    local runner_log
+    runner_log=$(command mktemp)
+    if ! BL_EVAL_LIVE=1 bats tests/skill-routing/eval-runner.bats --formatter tap > "$runner_log" 2>&1; then
+        bl_error_envelope setup "eval-runner failed; see $runner_log"
+        command tail -50 "$runner_log" >&2
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
+    command rm -f "$runner_log"
+    # Read the metrics report eval-runner.bats wrote to $BL_EVAL_REPORT_FILE
+    [[ -s "$report_file" ]] || {
+        bl_error_envelope setup "eval-runner did not write metrics to $report_file"
+        return "$BL_EX_UPSTREAM_ERROR"
+    }
+    command cat "$report_file" | jq '.'
+    printf 'bl setup --eval: report saved → %s\n' "$report_file"
+    local promotion_pass below_bar
+    promotion_pass=$(jq -r '.promotion_pass // false' "$report_file")
+    below_bar=$(jq -r '.below_bar // [] | join(", ")' "$report_file")
+    if (( promote == 1 )); then
+        if [[ "$promotion_pass" != "true" ]]; then
+            bl_error_envelope setup "promotion bar not met: $below_bar"
+            return "$BL_EX_PREFLIGHT_FAIL"
+        fi
+        # Promote: bump agent.skill_versions to current state-tracked versions
+        bl_setup_ensure_agent apply || return $?
+        bl_info "bl setup --eval --promote: agent updated to current Skill versions"
     fi
     return "$BL_EX_OK"
 }

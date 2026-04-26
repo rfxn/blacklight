@@ -1,0 +1,6 @@
+{
+    "case_id": "EVAL-distractor-09",
+    "evidence_summary": "Operator has a draft ModSec exclusion rule written by a colleague and asks curator to review it for correctness. The review task is evaluating an existing rule, not authoring a new one. The existing rule has a regex that over-matches legitimate Magento admin paths.",
+    "expected_no_skill": "prescribing-defensive-payloads",
+    "rationale": "Reviewing an existing rule for over-matching is a FP adjudication task — the rule itself is generating false positives on legitimate traffic. Correct routing: gating-false-positives to evaluate the rule's FP risk. prescribing-defensive-payloads applies when authoring a net-new rule."
+}

@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-briefs-3",
+    "evidence_summary": "Operator requests an executive-level one-pager for CASE-2026-0003 (credential skimmer via payment page JS injection). The brief must cover: business impact (transactions at risk, window of exposure), what was confirmed vs. unconfirmed, and recommended immediate actions. Format: bullet-heavy, max 400 words, no jargon.",
+    "expected_skill": "authoring-incident-briefs",
+    "expected_resource_reads": ["/skills/authoring-incident-briefs-corpus.md"],
+    "min_correlation_streams": 1
+}

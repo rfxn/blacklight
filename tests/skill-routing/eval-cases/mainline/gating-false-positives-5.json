@@ -1,0 +1,7 @@
+{
+    "case_id": "EVAL-mainline-gating-5",
+    "evidence_summary": "ClamAV flagged /var/www/html/vendor/magento/module-ui/view/base/requirejs-config.js as Js.Exploit.Agent-7. The file SHA256 matches Magento 2.4.7-p3's published vendor hash. Operator asks: does this constitute a FP, and should the file be excluded from future ClamAV scans of the /vendor/ tree?",
+    "expected_skill": "gating-false-positives",
+    "expected_resource_reads": ["/skills/gating-false-positives-corpus.md"],
+    "min_correlation_streams": 1
+}
