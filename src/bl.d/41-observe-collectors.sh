@@ -164,6 +164,12 @@ bl_observe_log_apache() {
         --argjson s4xx "${s4xx:-0}" --argjson s5xx "${s5xx:-0}" \
         '{source:"apache.transfer",total_records:$total,post_to_php_count:$post_to_php,status_histogram:{s2xx:$s2xx,s3xx:$s3xx,s4xx:$s4xx,s5xx:$s5xx},site:$site}')
     _bl_obs_close_stream "$stream_path" 'apache.transfer' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "apache"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "apache" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/apache"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -264,6 +270,12 @@ bl_observe_log_modsec() {
     local summary
     summary=$(jq -n -c --argjson total "$total" '{source:"modsec.audit",total_records:$total}')
     _bl_obs_close_stream "$stream_path" 'modsec.audit' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "modsec"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "modsec" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/modsec"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -339,6 +351,12 @@ bl_observe_log_journal() {
     summary=$(jq -n -c --argjson total "$total" --arg truncated "$truncated" --argjson cap "$journal_max" \
         '{source:"journal.entry",total_records:$total,truncated:($truncated == "true"),cap:$cap}')
     _bl_obs_close_stream "$stream_path" 'journal.entry' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "journal"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "journal" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/journal"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -456,6 +474,12 @@ bl_observe_file() {
     local summary
     summary=$(jq -n -c --arg path "$path" --arg sha256 "$sha256" --argjson size_bytes "$size" '{source:"file.triage",path:$path,sha256:$sha256,size_bytes:$size_bytes}')
     _bl_obs_close_stream "$stream_path" 'file.triage' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "file"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "file" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/file"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -533,6 +557,12 @@ bl_observe_htaccess() {
     local summary
     summary=$(jq -n -c --argjson total "$total" '{source:"htaccess.directive",total_flagged:$total}')
     _bl_obs_close_stream "$stream_path" 'htaccess.directive' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "htaccess"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "htaccess" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/htaccess"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -671,6 +701,12 @@ bl_observe_fs_mtime_cluster() {
     local summary
     summary=$(jq -n -c --argjson total "$total" '{source:"fs.mtime_cluster",total_records:$total}')
     _bl_obs_close_stream "$stream_path" 'fs.mtime_cluster' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "fs"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "fs" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/fs"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -755,6 +791,12 @@ bl_observe_fs_mtime_since() {
     local summary
     summary=$(jq -n -c --argjson total "$total" --arg since "$since_arg" '{source:"fs.mtime_since",total_records:$total,since:$since}')
     _bl_obs_close_stream "$stream_path" 'fs.mtime_since' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "fs"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "fs" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/fs"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -832,6 +874,12 @@ bl_observe_cron() {
     local summary
     summary=$(jq -n -c --argjson total "$total" '{source:"cron.entry",total_records:$total}')
     _bl_obs_close_stream "$stream_path" 'cron.entry' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "cron"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "cron" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/cron"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -934,6 +982,12 @@ bl_observe_proc() {
     local summary
     summary=$(jq -n -c --argjson total "$total" --arg user "$user_arg" '{source:"proc.snapshot",total_records:$total,user:$user}')
     _bl_obs_close_stream "$stream_path" 'proc.snapshot' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "proc"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "proc" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/proc"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -1031,6 +1085,12 @@ bl_observe_firewall() {
         --argjson total "$total" \
         '{source:"firewall.rule",backend_meta:{backend:$backend},total_records:$total}')
     _bl_obs_close_stream "$stream_path" 'firewall.rule' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "firewall"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "firewall" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/firewall"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -1158,6 +1218,12 @@ bl_observe_sigs() {
         --argjson missing "$missing_json" \
         '{source:"sig.loaded",total_records:$total,sig_scanners_present:$present,sig_scanners_missing:$missing}')
     _bl_obs_close_stream "$stream_path" 'sig.loaded' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "sigs"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "sigs" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/sigs"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -1458,6 +1524,12 @@ bl_observe_substrate() {
         --argjson elapsed_ms "$elapsed_ms" \
         '{source:"substrate.category",total_records:$total,categories_present:$present,categories_absent:$missing,elapsed_ms:$elapsed_ms}')
     _bl_obs_close_stream "$stream_path" 'substrate.category' "$summary"
+    # Path C: push to Files API on threshold
+    local _threshold_case_id
+    _threshold_case_id="$(bl_case_current)"
+    if [[ -n "$_threshold_case_id" ]] && bl_observe_evidence_threshold_check "$_threshold_case_id" "substrate"; then
+        bl_observe_evidence_rotate "$_threshold_case_id" "substrate" >/dev/null || bl_warn "evidence rotate failed for $_threshold_case_id/substrate"
+    fi
 
     unset -f _emit_substrate
     return "$BL_EX_OK"

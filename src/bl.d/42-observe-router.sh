@@ -187,6 +187,13 @@ bl_bundle_build() {
                 # Truncate at line boundary near 2KB to avoid mid-UTF-8 byte split (DESIGN.md §10.3 size budget).
                 printf '%s\n' "$sonnet_out" | command awk 'BEGIN{n=0} {if (n+length($0)+1 <= 2048) {print; n+=length($0)+1} else exit}' > "$stage_dir/summary.md"
                 bl_debug "bundle: summary.md rendered by claude-sonnet-4-6"
+                # Path C: upload summary to Files API for curator session attachment
+                local summary_fid
+                summary_fid=$(bl_files_create "text/markdown" "$stage_dir/summary.md") || bl_warn "bundle summary Files upload failed for $case_id"
+                if [[ -n "$summary_fid" ]]; then
+                    bl_debug "bl_bundle_build: summary uploaded → $summary_fid"
+                    # P8 wires the state.json update + session-attach via bl_setup_attach_session_resources
+                fi
             else
                 bl_warn "bundle: Sonnet summary unavailable (rc=$sonnet_rc) — fallback to deterministic"
                 _bl_obs_render_summary_deterministic "$stage_dir" "$case_id" "$host_label" "$now_ts" "$hypothesis" "${ts_min:-unknown}" "${ts_max:-unknown}"

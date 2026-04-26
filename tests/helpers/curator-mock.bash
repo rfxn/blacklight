@@ -168,12 +168,38 @@ bl_curator_mock_teardown() {
 }
 
 # Files API mocks — fixtures live in tests/fixtures/files-api-*.json
+
+_mock_files_api_upload_call_count() {
+    # Returns the number of times _mock_files_api_upload was invoked.
+    # Counter file lives in BATS_TEST_TMPDIR so it is per-test isolated.
+    local cfile="${BATS_TEST_TMPDIR:-/tmp}/_mock_files_upload_calls"
+    if [[ -f "$cfile" ]]; then
+        command wc -c < "$cfile" | command awk '{print $1}'
+    else
+        printf '0'
+    fi
+}
+
 _mock_files_api_upload() {
+    # Increment call counter (one byte per call)
+    printf 'x' >> "${BATS_TEST_TMPDIR:-/tmp}/_mock_files_upload_calls"
     cat "${BATS_TEST_DIRNAME}/fixtures/files-api-create.json"
     printf '\n200'
 }
 
+_mock_files_api_attach_call_count() {
+    # Returns the number of times _mock_files_api_attach was invoked.
+    local cfile="${BATS_TEST_TMPDIR:-/tmp}/_mock_files_attach_calls"
+    if [[ -f "$cfile" ]]; then
+        command wc -c < "$cfile" | command awk '{print $1}'
+    else
+        printf '0'
+    fi
+}
+
 _mock_files_api_attach() {
+    # Increment call counter (one byte per call)
+    printf 'x' >> "${BATS_TEST_TMPDIR:-/tmp}/_mock_files_attach_calls"
     cat "${BATS_TEST_DIRNAME}/fixtures/sessions-resources-add.json"
     printf '\n200'
 }

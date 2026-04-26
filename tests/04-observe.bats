@@ -8,6 +8,7 @@ load 'helpers/assert-jsonl'
 load 'helpers/observe-fixture-setup'
 load 'helpers/bl-preflight-mock'
 load 'helpers/capability-detect'
+load 'helpers/curator-mock'
 
 setup() {
     BL_SOURCE="${BL_SOURCE:-$BATS_TEST_DIRNAME/../bl}"
@@ -786,6 +787,70 @@ teardown() {
         BL_VAR_DIR="$BL_VAR_DIR" ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" BL_HOST_LABEL="$BL_HOST_LABEL" \
         "$BL_SOURCE" observe firewall --backend iptables >/dev/null 2>&1 || true
     run "$BL_SOURCE" observe bundle --format zst --out-dir "$BL_VAR_DIR/outbox"
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# Group: threshold-rotate — P7 Files lifecycle: threshold-check + rotate
+# ---------------------------------------------------------------------------
+
+@test "bl observe rolls evidence to Files API on threshold + writes state.json case_files" {
+    # Upgrade to curator mock so curl routes Files API calls correctly
+    bl_curator_mock_init
+    bl_curator_mock_set_response 'files-api-create.json' 200
+    bl_curator_mock_add_route '/v1/sessions/.*' 'sessions-resources-add.json' 200
+
+    # Seed state.json (case.current already written by setup_observe_case)
+    jq -n '{
+        schema_version:1,
+        agent:{id:"agent_test_stub",version:1,skill_versions:{}},
+        env_id:"env_x",
+        skills:{},
+        files:{},
+        files_pending_deletion:[],
+        case_memstores:{},
+        case_files:{},
+        case_id_counter:{year:2026,n:9999},
+        case_current:"CASE-2026-9999",
+        session_ids:{},
+        last_sync:""
+    }' > "$BL_VAR_DIR/state/state.json"
+
+    # bl_observe_evidence_threshold_check looks for evidence/<source>.json (stable
+    # cumulative path per source). Pre-seed it so the helper finds it. No upload.json
+    # exists → first-call path → rotate fires (threshold not evaluated on first call).
+    local ev_file="$BL_VAR_DIR/cases/CASE-2026-9999/evidence/apache.json"
+    printf '{"ts":"2026-04-23T14:22:01Z","source":"apache.transfer","record":{"n":1}}\n' > "$ev_file"
+
+    # Stage apache log fixture (for the collector run)
+    stage_apache_log "$BL_VAR_DIR/access.log"
+
+    # First-call (no upload.json) + threshold met → rotate fires
+    run env BL_VAR_DIR="$BL_VAR_DIR" ANTHROPIC_API_KEY="sk-ant-test" BL_HOST_LABEL="fleet-01-host-99" \
+        "$BL_SOURCE" observe log apache --around "$BL_VAR_DIR/access.log"
+    [ "$status" -eq 0 ]
+
+    # Assert rotate fired: upload.json threshold metadata file created
+    [ -f "$BL_VAR_DIR/cases/CASE-2026-9999/evidence/apache.upload.json" ]
+
+    # Assert state.json case_files entry populated (proves Files API write path executed)
+    local fid
+    fid=$(jq -r '
+        .case_files["CASE-2026-9999"]
+        | to_entries[]
+        | select(.key | contains("/raw/apache"))
+        | .value.workspace_file_id // empty
+    ' "$BL_VAR_DIR/state/state.json" 2>/dev/null)
+    [ -n "$fid" ]
+}
+
+@test "bl observe rotate does not break collector on Files API failure" {
+    # Simple preflight mock returns wrong body for Files API → rotate logs warning, collector exits 0
+    # (bl_mock_init returns agent-list body for ALL URLs; bl_files_create sees empty .id → warns)
+    stage_apache_log "$BL_VAR_DIR/access.log"
+    run env BL_VAR_DIR="$BL_VAR_DIR" ANTHROPIC_API_KEY="sk-ant-test" BL_HOST_LABEL="fleet-01-host-99" \
+        "$BL_SOURCE" observe log apache --around "$BL_VAR_DIR/access.log"
+    # Collector must exit 0 even when Files API upload fails (rotate failure is non-fatal)
     [ "$status" -eq 0 ]
 }
 
