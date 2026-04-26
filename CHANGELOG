@@ -2,6 +2,26 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== M16 P4 — 2026-04-26 (writeback emits user.custom_tool_result) ===
+
+[Fix] src/bl.d/60-run.sh — bl_run_step writeback session-event POST now reads
+      .custom_tool_use_id from the pending step body. When present (bridge-
+      enriched, M16 P3+), emits {type:"user.custom_tool_result", custom_
+      tool_use_id:<id>, content:[{type:"text", text:<summary>}]} which is
+      what the curator session is awaiting after a report_step custom-tool
+      call. When absent (legacy step paths, mocked-step BATS tests pre-
+      dating the bridge, manually-staged pending entries), falls back to
+      user.message which is what the session expects pre-handshake. The
+      rejection signature this closes: HTTP 400 'only user.tool_confirmation,
+      user.custom_tool_result, or user.interrupt may be sent' against any
+      session that is awaiting a custom_tool_result.
+[New] tests/05-consult-run-case.bats — 2 new tests under M16 P4 group: one
+      asserts user.custom_tool_result + matching id when the step carries
+      custom_tool_use_id; the other asserts the legacy user.message fallback
+      when the field is absent.
+[New] tests/fixtures/memstore-step-with-tool-use-id.json — bridge-enriched
+      step body fixture for the P4 happy-path test.
+
 === M16 P3 — 2026-04-26 (session-event → memstore-pending bridge; v0.6.0) ===
 
 Closes the M12.5 session-creation gap noted in MEMORY.md. The curator emits

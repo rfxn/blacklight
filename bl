@@ -7284,10 +7284,24 @@ bl_run_step() {
     if [[ -r "$session_id_file" ]]; then
         local session_id
         session_id=$(command cat "$session_id_file")
-        local body_file
+        local body_file custom_tool_use_id summary_text
         body_file=$(mktemp)
-        jq -n --arg s "$step_id" --argjson rc "$exec_rc" \
-            '{events:[{type:"user.message", content:[{type:"text", text:("result landed: "+$s+" rc="+($rc|tostring))}]}]}' > "$body_file"
+        # M16 P4: when the bridge enriched the pending step with custom_tool_use_id,
+        # the curator's session is awaiting user.custom_tool_result against that
+        # tool-use id. Sending user.message here would be rejected with HTTP 400
+        # ('only user.tool_confirmation, user.custom_tool_result, or user.interrupt
+        # may be sent'). When the field is absent — legacy step paths, mocked-step
+        # BATS tests pre-dating the bridge, manually-staged pending entries — fall
+        # back to user.message which is what the session expects pre-handshake.
+        custom_tool_use_id=$(jq -r '.custom_tool_use_id // empty' "$pending_tmp" 2>/dev/null || printf '')   # 2>/dev/null: pending_tmp may have been rm-ed by an earlier abort; treat as legacy
+        summary_text="result landed: $step_id rc=$exec_rc"
+        if [[ -n "$custom_tool_use_id" ]]; then
+            jq -n --arg id "$custom_tool_use_id" --arg t "$summary_text" \
+                '{events:[{type:"user.custom_tool_result", custom_tool_use_id:$id, content:[{type:"text", text:$t}]}]}' > "$body_file"
+        else
+            jq -n --arg t "$summary_text" \
+                '{events:[{type:"user.message", content:[{type:"text", text:$t}]}]}' > "$body_file"
+        fi
         bl_api_call POST "/v1/sessions/$session_id/events" "$body_file" >/dev/null || true   # non-fatal; ledger has the event
         command rm -f "$body_file"
     fi

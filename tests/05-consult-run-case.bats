@@ -581,6 +581,51 @@ teardown() {
 # F12 regression: sessions.create request body uses 'agent' field, not 'agent_id'
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# M16 P4: writeback emits user.custom_tool_result when pending step carries
+# custom_tool_use_id (bridge-enriched); falls back to user.message otherwise.
+# ---------------------------------------------------------------------------
+
+@test "M16 P4: writeback emits user.custom_tool_result when step has custom_tool_use_id" {
+    bl_case_fixture_seed CASE-2026-0001
+    printf 'CASE-2026-0001' > "$BL_VAR_DIR/state/case.current"
+    # Capture every curl invocation
+    export BL_MOCK_REQUEST_LOG
+    BL_MOCK_REQUEST_LOG=$(mktemp)
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    # Route the GET on the pending step → bridge-enriched fixture
+    bl_curator_mock_add_route 'pending%2Fs-bridge-01' 'memstore-step-with-tool-use-id.json' 200
+    run "$BL_SOURCE" run s-bridge-01
+    # Schema/tier-gate must pass; exec_rc may be non-zero (verb dispatch handler
+    # contract not Phase-5-yet); load-bearing assertion is on the writeback POST shape.
+    [ "$status" -ne 67 ]
+    [ "$status" -ne 68 ]
+    # POST to /v1/sessions/<sid>/events must use user.custom_tool_result with the matching id
+    grep -F 'sevt_01BridgeWriteback0001AAAAAAAA' "$BL_MOCK_REQUEST_LOG"
+    grep -E '"type":"user.custom_tool_result"' "$BL_MOCK_REQUEST_LOG"
+    # Anti-assertion: user.message MUST NOT appear in the events POST body for this case
+    ! grep -E '"events":\[\{"type":"user.message"' "$BL_MOCK_REQUEST_LOG"
+    rm -f "$BL_MOCK_REQUEST_LOG"
+}
+
+@test "M16 P4: writeback falls back to user.message when step has no custom_tool_use_id" {
+    bl_case_fixture_seed CASE-2026-0001
+    printf 'CASE-2026-0001' > "$BL_VAR_DIR/state/case.current"
+    export BL_MOCK_REQUEST_LOG
+    BL_MOCK_REQUEST_LOG=$(mktemp)
+    bl_curator_mock_set_response 'files-api-upload.json' 200
+    # Legacy fixture: no custom_tool_use_id field on the step body
+    bl_curator_mock_add_route 'pending%2Fs-0001' 'memstore-step-read-only.json' 200
+    run "$BL_SOURCE" run s-0001
+    [ "$status" -ne 67 ]
+    [ "$status" -ne 68 ]
+    # POST events body must use user.message (legacy fallback)
+    grep -E '"events":\[\{"type":"user.message"' "$BL_MOCK_REQUEST_LOG"
+    # Anti-assertion: no custom_tool_result should appear (no id to target)
+    ! grep -E '"type":"user.custom_tool_result"' "$BL_MOCK_REQUEST_LOG"
+    rm -f "$BL_MOCK_REQUEST_LOG"
+}
+
 @test "bl consult: session-create body uses 'agent' field name (F12 regression)" {
     # Seed state dir and state.json with agent.id = "agent_M8_TEST" so
     # bl_consult_create_session reads it when POSTing /v1/sessions.

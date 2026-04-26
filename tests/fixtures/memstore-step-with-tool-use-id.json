@@ -1,0 +1,5 @@
+{
+  "key": "bl-case/CASE-2026-0001/pending/s-bridge-01.json",
+  "content": "{\n  \"step_id\": \"s-bridge-01\",\n  \"verb\": \"observe.log_apache\",\n  \"action_tier\": \"read-only\",\n  \"reasoning\": \"bridge-enriched fixture step — custom_tool_use_id at top level\",\n  \"args\": [\n    {\"key\": \"path_glob\", \"value\": \"/var/log/apache2/access.log*\"},\n    {\"key\": \"since\", \"value\": \"2026-04-23T00:00:00Z\"}\n  ],\n  \"diff\": null,\n  \"patch\": null,\n  \"custom_tool_use_id\": \"sevt_01BridgeWriteback0001AAAAAAAA\"\n}",
+  "content_sha256": "def456"
+}
