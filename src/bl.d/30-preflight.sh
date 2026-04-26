@@ -236,15 +236,19 @@ bl_help_setup() {
     command cat <<'HELP_EOF'
 bl setup — provision or sync the Anthropic workspace.
 
-Usage: bl setup [--sync | --check]
+Usage: bl setup [--sync | --reset | --gc | --eval | --check] [opts]
 
 One-time per workspace: creates bl-curator agent, bl-curator-env
-environment, bl-skills + bl-case memory stores, seeds skills/.
+environment, bl-case memory store, uploads workspace corpora to the
+Files API, and registers six routing Skills.
 
---sync      delta-push skills/*.md against bl-skills memstore
---check     verify workspace state; no writes
+--sync [--dry-run]   delta-push routing Skills + workspace corpora; idempotent
+--reset [--force]    tear down agent + Skills + workspace Files (destructive)
+--gc                 purge files_pending_deletion when no live sessions reference
+--eval [--promote]   run skill-routing eval-cases (BL_EVAL_LIVE=1 gated)
+--check              print state.json snapshot + per-resource health
 
-Spec: DESIGN.md §8.
+Spec: DESIGN.md §8 / docs/setup-flow.md.
 HELP_EOF
 }
 

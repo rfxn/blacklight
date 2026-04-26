@@ -113,17 +113,18 @@ blacklight: CASE-2026-0001 defense step complete
 
 The curator is an Anthropic Managed Agent — not a stateless API call wrapped in a prompt.
 On first `bl setup`, blacklight creates a named agent (`bl-curator`), a tool environment
-(`bl-curator-env`), and two memory stores (`bl-skills`, `bl-case`). These IDs are
-persisted to `/var/lib/bl/state/` and reused on every subsequent invocation. The
+(`bl-curator-env`), and a `bl-case` memory store for per-case working state, registers six
+routing Skills against the agent, and uploads workspace corpora to the Files API. These
+identifiers are persisted to `/var/lib/bl/state/state.json` and reused on every invocation. The
 practical consequence: an operator runs `bl consult` on Monday morning to open a case,
 collects more evidence Tuesday afternoon via `bl observe`, and calls `bl consult` again —
 the curator already holds the case hypothesis, the prior evidence, and the pending steps.
 There is no re-prompt, no context reconstruction, no "please remember what we discussed."
 Case state accumulates across sim-days because it is stored in the agent's memory store,
 not in the operator's shell session. This is architecture, not a feature flag. Concretely:
-the agent ID, environment ID, and both memstore IDs are single-valued entries in
-`/var/lib/bl/state/` that `bl_preflight` validates on every run. See `DESIGN.md` §8
-for the full setup-and-reuse contract.
+the agent ID, environment ID, memstore ID, and Skills/Files identifiers are tracked in a
+single `/var/lib/bl/state/state.json` that `bl_preflight` validates on every run. See
+`DESIGN.md` §8 and `docs/setup-flow.md` for the full setup-and-reuse contract.
 
 ## Why Opus 4.7 + 1M context
 
