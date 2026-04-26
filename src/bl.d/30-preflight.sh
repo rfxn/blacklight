@@ -237,22 +237,28 @@ bl observe — read-only evidence extraction into the case bundle.
 Usage: bl observe <verb> [options]
 
 Verbs:
-  file <path>                          file-triage: sha256, magic, size, strings
-  log apache --around <path> [--window 6h]   parse access/error log around mtime
-  log modsec --around <path> [--txn ID] [--rule ID]  parse ModSec Serial audit
-  log journal [--since <ts>] [--unit <u>]    journalctl read window
-  cron [--user <u>] [--system]                snapshot crontabs (ANSI-obscured detect)
-  proc                                  argv-spoof + suspicious-binary triage
-  htaccess --root <path>                walk .htaccess tree under a web root
-  fs --mtime-cluster --under <p> [--cluster-window-secs N]
-  fs --mtime-since   --since <ts> --under <p> [--ext <ext>]
-  firewall                              snapshot iptables/nftables backend
-  sigs --root <path> --sigs <hdb>       maldet hdb signature scan
-  substrate                             host-substrate enumeration (12 categories)
-  bundle                                assemble all observe shards into a tgz
-
-Common:
-  --case <id>        override current case (default: /var/lib/bl/state/case.current)
+  file <path> [--attribution-from <attr-id>]
+                                       file-triage: sha256, magic, size, strings
+  log apache --around <path> [--window 6h] [--site <name>]
+                                       parse access/error log around mtime
+  log modsec --around <path> [--window 6h] [--txn <id>] [--rule <id>]
+                                       parse ModSec Serial audit
+  log journal --since <ts> [--grep <pattern>]
+                                       journalctl read window (--since required)
+  cron [--user <u>] [--system] [--from-file <path>]
+                                       snapshot crontabs (ANSI-obscured detect)
+  proc --user <user> [--verify-argv]   argv-spoof + suspicious-binary triage
+  htaccess <dir> [--recursive]         walk .htaccess tree (default: <dir>/.htaccess only)
+  fs --mtime-cluster <path> --window <secs> [--ext <list>]
+                                       group files modified inside a cluster window
+  fs --mtime-since --since <ts> --under <path> [--ext <list>]
+                                       retrospective mtime sweep
+  firewall [--backend auto|apf|csf|nftables|iptables]
+                                       snapshot active deny ruleset
+  sigs [--scanner lmd|clamav|yara]     loaded-signature inventory (auto-discovers DB)
+  substrate                            host-substrate enumeration (12 categories)
+  bundle [--format gz|zst|auto] [--since <ts>] [--out-dir <dir>] [--no-llm-summary]
+                                       assemble observe shards into a tarball
 
 Exit codes: docs/exit-codes.md
 HELP_EOF
@@ -262,13 +268,20 @@ bl_help_consult() {
     command cat <<'HELP_EOF'
 bl consult — open or attach to an investigation case with the curator agent.
 
-Usage: bl consult "<case description>" [--case <id>]
-       bl consult --attach <id>
+Usage: bl consult --new --trigger <path-or-event> [--notes "..."] [--dedup]
+       bl consult --attach <case-id>
+       bl consult --sweep-mode [--cve <id>]
 
-Posts the current case bundle (observed artifacts, prior ledger entries)
-to the bl-curator Managed Agent and receives an action-tier recommendation.
+--new            Allocate CASE-YYYY-NNNN, fingerprint the trigger artifact,
+                 open a curator session and bridge observed evidence in.
+                 --dedup short-circuits to an existing case when the trigger
+                 fingerprint matches within the dedup-window-hours config.
+--attach <id>    Re-attach to an existing case (resumes the curator session
+                 against the persisted memstore subtree).
+--sweep-mode     Open a host-wide sweep case (no specific trigger artifact);
+                 --cve <id> tags the case for retrospective CVE remediation.
 
-See DESIGN.md §5.
+Spec: DESIGN.md §5.2.
 HELP_EOF
 }
 
@@ -276,13 +289,19 @@ bl_help_run() {
     command cat <<'HELP_EOF'
 bl run — execute an agent-prescribed step (tier-gated).
 
-Usage: bl run [--yes] [--tier <auto|suggested|destructive>]
+Usage: bl run <step-id> [--yes] [--dry-run] [--unsafe] [--explain]
+       bl run --list
+       bl run --batch [--max <N>] [--yes]
 
-Pulls the next pending step from the curator, validates against action-
-tiers.md policy, prompts for confirmation (unless --yes and tier permits),
-executes, appends ledger + memstore entries.
+<step-id>    Pending step posted by the curator into bl-case/<case>/pending/.
+--yes        Skip confirmation prompt where the tier permits batch confirm.
+--dry-run    Print the planned operation + write a receipt; no mutations.
+--unsafe     Required to run a step with action_tier=unknown.
+--explain    Print the step JSON + tier classification, no execution.
+--list       Single-fetch list of pending steps (id, tier, synopsis); no run.
+--batch      Drain pending steps in tier order; --max caps the count.
 
-Tier policy: docs/action-tiers.md
+Tier policy: docs/action-tiers.md.  Spec: DESIGN.md §5.3.
 HELP_EOF
 }
 
@@ -290,37 +309,53 @@ bl_help_defend() {
     command cat <<'HELP_EOF'
 bl defend — apply an agent-authored defensive payload.
 
-Usage: bl defend <backend> <subcommand> [options]
+Usage: bl defend modsec <rule-file-or-id> [--remove] [--yes] [--reason <str>]
+       bl defend firewall <ip> [--backend auto|apf|csf|nft|iptables]
+                                [--reason <str>] [--retire <duration>]
+       bl defend sig <sig-file> [--scanner lmd|clamav|yara|all]
 
-Backends:
-  modsec      ModSecurity rule apply / --remove / rollback
-  firewall    iptables / nftables add / remove (CDN-safelist aware)
-  sig         ClamAV / LMD signature append (FP-corpus gated)
+modsec       Apply a ModSec rule file (or remove by rule-id with --remove).
+             Pre-flight: apachectl configtest; auto-rollback on failure.
+             --remove is destructive and requires --yes.
+firewall     Block a single IP via the auto-detected backend. CDN-ASN
+             safelist refuses Cloudflare/Fastly/Akamai/CloudFront
+             addresses. Default retire window 30d.
+sig          Append a scanner signature after corpus FP-gate +
+             (when borderline) Haiku adjudication. BL_DISABLE_LLM=1
+             fails closed.
 
-All subcommands emit ledger events to /var/lib/bl/ledger and are
-safe to roll back via 'bl defend <backend> --rollback <event-id>'.
+All apply paths emit ledger events under /var/lib/bl/ledger; failed
+applies emit defend_rollback automatically. Spec: DESIGN.md §5.4.
 HELP_EOF
 }
 
 bl_help_clean() {
     command cat <<'HELP_EOF'
-bl clean — apply agent-prescribed remediation (diff-confirmed).
+bl clean — apply agent-prescribed remediation (destructive, diff-confirmed).
 
-Usage: bl clean <kind> [options]
+Usage: bl clean htaccess <dir> --patch <file> [--yes] [--dry-run]
+       bl clean cron --user <user> --patch <file> [--yes] [--dry-run]
+       bl clean proc <pid> [--capture] [--yes]
+       bl clean file <path> [--reason <str>] [--yes]
        bl clean --undo <backup-id>
        bl clean --unquarantine <entry-id>
 
 Kinds:
-  file          unlink file (diff pre-shown, quarantine preserved)
-  htaccess      revert .htaccess to clean template
-  cron          remove injected crontab entry
-  proc          SIGTERM + verify argv match
+  htaccess      apply curator-authored .htaccess patch (backup written first)
+  cron          replace user crontab from patch (backup + crontab install)
+  proc          snapshot /proc + lsof, SIGTERM, escalate to SIGKILL on grace
+  file          MOVE to /var/lib/bl/quarantine — never unlinks
 
-Options:
-  --undo <backup-id>       restore a previous clean operation from backup
-  --unquarantine <entry-id>  restore a quarantined file to original path
+Operator-only restore:
+  --undo <backup-id>          restore htaccess/cron from a recorded backup
+  --unquarantine <entry-id>   restore a quarantined file to its original path
 
-All clean operations quarantine originals under /var/lib/bl/quarantine.
+Common:
+  --dry-run    print plan + write receipt; no mutations
+  --yes        skip the per-operation confirm prompt
+
+All file mutations land in /var/lib/bl/quarantine or /var/lib/bl/backups
+with a manifest entry for full reversal. Spec: DESIGN.md §5.5.
 HELP_EOF
 }
 
@@ -328,19 +363,22 @@ bl_help_case() {
     command cat <<'HELP_EOF'
 bl case — inspect, log, close, reopen cases.
 
+Cases are allocated by 'bl consult --new' (no 'open' verb here).
+Notes are appended via the memstore path bl-case/<case>/<artifact>.md.
+
 Usage: bl case <verb> [options]
 
 Verbs:
-  open <id>     open a new case
-  list          list cases on this host
-  log [<id>] [--audit]
-                show ledger entries; --audit appends per-kind summary
-                + decoded fence-wrapped wake entries from outbox
-                (consumes bl_fence_kind for forensic review)
-  show <id>     print case summary + ledger tail
-  note "..."    append a manual note to the current case
-  close <id>    mark case closed; persists memstore record
-  reopen <id>   reopen a closed case
+  list [--open|--closed|--all]    enumerate cases on this host
+  show [<id>]                     print 6-section case summary (memstore-backed)
+  log  [<id>] [--audit]           full chronological ledger; --audit appends
+                                  per-kind summary + decoded fence-wrapped
+                                  wake entries from outbox
+  close  [<id>] [--force]         render brief, persist closed.md, schedule
+                                  T+30d firewall-block retire-sweep
+  reopen <id> --reason <str>      re-attach a closed case to its session
+
+Spec: DESIGN.md §5.6.
 HELP_EOF
 }
 

@@ -2,6 +2,52 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== bl_help_* alignment with live dispatchers — 2026-04-26 (Tier-1 e2e fixup) ===
+
+End-to-end exercise of `bl` against tests/fixtures/ surfaced systemic drift
+between every per-verb help block (in src/bl.d/30-preflight.sh) and the real
+flag set its dispatcher accepts. Operators following `bl <verb> --help` were
+hitting "unknown flag" / "missing <arg>" errors on flags the help advertised
+but the impl never accepted. DESIGN.md §5.6 had already flagged case-help
+drift as known-stale; this sweep extends the same correction to observe /
+consult / run / defend / clean.
+
+[Fix] src/bl.d/30-preflight.sh — bl_help_observe now matches collector
+      flag sets: htaccess takes positional <dir> + [--recursive] (not
+      --root <path>); fs --mtime-cluster takes positional <path> +
+      --window <secs> (not --under <p> --cluster-window-secs N); sigs
+      is [--scanner ...] enumeration (not --root --sigs scan); proc
+      requires --user <user>; log journal --since is required + --grep
+      replaces the non-existent --unit. file/log apache/log modsec/cron/
+      firewall/bundle flag lists extended to match impl.
+[Fix] src/bl.d/30-preflight.sh — bl_help_consult lists the three real
+      modes (--new --trigger / --attach <id> / --sweep-mode --cve) per
+      DESIGN.md §5.2; the prior 'bl consult "<case description>"' form
+      was never accepted by the dispatcher.
+[Fix] src/bl.d/30-preflight.sh — bl_help_run shows positional <step-id>,
+      [--yes] [--dry-run] [--unsafe] [--explain], plus --list and
+      --batch [--max <N>] forms. The prior --tier flag did not exist.
+[Fix] src/bl.d/30-preflight.sh — bl_help_defend shows real per-backend
+      forms (modsec <rule-file-or-id> [--remove], firewall <ip>
+      [--backend ...], sig <sig-file> [--scanner ...]); --apply and
+      operator-callable --rollback never existed in src/bl.d/82-defend.sh.
+[Fix] src/bl.d/30-preflight.sh — bl_help_clean drops the dangerously
+      misleading "unlink file (diff pre-shown, quarantine preserved)"
+      kind line; per DESIGN.md §11 + src/bl.d/83-clean.sh:529 the file
+      verb MOVES to quarantine and never unlinks. Replaced with the four
+      real per-kind forms (htaccess/cron/proc/file) plus --undo /
+      --unquarantine restore paths.
+[Fix] src/bl.d/30-preflight.sh — bl_help_case drops the 'open <id>' and
+      'note "..."' verb entries that DESIGN.md §5.6 explicitly tracked
+      as known-stale; case allocation lives in 'bl consult --new' and
+      notes append via the memstore path bl-case/<case>/<artifact>.md.
+[Change] bl — regenerated from 27 parts via `make bl` after the help
+      block edits; assembled artifact stays in sync with src/bl.d/.
+
+Verification: bash -n + shellcheck clean; make -C tests test-quick
+green (33/33 BATS — smoke + cli surface). No behavior changes in any
+dispatcher; help-string text only.
+
 === M16 final fixup — 2026-04-26 (sentinel-review pass on full milestone; v0.6.0 stamp-up) ===
 
 Final adversarial 4-pass review across the full M16 milestone surfaced 3 MAJOR
