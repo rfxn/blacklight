@@ -52,6 +52,15 @@ ${BL_<KEY>:-default} fallback.
       contextually: colons for header-style separators, commas for
       inline parentheticals, parens for embedded clauses, periods for
       sentence breaks. No content changes; visual cleanup only.
+[Change] README.md — internal milestone vernacular stripped from
+      user-facing surfaces. Proof section live-trace bullet rewritten
+      to drop M12-timeline / Scene 0/1/2-hermetic / Scene 3 / M15
+      framing in favour of the substantive claim. Why-this-stack
+      Managed Agents paragraph dropped "in M15" qualifier from the
+      live-API verification claim. Skills bundle routing-model line
+      dropped "(M13 Path C)" tag. External readers do not know what
+      M-numbers, Scene refs, or Path designations mean and the prior
+      framing read as build-history notes leaking into shipped docs.
 [Change] README.md — provenance callout reframed + rfxn lowercased
       in prose. The "no customer data" callout was leading with
       disclaimer language; rewritten to lead from author lived

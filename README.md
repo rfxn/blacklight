@@ -309,7 +309,7 @@ flowchart LR
 
 Pre-flight validation (`apachectl -t`) runs in the agent's own sandbox before any rule promotes to `pending/`. Skills mount as platform-routed Skills; edits propagate to the next session without code deploy. Workspace-scoped commercially: per-tenant isolation is platform-native, blacklight does zero multi-tenant engineering.
 
-Live API surfaces verified against the `managed-agents-2026-04-01` beta header in M15: `POST /v1/agents/<id>` (update), `POST /v1/agents/<id>/archive` (retire), `sessions.create` body `{ agent: <id>, ... }`. See [`docs/managed-agents.md`](docs/managed-agents.md).
+Live API surfaces verified against the `managed-agents-2026-04-01` beta header: `POST /v1/agents/<id>` (update), `POST /v1/agents/<id>/archive` (retire), `sessions.create` body `{ agent: <id>, ... }`. See [`docs/managed-agents.md`](docs/managed-agents.md).
 
 ### Opus 4.7 + 1M context: full-bundle correlation
 
@@ -368,7 +368,7 @@ Operator-voice knowledge is the moat. The bundle is grounded in twenty-five year
 | Routing-skills | `routing-skills/` | 6 description-routed | Platform Skills primitives; lazy-loaded per turn |
 | Workspace corpora | `skills-corpus/` | 8 markdown corpora | Mounted as Files at session create; always present |
 
-**Routing model (M13 Path C):** the legacy `bl-skills` memory store is **retired**. Skills are description-routed Skills primitives; the platform router selects per turn from the description, so per-turn token load on routed Skills is bounded.
+**Routing model:** the legacy `bl-skills` memory store is **retired**. Skills are description-routed Skills primitives; the platform router selects per turn from the description, so per-turn token load on routed Skills is bounded.
 
 **Authoring discipline (non-negotiable):** each skill opens with a scenario from lived experience, states a non-obvious rule, gives one concrete example drawn from public APSB25-94 material, and names a failure mode. If the only available draft would be generic IR/SOC boilerplate, the gap is flagged and the file lands later. **Slop is not shipped.**
 
@@ -421,7 +421,7 @@ Behavioral verification is committed evidence, not a claim. Four artifacts:
 
 - **348 BATS tests across 17 files**, fixture-driven (no live API calls in CI). Pre-commit gate: debian12 + rocky9 must be green before every commit. Full release matrix runs across debian12, rocky9, ubuntu2404, centos7, rocky8, ubuntu2004.
 - **Live integration smoke**. [`tests/live/setup-live.bats`](tests/live/setup-live.bats) (`BL_LIVE`-gated) exercises the full provision path against the real Managed Agents API: workspace setup, agent ensure/archive, environment ensure, memory-store CRUD, Files upload, Skills create/update with CAS, session create, wake event, polled step-emit consume.
-- **Committed live trace**. [`tests/live/evidence/`](tests/live/evidence/) is a recorded run from the M12 timeline: Scenes 0/1/2 hermetic and green; Scene 3 hit a session-creation drift in the Managed Agents beta that M15 closed in source.
+- **Committed live trace**. [`tests/live/evidence/`](tests/live/evidence/) is a recorded end-to-end run against the live API. Workspace setup, case allocation, and observation substrate assembly are clean. The session-creation step in the recording hit a drift in the Managed Agents beta API that has since been closed in source; re-record locally with `make live-trace`.
 - **Stress corpus**. [`exhibits/fleet-01/`](exhibits/fleet-01/) is a deterministic, byte-identical, ~360k-token APSB25-94 forensic bundle (apache + modsec + fs + cron + proc + journal + maldet) with attack needles buried in realistic noise. Cross-stream correlation is the only resolution path; no single stream resolves the case.
 
 ---
