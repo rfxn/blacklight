@@ -2,7 +2,7 @@
 # Customized for single-binary layout: /usr/bin/bl + /var/lib/bl state dirs
 #
 %define name    blacklight
-%define version 0.3.0
+%define version 0.4.0
 %define release 1%{?dist}
 
 Name:           %{name}
@@ -65,6 +65,22 @@ fi
 %doc /usr/share/doc/blacklight/CHANGELOG
 
 %changelog
+* Sun Apr 26 2026 R-fx Networks <proj@rfxn.com> - 0.4.0-1
+- M14 substrate-hook (closed-loop response layer for LMD + ModSec on cPanel EA4):
+  vendored alert_lib v1.0.6 + tlog_lib v2.0.5 (slot 05/06 generated parts);
+  bl_notify multi-channel wrapper with notify_dispatched / notify_failed ledger
+  emission and notify.d/* channel registration; bl_consult_new dual-mode argv
+  (positional preserved; new --fingerprint + --dedup-window-hours flag-form);
+  bl trigger lmd verb + files/hooks/bl-lmd-hook adapter for LMD post_scan_hook
+  integration (lmd_hook_received + lmd_hit_degraded ledger events); cPanel Stage 4
+  ModSec userdata lock-in (45-cpanel.sh) with two-stage rollback +
+  cpanel_lockin_invoked / cpanel_lockin_failed / cpanel_lockin_rolled_back events;
+  G5 unattended-mode tier policy gate in 60-run.sh + bl_run_queue_unattended;
+  bl setup --install-hook lmd / --import-from-lmd verbs; /etc/blacklight/ +
+  notify.d/ + hooks/ provisioning in install.sh (cp -n preserves operator conf
+  on upgrade) + post_scan_hook removal + conf-tree prompt in uninstall.sh;
+  three new description-routed skill bundles (bl-capabilities, lmd-triggers,
+  cpanel-easyapache); docs/action-tiers.md §5.6 unattended-mode gate overrides.
 * Sat Apr 25 2026 R-fx Networks <proj@rfxn.com> - 0.3.0-1
 - M13 Skills primitive realignment (Path C): six routing Skills + 8 workspace corpora
   via Anthropic Skills + Files APIs; bl-skills memstore retired, bl-case retained for

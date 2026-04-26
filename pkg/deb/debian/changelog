@@ -1,3 +1,28 @@
+blacklight (0.4.0-1) unstable; urgency=medium
+
+  * M14 substrate-hook (closed-loop response layer for LMD + ModSec on cPanel EA4)
+  * Vendored alert_lib v1.0.6 + tlog_lib v2.0.5 (slot 05/06 generated parts)
+  * bl_notify multi-channel wrapper with notify_dispatched/notify_failed ledger emission
+  * notify.d/ channel registration (chmod 0600); LMD conf parse via --import-from-lmd
+  * bl_consult_new dual-mode argv: positional preserved + --fingerprint + --dedup-window-hours
+  * trigger_dedup_attached ledger event on within-window dedup match
+  * bl trigger lmd verb + files/hooks/bl-lmd-hook adapter (LMD post_scan_hook integration)
+  * lmd_hook_received + lmd_hit_degraded ledger events for hook-driven case opening
+  * cPanel Stage 4 ModSec userdata lock-in (45-cpanel.sh) with two-stage rollback
+  * cpanel_lockin_invoked/failed/rolled_back ledger events; restartsrv_httpd timeout-wrapped
+  * G5 unattended-mode tier policy gate in 60-run.sh + bl_run_queue_unattended helper
+  * bl_is_unattended 5-layer detection chain in 30-preflight.sh
+  * /etc/blacklight/blacklight.conf parsing with allowlisted keys + metacharacter rejection
+  * bl setup --install-hook lmd / --import-from-lmd verbs (84-setup.sh)
+  * /etc/blacklight/ + notify.d/ + hooks/ provisioning in install.sh (cp -n preserves operator conf)
+  * uninstall.sh: post_scan_hook removal + /etc/blacklight/ removal prompt + --keep-state
+  * Three description-routed skill bundles: bl-capabilities, lmd-triggers, cpanel-easyapache
+  * docs/action-tiers.md §5.6: unattended-mode gate overrides reference
+  * Test surface: 33/33 dev-mode test-quick green; new tests across 14-notify, 14-unattended,
+    14-trigger-lmd, 15-cpanel-apply, 08-setup, 10-install-paths
+
+ -- R-fx Networks <proj@rfxn.com>  Sun, 26 Apr 2026 06:00:00 +0000
+
 blacklight (0.3.0-1) unstable; urgency=medium
 
   * M13 Skills primitive realignment (Path C)
