@@ -48,6 +48,7 @@ Closed list. Every record's `source` MUST be one of these values. New sources re
 | `firewall.rule` | `bl observe firewall` | One active deny rule as seen by the auto-detected backend (APF / CSF / iptables / nftables). |
 | `sig.loaded` | `bl observe sigs` | One loaded signature (with hit count from the scanner's local history where available). |
 | `file.triage` | `bl observe file` | Aggregate triage output for one target path: stat + magic + strings + sha256 folded into one record. |
+| `substrate.category` | `bl observe substrate` | One host-substrate enumeration result for one of 12 axes (kernel, libc, init, web, firewall, scanner, log_surface, cron, package_mgr, integrity, virtualization, panel). The curator reads these BEFORE proposing defense steps so it avoids `defend.firewall` against an undetected backend or `defend.sig --scanner` against a missing scanner. |
 | `observe.summary` | Any `bl observe` | Emit-boundary summary record: counts by classification, top-N buckets, time span, invariant checks. Exactly one per `obs-NNNN` when the verb opts into summarization. |
 
 **Non-sources.** Wrapper and session metadata (case opened, step accepted, defense applied) are NOT evidence — they live in `bl-case/<case>/actions/*` and `/var/lib/bl/ledger/`, not in JSONL evidence. If a signal belongs to the action ledger, it does not belong here.
@@ -146,7 +147,21 @@ Records belonging to the same mtime-cluster share `cluster_id`. `cluster_size` a
 
 `strings_sample` is capped at the top-N printable ≥6-char strings (wrapper caps N=32); `strings_total` is the full count.
 
-### 3.13 `observe.summary`
+### 3.13 `substrate.category`
+
+```json
+{"category":"firewall","present":true,"detected":["apf"],"backend":"apf"}
+```
+
+```json
+{"category":"libc","present":true,"flavor":"glibc","version":"2.39","detected":[]}
+```
+
+Every record carries `category` (closed enum: `kernel | libc | init | web | firewall | scanner | log_surface | cron | package_mgr | integrity | virtualization | panel`), `present` (boolean), and a `detected` array (which concrete backends/binaries the wrapper found for this axis). Per-category extras fold in alongside — kernel adds `os_id` / `os_version_id` / `kernel_release` / `kernel_machine`; libc adds `flavor` / `version`; firewall adds `backend`; scanner adds the loaded-scanner name(s); etc. Exactly 12 records emit per invocation (one per axis), followed by a single `observe.summary` carrying `categories_present` / `categories_absent` / `elapsed_ms`.
+
+Use: the curator inspects `substrate.category` records (preferring the summary's `categories_present` list) before authoring any `defend.*` step. A `defend.firewall` against an absent firewall axis, or `defend.sig --scanner clamav` on a host where the scanner axis lists no clamav, is a curator bug — the substrate enumeration exists to prevent it.
+
+### 3.14 `observe.summary`
 
 ```json
 {"verb":"observe.log_apache","span":{"from":"2026-04-23T08:00:00Z","to":"2026-04-23T14:00:00Z"},"counts":{"records_in":148210,"records_emitted":148210,"filtered":0},"top_ips_200":[{"ip":"203.0.113.51","count":8412}],"top_paths_200":[{"path":"/pub/media/.../a.php","count":8412}],"status_histogram":{"200":140018,"404":7812,"500":380},"backend_meta":{"firewall_backend":"iptables","firewall_detect":"ok","sig_scanners_present":["maldet","yara"],"sig_scanners_missing":["clamav"]},"attention":["double_ext_jpg paths account for 5.7% of 200s — unusual"]}

@@ -2,6 +2,31 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== schemas/evidence-envelope: substrate.category source row — 2026-04-26 (Tier-2B) ===
+
+`bl observe substrate` has emitted `substrate.category` records since M4
+(12 records per invocation, one per host-substrate axis), and
+tests/helpers/assert-jsonl.bash already validates the source as a known
+JSONL contract. The closed-taxonomy table in
+schemas/evidence-envelope.md §2 was missing the row, leaving the doc
+surface out of sync with the wrapper's emit path and the test
+validator. End-to-end exercise surfaced the omission.
+
+[Fix] schemas/evidence-envelope.md §2 — adds `substrate.category` row
+      to the closed source taxonomy table; cross-references the
+      curator-side use (substrate must be enumerated BEFORE any
+      defend.* step is authored, so the defend cannot land on an
+      undetected backend or a missing scanner).
+[Fix] schemas/evidence-envelope.md §3.13 — new section documents the
+      record shape: `category` (12-value closed enum), `present`
+      (boolean), `detected` (array), plus per-category extras (kernel
+      adds os/kernel fields; libc adds flavor/version; firewall adds
+      backend; etc). The prior §3.13 (`observe.summary`) renumbers to
+      §3.14 with body intact.
+
+Verification: docs-only — no bash or bl regeneration. make -C tests
+test-quick green (33/33).
+
 === bl_observe_firewall comment-line filter — 2026-04-26 (Tier-2A e2e fixup) ===
 
 apf /etc/apf/deny_hosts.rules and csf /etc/csf/csf.deny ship with multi-line
