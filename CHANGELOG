@@ -12,6 +12,13 @@ https://github.com/rfxn/blacklight
 [New] M14 P5 — tests/fixtures/blacklight-conf-sample.conf — fixture covering all keys + reject paths
 [Change] M14 P5 — tests/02-preflight.bats — assert graceful fallback on absent conf
 [Change] M14 P5 — bl regenerated
+[New] M14 P8 — src/bl.d/45-cpanel.sh — _bl_cpanel_present, _bl_cpanel_lockin_global, _bl_cpanel_lockin_uservhost; two-stage rollback with critical-notify on rollback fail
+[New] M14 P8 — BL_CPANEL_SCRIPT_DIR + BL_CPANEL_DIR env hatches for test isolation
+[Change] M14 P8 — src/bl.d/82-defend.sh — Stage 4 cPanel lock-in after apachectl graceful (R4: timeout-wrapped per BL_CPANEL_LOCKIN_TIMEOUT_SECONDS)
+[New] M14 P8 — tests/15-cpanel-apply.bats — G6 + G7 scenarios (7 tests; file numbered 15 due to 14-notify.bats from P4)
+[New] M14 P8 — tests/helpers/cpanel-mock.bash — programmable restartsrv_httpd / ensure_vhost_includes stubs
+[Change] M14 P8 — tests/06-defend.bats — non-cPanel regression assertion
+[Change] M14 P8 — bl regenerated
 [New] M14 P1 — schemas/ledger-event.json: extend `kind` enum +8 M14 values (lmd_hook_received, trigger_dedup_attached, lmd_hit_degraded, notify_dispatched, notify_failed, cpanel_lockin_invoked, cpanel_lockin_failed, cpanel_lockin_rolled_back)
 [New] M14 P1 — schemas/step.json: extend `verb` enum +3 M14 values (trigger.lmd, setup.install_hook, setup.import_from_lmd)
 [New] M14 P1 — tests/05-consult-run-case.bats: add G17.5 positive-accept tests for new ledger kinds + step verbs; add regression guard for unknown-kind rejection
