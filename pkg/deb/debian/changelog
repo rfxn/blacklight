@@ -1,3 +1,22 @@
+blacklight (0.5.0-1) unstable; urgency=medium
+
+  * M15 + post-M15 consolidation: live API correctness against managed-agents-2026-04-01
+  * Sessions events shape: {events:[...]} wrapper across 27-outbox/50-consult/60-run/70-case
+  * Sessions.create body: agent (not agent_id) + environment_id + resources[] (P5/F12)
+  * Environments body: canonical config.type/config.networking.unrestricted (no packages field)
+  * Skills API workspace-allowlist fallback: routing-skill SKILL.md uploaded as corpus Files
+  * Skills API probe: body+status parsing portable across real curl + curator-mock test shim
+  * bl_preflight seeds BL_MEMSTORE_CASE_ID from state.json before cached-agent-id early-return
+  * Live integration smoke (tests/live/setup-live.bats) 4/4 green under BL_LIVE=1
+  * Hermetic suite 348/0 on debian12 + rocky9 (P6 agent-body shape test rewritten)
+  * New top-level docs: ANTHROPIC-API-NOTES.md (10 API friction items with severity)
+  * New top-level doc: HACKATHON_TIMELINE.md (6-day development record)
+  * DESIGN.md / PRD.md / FUTURE.md re-promoted to committed operator-tracked docs
+  * Archive housekeeping: .rdf/archive/Mx/ → date-prefixed 2026-04-XX-Mx/ layout
+  * M13 plan moved from loose archive root into 2026-04-25-M13/PLAN-M13.md
+
+ -- R-fx Networks <proj@rfxn.com>  Sun, 26 Apr 2026 16:00:00 +0000
+
 blacklight (0.4.0-1) unstable; urgency=medium
 
   * M14 substrate-hook (closed-loop response layer for LMD + ModSec on cPanel EA4)

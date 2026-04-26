@@ -357,8 +357,9 @@ bl_setup_seed_corpus() {
 }
 
 # bl_setup_seed_skills <mode> — mode: dry-run | apply
-# For each routing-skills/<name>/, hash description+body, diff vs state.json `.skills`.
-# If skill_id absent: bl_skills_create. If sha changed: bl_skills_versions_create.
+# Probes /v1/skills availability; if the endpoint is live, creates/bumps routing Skills.
+# If /v1/skills returns 404 (endpoint unavailable), falls back to uploading each
+# routing-skill SKILL.md as a corpus File so the content remains available to sessions.
 bl_setup_seed_skills() {
     local mode="${1:-apply}"
     local repo_root
@@ -374,6 +375,29 @@ bl_setup_seed_skills() {
         bl_error_envelope setup "no routing Skills found at $rs_dir; expected 6"
         return "$BL_EX_PREFLIGHT_FAIL"
     fi
+
+    # Probe Skills API availability. Distinguish 404 (endpoint not enabled in this
+    # workspace — Path A allowlist not granted) from 401/403 (auth failure, propagate)
+    # and 5xx (transient, propagate). Output uses curl's "<body>\n<http_code>" via -w
+    # so it parses identically under real curl AND the test curl shim
+    # (tests/helpers/curator-mock.bash) which dumps body+newline+status.
+    local probe_resp probe_status
+    probe_resp=$(curl -sS --max-time 10 -w '\n%{http_code}' \
+        "https://api.anthropic.com/v1/skills" \
+        -H "x-api-key: ${ANTHROPIC_API_KEY:-}" \
+        -H "anthropic-version: 2023-06-01" \
+        -H "anthropic-beta: managed-agents-2026-04-01" 2>&1) || true   # network/curl fail → status="" below → fallback path
+    probe_status="${probe_resp##*$'\n'}"
+    if [[ "$probe_status" == "404" ]]; then
+        bl_warn "bl setup: Skills API unavailable (HTTP 404); uploading routing-skills as corpus Files"
+        bl_setup_seed_skills_as_files "$mode" "$rs_dir"
+        return $?
+    fi
+    if [[ ! "$probe_status" =~ ^2 ]]; then
+        bl_error_envelope setup "Skills API probe failed (HTTP $probe_status); cannot seed skills"
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
+
     local state_file="$BL_STATE_DIR/state.json"
     local existing_state="{}"
     [[ -f "$state_file" ]] && existing_state=$(command cat "$state_file")
@@ -410,20 +434,78 @@ bl_setup_seed_skills() {
             existing_state=$(printf '%s' "$existing_state" | jq \
                 --arg n "$name" --arg id "$new_id" --arg v "$new_version" \
                 --arg ds "$desc_sha" --arg bs "$body_sha" \
-                '.skills[$n] = {id: $id, version: $v, description_sha256: $ds, body_sha256: $bs} | .agent.skill_versions[$n] = $v')
+                '.skills[$n] = {id: $id, version: $v, description_sha256: $ds, body_sha256: $bs}')
         else
             new_version=$(bl_skills_versions_create "$existing_id" "$desc_file" "$body_file") || return $?
             bl_info "bl setup: bumped Skill $name → version $new_version"
             existing_state=$(printf '%s' "$existing_state" | jq \
                 --arg n "$name" --arg v "$new_version" \
                 --arg ds "$desc_sha" --arg bs "$body_sha" \
-                '.skills[$n].version = $v | .skills[$n].description_sha256 = $ds | .skills[$n].body_sha256 = $bs | .agent.skill_versions[$n] = $v')
+                '.skills[$n].version = $v | .skills[$n].description_sha256 = $ds | .skills[$n].body_sha256 = $bs')
         fi
     done
     if [[ "$mode" != "dry-run" ]]; then
         local tmp_state="$state_file.tmp.$$"
         printf '%s' "$existing_state" > "$tmp_state"
         command mv "$tmp_state" "$state_file"
+    fi
+    return "$BL_EX_OK"
+}
+
+# bl_setup_seed_skills_as_files <mode> <rs-dir> — Skills API fallback.
+# Uploads each routing-skill SKILL.md to the Files API so content is available to
+# sessions as corpus files mounted under /skills/<name>-skill.md.
+bl_setup_seed_skills_as_files() {
+    local mode="$1" rs_dir="$2"
+    local state_file="$BL_STATE_DIR/state.json"
+    local existing_state="{}"
+    [[ -f "$state_file" ]] && existing_state=$(command cat "$state_file")
+    local d name body_file mount_path content_sha existing_fid existing_sha new_fid
+    local upload_count=0 skip_count=0 supersede_count=0
+    for d in "$rs_dir"/*/; do
+        name=$(basename "$d")
+        body_file="$d/SKILL.md"
+        [[ -r "$body_file" ]] || {
+            bl_warn "bl setup: skipping $name (skills-as-files) — missing SKILL.md"
+            continue
+        }
+        mount_path="/skills/${name}-skill.md"
+        content_sha=$(command sha256sum "$body_file" | command awk '{print $1}')
+        existing_fid=$(printf '%s' "$existing_state" | jq -r --arg p "$mount_path" '.files[$p].file_id // empty')
+        existing_sha=$(printf '%s' "$existing_state" | jq -r --arg p "$mount_path" '.files[$p].content_sha256 // empty')
+        if [[ "$content_sha" == "$existing_sha" && -n "$existing_fid" ]]; then
+            skip_count=$((skip_count + 1))
+            bl_debug "bl_setup_seed_skills_as_files: skip $mount_path (sha matches)"
+            [[ "$mode" == "dry-run" ]] && printf 'would skip %s (no change)\n' "$mount_path"
+            continue
+        fi
+        if [[ "$mode" == "dry-run" ]]; then
+            printf 'would upload %s (skill fallback)\n' "$mount_path"
+            upload_count=$((upload_count + 1))
+            continue
+        fi
+        new_fid=$(bl_files_create "text/markdown" "$body_file") || return $?
+        bl_info "bl setup: uploaded ${mount_path} → $new_fid (skill fallback)"
+        existing_state=$(printf '%s' "$existing_state" | jq \
+            --arg p "$mount_path" --arg fid "$new_fid" --arg sha "$content_sha" \
+            --arg ts "$(command date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '.files[$p] = {file_id: $fid, content_sha256: $sha, uploaded_at: $ts}')
+        if [[ -n "$existing_fid" ]]; then
+            existing_state=$(printf '%s' "$existing_state" | jq \
+                --arg fid "$existing_fid" --arg p "$mount_path" \
+                --arg ts "$(command date -u +%Y-%m-%dT%H:%M:%SZ)" --arg new "$new_fid" \
+                '.files_pending_deletion += [{file_id: $fid, marked_at: $ts, reason: ("superseded by " + $new), previous_mount_path: $p}]')
+            supersede_count=$((supersede_count + 1))
+        fi
+        upload_count=$((upload_count + 1))
+    done
+    if [[ "$mode" != "dry-run" ]]; then
+        local tmp_state="$state_file.tmp.$$"
+        printf '%s' "$existing_state" > "$tmp_state"
+        command mv "$tmp_state" "$state_file"
+        bl_info "bl setup: skill fallback — $upload_count uploaded, $skip_count skipped, $supersede_count superseded"
+    else
+        bl_info "bl setup: skill fallback — would upload $upload_count, would skip $skip_count"
     fi
     return "$BL_EX_OK"
 }
@@ -842,7 +924,6 @@ bl_setup_ensure_memstore() {
 }
 
 # bl_setup_compose_agent_body — emits agent-create JSON to stdout per setup-flow.md §4.2.
-# Includes skill_versions field populated from state.json (Path C addition).
 bl_setup_compose_agent_body() {
     local repo_root resolved
     resolved=$(readlink -f "$0" 2>/dev/null || printf '.')   # readlink -f may fail when $0 is relative / sourced — fallback to cwd
@@ -854,25 +935,15 @@ bl_setup_compose_agent_body() {
     for f in "$prompt_file" "$step_schema" "$def_schema" "$int_schema"; do
         [[ -r "$f" ]] || { bl_error_envelope setup "input file missing: $f"; return "$BL_EX_PREFLIGHT_FAIL"; }
     done
-    local sv_json='{}' skills_json='[]'
-    local state_file="$BL_STATE_DIR/state.json"
-    if [[ -f "$state_file" ]]; then
-        sv_json=$(jq -c '.agent.skill_versions // {}' "$state_file" 2>/dev/null || printf '{}')
-        skills_json=$(jq -c '[.skills[].id] // []' "$state_file" 2>/dev/null || printf '[]')
-    fi
     jq -n \
         --rawfile prompt "$prompt_file" \
         --slurpfile stepRaw "$step_schema" \
         --slurpfile defRaw  "$def_schema" \
         --slurpfile intRaw  "$int_schema" \
-        --argjson sv "$sv_json" \
-        --argjson skills "$skills_json" \
         '{
             name: "bl-curator",
             model: "claude-opus-4-7",
             system: $prompt,
-            skill_versions: $sv,
-            skills: $skills,
             tools: [
                 {type: "agent_toolset_20260401"},
                 {
@@ -898,14 +969,21 @@ bl_setup_compose_agent_body() {
 }
 
 # bl_setup_compose_env_body — emits env-create JSON per setup-flow.md §4.3.
+# Canonical body (managed-agents-2026-04-01, probed 2026-04-26):
+#   {name, config:{type:"cloud", networking:{type:"unrestricted"}}}
+# `packages` is NOT a valid field — pre-installed apt packages are not
+# supported at env-create. Sessions install via bash tool when needed
+# (apache2, libapache2-mod-security2, modsecurity-crs, yara, jq, zstd,
+# duckdb, pandoc, weasyprint). Future API surfaces may add a setup_script
+# or image field; the agent prompts MUST therefore drive package install
+# explicitly per session until then. Tracked as a Path C gap.
 bl_setup_compose_env_body() {
     jq -n '{
         name: "bl-curator-env",
-        type: "cloud",
-        packages: {
-            apt: ["apache2","libapache2-mod-security2","modsecurity-crs","yara","jq","zstd","duckdb","pandoc","weasyprint"]
-        },
-        networking: {type: "unrestricted"}
+        config: {
+            type: "cloud",
+            networking: {type: "unrestricted"}
+        }
     }'
 }
 

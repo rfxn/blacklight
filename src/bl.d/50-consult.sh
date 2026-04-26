@@ -160,8 +160,9 @@ bl_consult_register_curator() {
     # (sha256[:16] of the operator artifact) is conveyed. Operator-derived input has lower
     # injection surface than raw payload bytes — an attacker would need to control the
     # operator's local artifact to influence it. Hardening tracked for M11+.
+    # API shape: POST /v1/sessions/<id>/events requires {events:[...]} wrapper.
     jq -n --arg c "$case_id" --arg f "$fp" \
-        '{type:"user.message", content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f+"; read first per system-prompt §3")}]}' \
+        '{events:[{type:"user.message", content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f+"; read first per system-prompt §3")}]}]}' \
         > "$body_file"
     bl_api_call POST "/v1/sessions/$session_id/events" "$body_file" >/dev/null
     local rc=$?
@@ -176,10 +177,12 @@ bl_consult_create_session() {
     [[ -z "$case_id" ]] && { bl_error_envelope consult "bl_consult_create_session: case-id required"; return "$BL_EX_USAGE"; }
     local state_file="$BL_STATE_DIR/state.json"
     [[ -f "$state_file" ]] || { bl_error_envelope consult "state.json missing; run 'bl setup --sync' first"; return "$BL_EX_PREFLIGHT_FAIL"; }
-    local agent_id
+    local agent_id env_id
     agent_id=$(jq -r '.agent.id // empty' "$state_file")
+    env_id=$(jq -r '.env_id // empty' "$state_file")
     [[ -z "$agent_id" ]] && { bl_error_envelope consult "agent.id missing in state.json; run 'bl setup --sync'"; return "$BL_EX_PREFLIGHT_FAIL"; }
-    # Build resources[] array — 8 workspace files + per-case files for this case_id
+    [[ -z "$env_id" ]] && { bl_error_envelope consult "env_id missing in state.json; run 'bl setup --sync'"; return "$BL_EX_PREFLIGHT_FAIL"; }
+    # Build resources[] array — workspace files + per-case files for this case_id
     local resources_json
     resources_json=$(jq -c \
         --arg c "$case_id" \
@@ -189,13 +192,12 @@ bl_consult_create_session() {
         ' "$state_file")
     local body_file
     body_file=$(command mktemp)
-    # F12 fix — live API rejects agent_id with "Did you mean 'agent'?".
-    # Field name in sessions.create body is 'agent', not 'agent_id'. The
-    # response shape is unrelated and may still carry agent_id.
+    # Sessions.create requires 'agent' (not 'agent_id') and 'environment_id'.
     jq -n \
         --arg aid "$agent_id" \
+        --arg eid "$env_id" \
         --argjson rs "$resources_json" \
-        '{agent: $aid, resources: $rs}' > "$body_file"
+        '{agent: $aid, environment_id: $eid, resources: $rs}' > "$body_file"
     local resp rc session_id
     resp=$(bl_api_call POST "/v1/sessions" "$body_file")
     rc=$?
@@ -407,8 +409,12 @@ bl_consult_new() {
         [[ -n "$existing" ]] && bl_warn "trigger fingerprint $fp already open in $existing (use --dedup to attach, or proceed for new)"
     fi
 
+    # Retry limit is generous: fresh workspaces with a pre-populated shared memstore
+    # (same API key, prior sessions) produce 409 conflicts for each already-used case-id.
+    # The counter fast-forwards past them; each retry costs only a counter increment.
+    local max_attempts="${BL_CONSULT_ALLOC_MAX_RETRIES:-50}"
     local case_id attempt=0
-    while (( attempt < 3 )); do
+    while (( attempt < max_attempts )); do
         case_id=$(bl_consult_allocate_case_id) || return $?
         if bl_consult_materialize_case "$case_id" "$fp" "$notes"; then
             printf '%s' "$case_id" > "$BL_CASE_CURRENT_FILE"
@@ -421,9 +427,9 @@ bl_consult_new() {
             return "$BL_EX_OK"
         fi
         attempt=$((attempt + 1))
-        bl_debug "bl_consult_new: materialize conflict (attempt $attempt/3); retrying"
+        bl_debug "bl_consult_new: materialize conflict (attempt $attempt/$max_attempts); retrying"
     done
-    bl_error_envelope consult "case-id allocation exhausted 3 retries"
+    bl_error_envelope consult "case-id allocation exhausted $max_attempts retries"
     return "$BL_EX_CONFLICT"
 }
 

@@ -283,7 +283,7 @@ bl_case_close_stage2_render() {
     local wake_body
     wake_body=$(mktemp)
     jq -n --arg m "$fid_md" --arg c "$case_id" \
-        '{type:"user.message", content:[{type:"text", text:("render file_id="+$m+" to HTML and PDF; write to /mnt/session/outputs/brief-"+$c+".{html,pdf}")}]}' > "$wake_body"
+        '{events:[{type:"user.message", content:[{type:"text", text:("render file_id="+$m+" to HTML and PDF; write to /mnt/session/outputs/brief-"+$c+".{html,pdf}")}]}]}' > "$wake_body"
     bl_api_call POST "/v1/sessions/$session_id/events" "$wake_body" >/dev/null || {
         command rm -f "$wake_body"
         printf '|'

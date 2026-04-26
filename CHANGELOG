@@ -2,6 +2,114 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== v0.5.0 release — 2026-04-26 (M15 + post-M15 consolidation) ===
+
+Live API correctness round 2 + integration-notes formalization.
+
+Sessions events shape | 2026-04-26 — silent breaking change in upstream
+      managed-agents-2026-04-01 beta surface. Bare-event payload
+      ({type:"user.message", content:[…]}) was working through M12 P5.5
+      (2026-04-25 last live-trace harness run); the {events:[…]} wrapper
+      requirement surfaced 24h later during M15 P8 live integration smoke.
+[Fix] src/bl.d/27-outbox.sh — outbox drain wraps stored wake payload in
+      {events:[.]} via jq before POST /v1/sessions/<sid>/events.
+[Fix] src/bl.d/50-consult.sh — bl_consult_register_curator wraps the
+      direct-session wake event in {events:[…]}.
+[Fix] src/bl.d/60-run.sh — bl_run step-result event wrapped in {events:[…]}.
+[Fix] src/bl.d/70-case.sh — bl_case_close render-brief event wrapped in
+      {events:[…]}.
+
+Sessions.create body | 2026-04-26 — finalized field shape against the live
+      API. Field is `agent` (not `agent_id`); `environment_id` is required;
+      resources[] accepts entries shaped {type, file_id, mount_path}.
+[Fix] src/bl.d/50-consult.sh — bl_consult_create_session reads env_id from
+      state.json, fails fast with PREFLIGHT_FAIL if missing, includes both
+      `agent` and `environment_id` in the create body alongside the
+      resources[] array (8 corpus files + 6 skill-fallback files when
+      Skills API is gated).
+[Fix] src/bl.d/50-consult.sh — bl_consult_new retry limit raised from 3 to
+      ${BL_CONSULT_ALLOC_MAX_RETRIES:-50}. Fresh workspace counters start at
+      0 but shared-API-key memstores carry pre-existing case-id paths;
+      every collision costs only a counter increment so 50 retries is
+      strictly cheaper than failure.
+
+Environments.create body | 2026-04-26 — public API surface accepts
+      {name, config:{type:"cloud", networking:{type:"unrestricted"}}} only.
+      The legacy {type:"cloud", packages:{apt:[…]}, networking:{…}} top-
+      level shape returns 400 "Extra inputs are not permitted" for every
+      field but `name`. apt-package install is now session-driven via the
+      curator's bash tool until Anthropic exposes a setup-script field.
+[Change] src/bl.d/84-setup.sh — bl_setup_compose_env_body emits the
+      canonical nested-config body. networking:"unrestricted" preserves
+      session ability to apt-install apache2 / mod_security2 / yara /
+      duckdb / pandoc / weasyprint at runtime.
+[Change] docs/setup-flow.md §4.3 — body shape rewritten with packages-as-
+      Path-C-gap note; legacy body removed.
+
+Skills API workspace-allowlist fallback | 2026-04-26 — /v1/skills returns
+      404 for non-allowlisted workspaces. Probe distinguishes 404 (gated)
+      from 401/403 (auth) and 5xx (transient).
+[Change] src/bl.d/84-setup.sh — bl_setup_seed_skills probes /v1/skills
+      with the body+status format ('\n%{http_code}'); on 404, falls
+      through to bl_setup_seed_skills_as_files which uploads each
+      routing-skills/<name>/SKILL.md as a corpus File at
+      /skills/<name>-skill.md. Probe parsing is portable across real curl
+      AND the test curl shim (tests/helpers/curator-mock.bash).
+
+Preflight memstore-id seeding | 2026-04-26 — closes M15 fallout where
+      consult/run verbs collapsed to literal "memstore_bl_case" default.
+[Fix] src/bl.d/30-preflight.sh — BL_MEMSTORE_CASE_ID seeded from
+      state.json (.case_memstores._default) BEFORE the cached-agent-id
+      early-return path. Old per-key file (state/memstore-case-id) was
+      removed during the M13 state-migration; per-verb fallbacks were
+      reading the now-deleted file and resolving to the literal default.
+
+Live integration smoke + fixture parity | 2026-04-26
+[New] tests/live/setup-live.bats — BL_LIVE=1 gated; runs the full
+      setup→check→consult→reset cycle against the real Anthropic
+      workspace. 4/4 green. Test 3 (consult --new) extracts the allocated
+      case-id via grep ... | tail -1 (not head -1) — earlier output lines
+      may name OTHER cases (dedup-fingerprint warnings, materialize
+      409 conflicts) so the trailing standalone case-id line is the only
+      reliable anchor.
+[Change] tests/08-setup.bats — P6 agent-body-shape test rewritten to
+      assert the managed-agents-2026-04-01 contract: name + model +
+      system + tools[] (≥1 entry); forbidden: skill_versions, thinking,
+      output_config. Replaces the old skill_versions + skills-array
+      assertions which targeted a since-removed body shape.
+
+Top-level docs (operator-tracked) | 2026-04-26
+[New] ANTHROPIC-API-NOTES.md — operator log of 10 numbered API friction
+      points with severity tags (BLOCKING / DEGRADED / MINOR / resolved),
+      probe windows (2026-04-24 → 2026-04-26), workarounds, and ideal
+      API surfaces. Cross-linked from HACKATHON_TIMELINE.md.
+[New] HACKATHON_TIMELINE.md — 6-day development record. v1 hackathon
+      scaffolding (Days 1-3, archived to .rdf/archive/legacy/) through
+      pivot day (2026-04-24, scorched earth + DESIGN.md v2 + M0–M9
+      authored same-day) through milestone-driven build (M9.5–M15) to
+      submission state. Cumulative: 289 commits, 119 jsonl sessions,
+      0 → v0.5.0 in 6 calendar days.
+[New] DESIGN.md / PRD.md / FUTURE.md — re-promoted to committed
+      operator-tracked top-level docs. Removed from .git/info/exclude
+      working-files list.
+
+Archive housekeeping | 2026-04-26 (operator-local; not reflected in commits)
+- .rdf/archive/M{0..15-final}/ renamed to date-prefixed form
+  .rdf/archive/2026-04-{24,25,26}-M*/ matching the convention used for
+  docs/specs/2026-04-XX-M*-*.md. 19 milestone dirs + legacy/ + docs-*.
+- M13 plan moved from loose .rdf/archive/PLAN.md (where it landed during
+  M15-final consolidation) into 2026-04-25-M13/PLAN-M13.md.
+- Final DESIGN.md snapshot moved into 2026-04-26-M15-final/DESIGN.md
+  (was loose at archive root after M15-final consolidation).
+
+[Change] src/bl.d/00-header.sh — BL_VERSION 0.4.0 → 0.5.0.
+[Change] pkg/rpm/blacklight.spec — %define version 0.4.0 → 0.5.0; new
+      %changelog stanza for 0.5.0-1 summarizing post-M15 consolidation;
+      preserves 0.4.0-1 + earlier history below.
+[Change] pkg/deb/debian/changelog — new (0.5.0-1) entry at top with
+      release summary; preserves (0.4.0-1) + earlier entries below.
+[Change] bl — regenerated.
+
 === M15 — API correctness against live Anthropic Managed Agents ===
 
 Post-M15 baseline-green triage (2026-04-26)

@@ -141,20 +141,21 @@ Body MAY include:
 ### 4.3 Create environment — `POST /v1/environments`
 
 - Method: `POST`
-- Body:
+- Body (canonical, probed 2026-04-26 against `managed-agents-2026-04-01`):
 
 ```json
 {
   "name": "bl-curator-env",
-  "type": "cloud",
-  "packages": {
-    "apt": ["apache2", "libapache2-mod-security2", "modsecurity-crs", "yara", "jq", "zstd", "duckdb", "pandoc", "weasyprint"]
-  },
-  "networking": {"type": "unrestricted"}
+  "config": {
+    "type": "cloud",
+    "networking": {"type": "unrestricted"}
+  }
 }
 ```
 
-`networking.type: unrestricted` is required at env creation for apt to reach its mirror. Sessions subsequently attached to this env can use `limited` networking without re-creating the env (per DESIGN.md §8.2 item 2).
+- Fields nested under `config` (not at top level) — bare `type:"cloud"` at top-level is rejected with HTTP 400 "Extra inputs are not permitted".
+- `networking.type` accepts `"unrestricted"` (full egress except legal blocklist) or `"package_managers_and_custom"` (with `allowed_hosts:[…]`). Path C uses `unrestricted` so sessions can `apt install` apache2 / mod_security2 / yara / duckdb / pandoc / weasyprint at runtime.
+- **Packages are NOT pre-installable at env-create** — the public API has no `packages` field. The curator agent's system prompt drives `apt install` via the bash tool inside sessions; this re-runs each fresh session until Anthropic exposes a setup-script or pre-baked-image field. Tracked as a Path C gap.
 
 - Success: persist `id` to `/var/lib/bl/state/env-id`.
 - Failure modes: identical to §4.2.

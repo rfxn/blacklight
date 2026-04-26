@@ -28,7 +28,7 @@
 # Version + exit-code constants (from docs/exit-codes.md §1)
 # ----------------------------------------------------------------------------
 
-readonly BL_VERSION="0.4.0"
+readonly BL_VERSION="0.5.0"
 
 readonly BL_EX_OK=0
 readonly BL_EX_USAGE=64
@@ -3184,7 +3184,8 @@ bl_outbox_drain() {
                 [[ -r "$sid_file" ]] && sid=$(command cat "$sid_file")
                 if [[ -n "$sid" ]]; then
                     body_tmp=$(mktemp)
-                    printf '%s' "$payload" > "$body_tmp"
+                    # Wrap stored event payload in {events:[...]} — API requires the wrapper.
+                    printf '%s' "$payload" | jq -c '{events:[.]}' > "$body_tmp"
                     bl_api_call POST "/v1/sessions/$sid/events" "$body_tmp" >/dev/null || rc=$?
                     command rm -f "$body_tmp"
                 else
@@ -3650,7 +3651,14 @@ bl_preflight() {
         return "$BL_EX_PREFLIGHT_FAIL"
     fi
 
-    # 4. Cached agent-id?
+    # 4. Seed BL_MEMSTORE_CASE_ID from state.json if not already set.
+    # Old per-key file (memstore-case-id) was removed in M15 state.json migration.
+    if [[ -z "${BL_MEMSTORE_CASE_ID:-}" ]]; then
+        BL_MEMSTORE_CASE_ID=$(jq -r '.case_memstores._default // empty' "$BL_STATE_DIR/state.json" 2>/dev/null || printf '')   # 2>/dev/null: missing state.json on first-run is normal; empty → per-verb checks handle
+        bl_debug "bl_preflight: BL_MEMSTORE_CASE_ID=$BL_MEMSTORE_CASE_ID"
+    fi
+
+    # 5. Cached agent-id?
     if [[ -r "$BL_AGENT_ID_FILE" ]]; then
         BL_AGENT_ID="$(command cat "$BL_AGENT_ID_FILE")"
         if [[ -n "$BL_AGENT_ID" ]]; then
@@ -6508,8 +6516,9 @@ bl_consult_register_curator() {
     # (sha256[:16] of the operator artifact) is conveyed. Operator-derived input has lower
     # injection surface than raw payload bytes — an attacker would need to control the
     # operator's local artifact to influence it. Hardening tracked for M11+.
+    # API shape: POST /v1/sessions/<id>/events requires {events:[...]} wrapper.
     jq -n --arg c "$case_id" --arg f "$fp" \
-        '{type:"user.message", content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f+"; read first per system-prompt §3")}]}' \
+        '{events:[{type:"user.message", content:[{type:"text", text:("case opened: "+$c+"; trigger_fingerprint="+$f+"; read first per system-prompt §3")}]}]}' \
         > "$body_file"
     bl_api_call POST "/v1/sessions/$session_id/events" "$body_file" >/dev/null
     local rc=$?
@@ -6524,10 +6533,12 @@ bl_consult_create_session() {
     [[ -z "$case_id" ]] && { bl_error_envelope consult "bl_consult_create_session: case-id required"; return "$BL_EX_USAGE"; }
     local state_file="$BL_STATE_DIR/state.json"
     [[ -f "$state_file" ]] || { bl_error_envelope consult "state.json missing; run 'bl setup --sync' first"; return "$BL_EX_PREFLIGHT_FAIL"; }
-    local agent_id
+    local agent_id env_id
     agent_id=$(jq -r '.agent.id // empty' "$state_file")
+    env_id=$(jq -r '.env_id // empty' "$state_file")
     [[ -z "$agent_id" ]] && { bl_error_envelope consult "agent.id missing in state.json; run 'bl setup --sync'"; return "$BL_EX_PREFLIGHT_FAIL"; }
-    # Build resources[] array — 8 workspace files + per-case files for this case_id
+    [[ -z "$env_id" ]] && { bl_error_envelope consult "env_id missing in state.json; run 'bl setup --sync'"; return "$BL_EX_PREFLIGHT_FAIL"; }
+    # Build resources[] array — workspace files + per-case files for this case_id
     local resources_json
     resources_json=$(jq -c \
         --arg c "$case_id" \
@@ -6537,13 +6548,12 @@ bl_consult_create_session() {
         ' "$state_file")
     local body_file
     body_file=$(command mktemp)
-    # F12 fix — live API rejects agent_id with "Did you mean 'agent'?".
-    # Field name in sessions.create body is 'agent', not 'agent_id'. The
-    # response shape is unrelated and may still carry agent_id.
+    # Sessions.create requires 'agent' (not 'agent_id') and 'environment_id'.
     jq -n \
         --arg aid "$agent_id" \
+        --arg eid "$env_id" \
         --argjson rs "$resources_json" \
-        '{agent: $aid, resources: $rs}' > "$body_file"
+        '{agent: $aid, environment_id: $eid, resources: $rs}' > "$body_file"
     local resp rc session_id
     resp=$(bl_api_call POST "/v1/sessions" "$body_file")
     rc=$?
@@ -6755,8 +6765,12 @@ bl_consult_new() {
         [[ -n "$existing" ]] && bl_warn "trigger fingerprint $fp already open in $existing (use --dedup to attach, or proceed for new)"
     fi
 
+    # Retry limit is generous: fresh workspaces with a pre-populated shared memstore
+    # (same API key, prior sessions) produce 409 conflicts for each already-used case-id.
+    # The counter fast-forwards past them; each retry costs only a counter increment.
+    local max_attempts="${BL_CONSULT_ALLOC_MAX_RETRIES:-50}"
     local case_id attempt=0
-    while (( attempt < 3 )); do
+    while (( attempt < max_attempts )); do
         case_id=$(bl_consult_allocate_case_id) || return $?
         if bl_consult_materialize_case "$case_id" "$fp" "$notes"; then
             printf '%s' "$case_id" > "$BL_CASE_CURRENT_FILE"
@@ -6769,9 +6783,9 @@ bl_consult_new() {
             return "$BL_EX_OK"
         fi
         attempt=$((attempt + 1))
-        bl_debug "bl_consult_new: materialize conflict (attempt $attempt/3); retrying"
+        bl_debug "bl_consult_new: materialize conflict (attempt $attempt/$max_attempts); retrying"
     done
-    bl_error_envelope consult "case-id allocation exhausted 3 retries"
+    bl_error_envelope consult "case-id allocation exhausted $max_attempts retries"
     return "$BL_EX_CONFLICT"
 }
 
@@ -7023,7 +7037,7 @@ bl_run_step() {
         local body_file
         body_file=$(mktemp)
         jq -n --arg s "$step_id" --argjson rc "$exec_rc" \
-            '{type:"user.message", content:[{type:"text", text:("result landed: "+$s+" rc="+($rc|tostring))}]}' > "$body_file"
+            '{events:[{type:"user.message", content:[{type:"text", text:("result landed: "+$s+" rc="+($rc|tostring))}]}]}' > "$body_file"
         bl_api_call POST "/v1/sessions/$session_id/events" "$body_file" >/dev/null || true   # non-fatal; ledger has the event
         command rm -f "$body_file"
     fi
@@ -7571,7 +7585,7 @@ bl_case_close_stage2_render() {
     local wake_body
     wake_body=$(mktemp)
     jq -n --arg m "$fid_md" --arg c "$case_id" \
-        '{type:"user.message", content:[{type:"text", text:("render file_id="+$m+" to HTML and PDF; write to /mnt/session/outputs/brief-"+$c+".{html,pdf}")}]}' > "$wake_body"
+        '{events:[{type:"user.message", content:[{type:"text", text:("render file_id="+$m+" to HTML and PDF; write to /mnt/session/outputs/brief-"+$c+".{html,pdf}")}]}]}' > "$wake_body"
     bl_api_call POST "/v1/sessions/$session_id/events" "$wake_body" >/dev/null || {
         command rm -f "$wake_body"
         printf '|'
@@ -9696,8 +9710,9 @@ bl_setup_seed_corpus() {
 }
 
 # bl_setup_seed_skills <mode> — mode: dry-run | apply
-# For each routing-skills/<name>/, hash description+body, diff vs state.json `.skills`.
-# If skill_id absent: bl_skills_create. If sha changed: bl_skills_versions_create.
+# Probes /v1/skills availability; if the endpoint is live, creates/bumps routing Skills.
+# If /v1/skills returns 404 (endpoint unavailable), falls back to uploading each
+# routing-skill SKILL.md as a corpus File so the content remains available to sessions.
 bl_setup_seed_skills() {
     local mode="${1:-apply}"
     local repo_root
@@ -9713,6 +9728,29 @@ bl_setup_seed_skills() {
         bl_error_envelope setup "no routing Skills found at $rs_dir; expected 6"
         return "$BL_EX_PREFLIGHT_FAIL"
     fi
+
+    # Probe Skills API availability. Distinguish 404 (endpoint not enabled in this
+    # workspace — Path A allowlist not granted) from 401/403 (auth failure, propagate)
+    # and 5xx (transient, propagate). Output uses curl's "<body>\n<http_code>" via -w
+    # so it parses identically under real curl AND the test curl shim
+    # (tests/helpers/curator-mock.bash) which dumps body+newline+status.
+    local probe_resp probe_status
+    probe_resp=$(curl -sS --max-time 10 -w '\n%{http_code}' \
+        "https://api.anthropic.com/v1/skills" \
+        -H "x-api-key: ${ANTHROPIC_API_KEY:-}" \
+        -H "anthropic-version: 2023-06-01" \
+        -H "anthropic-beta: managed-agents-2026-04-01" 2>&1) || true   # network/curl fail → status="" below → fallback path
+    probe_status="${probe_resp##*$'\n'}"
+    if [[ "$probe_status" == "404" ]]; then
+        bl_warn "bl setup: Skills API unavailable (HTTP 404); uploading routing-skills as corpus Files"
+        bl_setup_seed_skills_as_files "$mode" "$rs_dir"
+        return $?
+    fi
+    if [[ ! "$probe_status" =~ ^2 ]]; then
+        bl_error_envelope setup "Skills API probe failed (HTTP $probe_status); cannot seed skills"
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
+
     local state_file="$BL_STATE_DIR/state.json"
     local existing_state="{}"
     [[ -f "$state_file" ]] && existing_state=$(command cat "$state_file")
@@ -9749,20 +9787,78 @@ bl_setup_seed_skills() {
             existing_state=$(printf '%s' "$existing_state" | jq \
                 --arg n "$name" --arg id "$new_id" --arg v "$new_version" \
                 --arg ds "$desc_sha" --arg bs "$body_sha" \
-                '.skills[$n] = {id: $id, version: $v, description_sha256: $ds, body_sha256: $bs} | .agent.skill_versions[$n] = $v')
+                '.skills[$n] = {id: $id, version: $v, description_sha256: $ds, body_sha256: $bs}')
         else
             new_version=$(bl_skills_versions_create "$existing_id" "$desc_file" "$body_file") || return $?
             bl_info "bl setup: bumped Skill $name → version $new_version"
             existing_state=$(printf '%s' "$existing_state" | jq \
                 --arg n "$name" --arg v "$new_version" \
                 --arg ds "$desc_sha" --arg bs "$body_sha" \
-                '.skills[$n].version = $v | .skills[$n].description_sha256 = $ds | .skills[$n].body_sha256 = $bs | .agent.skill_versions[$n] = $v')
+                '.skills[$n].version = $v | .skills[$n].description_sha256 = $ds | .skills[$n].body_sha256 = $bs')
         fi
     done
     if [[ "$mode" != "dry-run" ]]; then
         local tmp_state="$state_file.tmp.$$"
         printf '%s' "$existing_state" > "$tmp_state"
         command mv "$tmp_state" "$state_file"
+    fi
+    return "$BL_EX_OK"
+}
+
+# bl_setup_seed_skills_as_files <mode> <rs-dir> — Skills API fallback.
+# Uploads each routing-skill SKILL.md to the Files API so content is available to
+# sessions as corpus files mounted under /skills/<name>-skill.md.
+bl_setup_seed_skills_as_files() {
+    local mode="$1" rs_dir="$2"
+    local state_file="$BL_STATE_DIR/state.json"
+    local existing_state="{}"
+    [[ -f "$state_file" ]] && existing_state=$(command cat "$state_file")
+    local d name body_file mount_path content_sha existing_fid existing_sha new_fid
+    local upload_count=0 skip_count=0 supersede_count=0
+    for d in "$rs_dir"/*/; do
+        name=$(basename "$d")
+        body_file="$d/SKILL.md"
+        [[ -r "$body_file" ]] || {
+            bl_warn "bl setup: skipping $name (skills-as-files) — missing SKILL.md"
+            continue
+        }
+        mount_path="/skills/${name}-skill.md"
+        content_sha=$(command sha256sum "$body_file" | command awk '{print $1}')
+        existing_fid=$(printf '%s' "$existing_state" | jq -r --arg p "$mount_path" '.files[$p].file_id // empty')
+        existing_sha=$(printf '%s' "$existing_state" | jq -r --arg p "$mount_path" '.files[$p].content_sha256 // empty')
+        if [[ "$content_sha" == "$existing_sha" && -n "$existing_fid" ]]; then
+            skip_count=$((skip_count + 1))
+            bl_debug "bl_setup_seed_skills_as_files: skip $mount_path (sha matches)"
+            [[ "$mode" == "dry-run" ]] && printf 'would skip %s (no change)\n' "$mount_path"
+            continue
+        fi
+        if [[ "$mode" == "dry-run" ]]; then
+            printf 'would upload %s (skill fallback)\n' "$mount_path"
+            upload_count=$((upload_count + 1))
+            continue
+        fi
+        new_fid=$(bl_files_create "text/markdown" "$body_file") || return $?
+        bl_info "bl setup: uploaded ${mount_path} → $new_fid (skill fallback)"
+        existing_state=$(printf '%s' "$existing_state" | jq \
+            --arg p "$mount_path" --arg fid "$new_fid" --arg sha "$content_sha" \
+            --arg ts "$(command date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '.files[$p] = {file_id: $fid, content_sha256: $sha, uploaded_at: $ts}')
+        if [[ -n "$existing_fid" ]]; then
+            existing_state=$(printf '%s' "$existing_state" | jq \
+                --arg fid "$existing_fid" --arg p "$mount_path" \
+                --arg ts "$(command date -u +%Y-%m-%dT%H:%M:%SZ)" --arg new "$new_fid" \
+                '.files_pending_deletion += [{file_id: $fid, marked_at: $ts, reason: ("superseded by " + $new), previous_mount_path: $p}]')
+            supersede_count=$((supersede_count + 1))
+        fi
+        upload_count=$((upload_count + 1))
+    done
+    if [[ "$mode" != "dry-run" ]]; then
+        local tmp_state="$state_file.tmp.$$"
+        printf '%s' "$existing_state" > "$tmp_state"
+        command mv "$tmp_state" "$state_file"
+        bl_info "bl setup: skill fallback — $upload_count uploaded, $skip_count skipped, $supersede_count superseded"
+    else
+        bl_info "bl setup: skill fallback — would upload $upload_count, would skip $skip_count"
     fi
     return "$BL_EX_OK"
 }
@@ -10181,7 +10277,6 @@ bl_setup_ensure_memstore() {
 }
 
 # bl_setup_compose_agent_body — emits agent-create JSON to stdout per setup-flow.md §4.2.
-# Includes skill_versions field populated from state.json (Path C addition).
 bl_setup_compose_agent_body() {
     local repo_root resolved
     resolved=$(readlink -f "$0" 2>/dev/null || printf '.')   # readlink -f may fail when $0 is relative / sourced — fallback to cwd
@@ -10193,25 +10288,15 @@ bl_setup_compose_agent_body() {
     for f in "$prompt_file" "$step_schema" "$def_schema" "$int_schema"; do
         [[ -r "$f" ]] || { bl_error_envelope setup "input file missing: $f"; return "$BL_EX_PREFLIGHT_FAIL"; }
     done
-    local sv_json='{}' skills_json='[]'
-    local state_file="$BL_STATE_DIR/state.json"
-    if [[ -f "$state_file" ]]; then
-        sv_json=$(jq -c '.agent.skill_versions // {}' "$state_file" 2>/dev/null || printf '{}')
-        skills_json=$(jq -c '[.skills[].id] // []' "$state_file" 2>/dev/null || printf '[]')
-    fi
     jq -n \
         --rawfile prompt "$prompt_file" \
         --slurpfile stepRaw "$step_schema" \
         --slurpfile defRaw  "$def_schema" \
         --slurpfile intRaw  "$int_schema" \
-        --argjson sv "$sv_json" \
-        --argjson skills "$skills_json" \
         '{
             name: "bl-curator",
             model: "claude-opus-4-7",
             system: $prompt,
-            skill_versions: $sv,
-            skills: $skills,
             tools: [
                 {type: "agent_toolset_20260401"},
                 {
@@ -10237,14 +10322,21 @@ bl_setup_compose_agent_body() {
 }
 
 # bl_setup_compose_env_body — emits env-create JSON per setup-flow.md §4.3.
+# Canonical body (managed-agents-2026-04-01, probed 2026-04-26):
+#   {name, config:{type:"cloud", networking:{type:"unrestricted"}}}
+# `packages` is NOT a valid field — pre-installed apt packages are not
+# supported at env-create. Sessions install via bash tool when needed
+# (apache2, libapache2-mod-security2, modsecurity-crs, yara, jq, zstd,
+# duckdb, pandoc, weasyprint). Future API surfaces may add a setup_script
+# or image field; the agent prompts MUST therefore drive package install
+# explicitly per session until then. Tracked as a Path C gap.
 bl_setup_compose_env_body() {
     jq -n '{
         name: "bl-curator-env",
-        type: "cloud",
-        packages: {
-            apt: ["apache2","libapache2-mod-security2","modsecurity-crs","yara","jq","zstd","duckdb","pandoc","weasyprint"]
-        },
-        networking: {type: "unrestricted"}
+        config: {
+            type: "cloud",
+            networking: {type: "unrestricted"}
+        }
     }'
 }
 

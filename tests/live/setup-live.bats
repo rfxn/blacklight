@@ -36,7 +36,7 @@ setup() {
     export BL_REPO_ROOT
 }
 
-@test "bl setup --sync: provisions agent + env + memstore + 8 corpora against live API" {
+@test "bl setup --sync: provisions agent + env + memstore + corpora + skills-as-files against live API" {
     _live_skip_unless_live
     run "$BL_SOURCE" setup --sync
     [ "$status" -eq 0 ]
@@ -44,7 +44,10 @@ setup() {
     [ -f "$BL_STATE_DIR/state.json" ]
     [ -n "$(jq -r '.agent.id // empty' "$BL_STATE_DIR/state.json")" ]
     [ -n "$(jq -r '.env_id // empty' "$BL_STATE_DIR/state.json")" ]
-    [ "$(jq -r '.files | length' "$BL_STATE_DIR/state.json")" -eq 8 ]
+    # 8 corpus files + 6 routing-skill fallback files = 14 when Skills API is unavailable
+    local fc
+    fc=$(jq -r '.files | length' "$BL_STATE_DIR/state.json")
+    [ "$fc" -ge 8 ]
     [ -n "$(jq -r '.case_memstores._default // empty' "$BL_STATE_DIR/state.json")" ]
 }
 
@@ -57,19 +60,26 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"agent: ok"* ]]
     [[ "$output" == *"env: ok"* ]]
-    [[ "$output" == *"files: 8 workspace files"* ]]
+    [[ "$output" == *"files:"* ]]
 }
 
-@test "bl consult --new (smoke): creates session with corpora attached" {
+@test "bl consult --new (smoke): creates case + session with corpora attached" {
     _live_skip_unless_live
     [ -f "$BL_STATE_DIR/state.json" ] || skip "prior test did not provision"
-    # Open a fresh case; --attach creates the session bound to the agent
-    run "$BL_SOURCE" consult --new --trigger "M15-P8-smoke" --attach
+    run "$BL_SOURCE" consult --new --trigger "M15-P8-smoke"
     [ "$status" -eq 0 ]
-    local case_id session_id
-    case_id=$(jq -r '.case_current // empty' "$BL_STATE_DIR/state.json")
-    session_id=$(jq -r --arg c "$case_id" '.session_ids[$c] // empty' "$BL_STATE_DIR/state.json")
+    # bl_consult_new emits the allocated case-id as the LAST line of stdout.
+    # Earlier lines may name OTHER cases (dedup-warning, materialize-conflict
+    # 409 messages naming the conflicting case) — must take the trailing
+    # match, not the first.
+    local case_id
+    case_id=$(printf '%s\n' "$output" | grep -oE 'CASE-[0-9]{4}-[0-9]{4}' | tail -1)
     [ -n "$case_id" ]
+    # Session is created by bl_consult_register_curator; persisted to legacy path
+    local sid_file="$BL_STATE_DIR/session-$case_id"
+    [ -f "$sid_file" ]
+    local session_id
+    session_id=$(cat "$sid_file")
     [ -n "$session_id" ]
 }
 

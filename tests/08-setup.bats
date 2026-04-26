@@ -1041,16 +1041,28 @@ teardown() {
 # P6 (M15): Path A invariants — skill_versions present + skills[] is array
 # ---------------------------------------------------------------------------
 
-@test "bl setup P6 — agent body shape matches recorded path" {
-    # Path A invariants — skill_versions present + skills[] is array
+@test "bl setup — agent body shape matches managed-agents-2026-04-01" {
+    # Live API (probed 2026-04-26) rejects skill_versions and skills[] at the
+    # top level of agents.create — Skills attach via the agent's tools[] entry
+    # (agent_toolset_20260401) plus separate skill bindings if the workspace is
+    # allowlisted. Body must carry name + model + system + tools[].
+    # Custom tools must NOT include input_schema.additionalProperties or per-field
+    # description (both rejected with HTTP 400).
     local fake_repo body
     fake_repo=$(mktemp -d)
     _make_fake_repo "$fake_repo"
     export BL_REPO_ROOT="$fake_repo"
     body=$(bash -c ". \"$BL_SOURCE\"; bl_setup_compose_agent_body")
     rm -rf "$fake_repo"
-    printf '%s' "$body" | jq -e '.skill_versions'
+    printf '%s' "$body" | jq -e '.name == "bl-curator"'
     [ "$?" -eq 0 ]
-    printf '%s' "$body" | jq -e '.skills | type == "array"'
+    printf '%s' "$body" | jq -e '.model and .system and (.tools | type == "array") and (.tools | length >= 1)'
+    [ "$?" -eq 0 ]
+    # Forbidden top-level fields (rejected by live API):
+    printf '%s' "$body" | jq -e 'has("skill_versions") | not'
+    [ "$?" -eq 0 ]
+    printf '%s' "$body" | jq -e 'has("thinking") | not'
+    [ "$?" -eq 0 ]
+    printf '%s' "$body" | jq -e 'has("output_config") | not'
     [ "$?" -eq 0 ]
 }

@@ -169,7 +169,7 @@ bl_run_step() {
         local body_file
         body_file=$(mktemp)
         jq -n --arg s "$step_id" --argjson rc "$exec_rc" \
-            '{type:"user.message", content:[{type:"text", text:("result landed: "+$s+" rc="+($rc|tostring))}]}' > "$body_file"
+            '{events:[{type:"user.message", content:[{type:"text", text:("result landed: "+$s+" rc="+($rc|tostring))}]}]}' > "$body_file"
         bl_api_call POST "/v1/sessions/$session_id/events" "$body_file" >/dev/null || true   # non-fatal; ledger has the event
         command rm -f "$body_file"
     fi

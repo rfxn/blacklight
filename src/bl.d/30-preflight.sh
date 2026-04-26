@@ -26,7 +26,14 @@ bl_preflight() {
         return "$BL_EX_PREFLIGHT_FAIL"
     fi
 
-    # 4. Cached agent-id?
+    # 4. Seed BL_MEMSTORE_CASE_ID from state.json if not already set.
+    # Old per-key file (memstore-case-id) was removed in M15 state.json migration.
+    if [[ -z "${BL_MEMSTORE_CASE_ID:-}" ]]; then
+        BL_MEMSTORE_CASE_ID=$(jq -r '.case_memstores._default // empty' "$BL_STATE_DIR/state.json" 2>/dev/null || printf '')   # 2>/dev/null: missing state.json on first-run is normal; empty → per-verb checks handle
+        bl_debug "bl_preflight: BL_MEMSTORE_CASE_ID=$BL_MEMSTORE_CASE_ID"
+    fi
+
+    # 5. Cached agent-id?
     if [[ -r "$BL_AGENT_ID_FILE" ]]; then
         BL_AGENT_ID="$(command cat "$BL_AGENT_ID_FILE")"
         if [[ -n "$BL_AGENT_ID" ]]; then

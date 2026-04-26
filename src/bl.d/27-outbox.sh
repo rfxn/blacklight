@@ -237,7 +237,8 @@ bl_outbox_drain() {
                 [[ -r "$sid_file" ]] && sid=$(command cat "$sid_file")
                 if [[ -n "$sid" ]]; then
                     body_tmp=$(mktemp)
-                    printf '%s' "$payload" > "$body_tmp"
+                    # Wrap stored event payload in {events:[...]} — API requires the wrapper.
+                    printf '%s' "$payload" | jq -c '{events:[.]}' > "$body_tmp"
                     bl_api_call POST "/v1/sessions/$sid/events" "$body_tmp" >/dev/null || rc=$?
                     command rm -f "$body_tmp"
                 else

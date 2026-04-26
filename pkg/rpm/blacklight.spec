@@ -2,7 +2,7 @@
 # Customized for single-binary layout: /usr/bin/bl + /var/lib/bl state dirs
 #
 %define name    blacklight
-%define version 0.4.0
+%define version 0.5.0
 %define release 1%{?dist}
 
 Name:           %{name}
@@ -65,6 +65,40 @@ fi
 %doc /usr/share/doc/blacklight/CHANGELOG
 
 %changelog
+* Sun Apr 26 2026 R-fx Networks <proj@rfxn.com> - 0.5.0-1
+- M15 + post-M15 consolidation: live API correctness against the
+  managed-agents-2026-04-01 beta surface and integration-notes formalization.
+  Sessions events shape migrated to the new {events:[...]} wrapper across
+  27-outbox.sh / 50-consult.sh / 60-run.sh / 70-case.sh after silent breaking
+  change in upstream beta (bare-event was working through M12 P5.5; new
+  wrapper required as of M15 P8 live smoke). Sessions.create body now carries
+  agent (not agent_id) + environment_id + resources[] (P5/F12). Environments
+  body migrated to canonical config.type/config.networking.unrestricted shape
+  after probing rejection of legacy packages/networking top-level fields;
+  apt-package install is now session-driven via the curator bash tool until
+  the API exposes a setup-script field. Skills API workspace allowlist fall-
+  back: bl_setup_seed_skills_as_files uploads each routing-skill SKILL.md as
+  a corpus File at /skills/<name>-skill.md when /v1/skills returns 404. Skills
+  API probe rewritten with body+status parsing portable across real curl AND
+  the curator-mock test shim. bl_preflight seeds BL_MEMSTORE_CASE_ID from
+  state.json before the cached-agent-id early-return path (closes M15 fallout
+  where post-migration consult/run verbs collapsed to literal default).
+  Live integration smoke (tests/live/setup-live.bats) runs end-to-end against
+  the real Anthropic workspace under BL_LIVE=1 (4/4 green): setup --sync,
+  setup --check, consult --new with corpora attached, setup --reset --force
+  archive verb. Hermetic suite restored to 348/0 on debian12 + rocky9 after
+  P6 agent-body-shape test rewritten to assert the managed-agents-2026-04-01
+  contract (name + model + system + tools[]; forbidden: skill_versions,
+  thinking, output_config). New top-level docs: ANTHROPIC-API-NOTES.md
+  (operator log of 10 numbered API friction points with severity tags +
+  workarounds), HACKATHON_TIMELINE.md (6-day development record:
+  v1 hackathon scaffolding through pivot to v2 milestone-driven rebuild
+  through M15 close). DESIGN.md / PRD.md / FUTURE.md re-promoted to
+  committed top-level docs (operator-tracked, no longer working files).
+  Archive housekeeping: .rdf/archive/Mx/ → .rdf/archive/2026-04-XX-Mx/
+  with date-prefixed milestone dirs; M13 plan moved from loose archive root
+  into 2026-04-25-M13/PLAN-M13.md; final DESIGN.md snapshot relocated into
+  2026-04-26-M15-final/.
 * Sun Apr 26 2026 R-fx Networks <proj@rfxn.com> - 0.4.0-1
 - M14 substrate-hook (closed-loop response layer for LMD + ModSec on cPanel EA4):
   vendored alert_lib v1.0.6 + tlog_lib v2.0.5 (slot 05/06 generated parts);
