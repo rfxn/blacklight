@@ -6986,9 +6986,10 @@ bl_run_step() {
             return "$BL_EX_TIER_GATE_DENIED"
         fi
     fi
-    local args_json diff
+    local args_json diff reasoning
     args_json=$(jq -c '.args' "$pending_tmp")
     diff=$(jq -r '.diff // ""' "$pending_tmp")
+    reasoning=$(jq -r '.reasoning // ""' "$pending_tmp")
     case "$tier" in
         read-only|auto)
             : ;;
@@ -7025,7 +7026,7 @@ bl_run_step() {
                 bl_debug "unattended: $verb tier=$tier auto-applying (preflight gate passed)"
             elif [[ "$yes" != "yes" && "$dry_run" != "yes" ]]; then
                 # Existing interactive prompt path
-                if ! bl_run_prompt_operator "$step_id" "$tier" "$diff"; then
+                if ! bl_run_prompt_operator "$step_id" "$tier" "$diff" "$reasoning"; then
                     bl_ledger_append "$case_id" \
                         "$(jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg c "$case_id" --arg s "$step_id" \
                             '{ts:$ts, case:$c, kind:"operator_decline", payload:{step_id:$s}}')"
@@ -7103,10 +7104,11 @@ bl_run_evaluate_tier() {
 }
 
 bl_run_prompt_operator() {
-    # bl_run_prompt_operator <step-id> <tier> <diff> — 0 on approve, 68 on decline
+    # bl_run_prompt_operator <step-id> <tier> <diff> <reasoning> — 0 on approve, 68 on decline
     local step_id="$1"
     local tier="$2"
     local diff="$3"
+    local reasoning="$4"
     local ans
     printf 'bl-run: step %s tier=%s\n' "$step_id" "$tier" >&2
     [[ -n "$diff" ]] && printf '[diff]\n%s\n' "$diff" >&2
@@ -7122,7 +7124,11 @@ bl_run_prompt_operator() {
                 printf '%s\n' "$diff" >&2
                 ;;
             explain)
-                printf '(explain — re-prints reasoning from step envelope; M5 stub shows tier+diff only)\n' >&2
+                if [[ -n "$reasoning" ]]; then
+                    printf '[reasoning]\n%s\n' "$reasoning" >&2
+                else
+                    printf '(no reasoning recorded for this step)\n' >&2
+                fi
                 ;;
             *)
                 printf 'invalid; type y, N, diff-full, explain, or abort\n' >&2

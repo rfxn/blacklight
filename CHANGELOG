@@ -2,6 +2,73 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== v0.5.2 release — 2026-04-26 (pre-ship adversarial sweep + judge-facing honesty pass) ===
+
+Pre-submission red-team sweep against six attack vectors (README claim
+verification, AI-slop linguistics, maturity tells, skill-bundle authenticity,
+Managed Agents wiring, exhibit/APSB25-94 authenticity). Sentinel-reviewed,
+false-positives stripped, defensible findings remediated. Curator-IS-Managed-
+Agent claim independently verified (PROVEN) — endpoint-by-endpoint at
+/v1/agents create+CAS+archive, /v1/sessions with `agent` field,
+/v1/sessions/{id}/events, managed-agents-2026-04-01 beta header, persistent
+agent_id + session_id in state.json.
+
+[Fix] src/bl.d/60-run.sh — bl_run_prompt_operator `explain` arm now re-prints
+      the step envelope's .reasoning field instead of the M5-stub placeholder
+      "(re-prints reasoning from step envelope; M5 stub shows tier+diff only)"
+      that leaked to user-facing stderr. New 4th arg ($reasoning); falls back
+      to "(no reasoning recorded for this step)" when envelope omits it.
+[Change] tests/14-unattended.bats — inline tier-gate copy updated to pass the
+      4th arg to bl_run_prompt_operator and initialize reasoning="test" so the
+      stub receives the real signature.
+[Change] tests/live/trace-runner.sh — Scene 4 changed from `bl run --tier auto`
+      (invalid flag — auto-tier resolution is the wrapper default, not a flag)
+      to `bl run --list` (lists pending step queue without execution). Trace
+      summary printf rewritten to avoid `printf -- '-...'` option-parser
+      edge case that surfaced as `printf: -: invalid option` on the
+      recording-time shell. Bullet now built as a printf arg, format is bare
+      '%s\n'.
+[Change] tests/live/evidence/live-trace-20260425-2208.md — top-of-file framing
+      block added: Scenes 0/1/2 are hermetic-green and endpoint-verified
+      against the live workspace (curator wiring proof); Scene 3 hypothesis
+      turn FAIL is reframed as a known Managed Agents beta drift in
+      /v1/sessions/{id}/events polling (tracked internally as M12.5);
+      Scene 4 + trace-summary errors annotated as recording-time runner
+      bugs fixed post-recording.
+[Change] README.md — three honesty passes:
+      (1) version stamp v0.5.0 → v0.5.2 in the IMPORTANT callout and
+          single-host disclaimer (final release tag; further changes roll
+          into 0.5.2);
+      (2) Skills primitive language softened to acknowledge that the
+          submitted-build runtime uploads bundles via the Files surface
+          because Anthropic's /v1/skills endpoint is workspace-allowlist-
+          gated (HTTP 404). Architectural shape (description-routed,
+          per-turn lazy load) is preserved as the upgrade path; mermaid
+          skills box and routing-skills row updated;
+      (3) Proof section discloses 7 environment-conditional + 6 integration-
+          deferred skips inside the 348-test count; live-trace bullet
+          softened to honest framing of Scene 3 beta-drift gating.
+[Change] PRD.md, DESIGN.md — version stamp v0.5.0/0.4.0 → v0.5.2; Skills-
+      primitive note added to each preamble explaining the design vs
+      submitted-build runtime divergence.
+[Change] HACKATHON_TIMELINE.md — total stamp 0 → v0.5.1 → 0 → v0.5.2.
+[New] skills/linux-forensics/modsec-audit-format.md — "Simplified Section A"
+      subsection documenting the stripped-down deployment shape and the
+      synthesis-corpus shape (no mod_unique_id; transfer-log join falls
+      back to (client_ip, timestamp, request_line)). Aligns the grammar
+      reference with what exhibits/fleet-01/ actually emits.
+[Change] skills-corpus/synthesizing-evidence-corpus.md — auto-rebuilt
+      downstream of the modsec skill addition (make skills-corpus).
+[New] exhibits/fleet-01/README.md — "Synthesis format notes" section
+      documenting (a) ModSec simplified Section A shape with parser
+      guidance, (b) Section C omission for POST transactions, (c) the
+      ~14h temporal gap between webshell mtime and in-corpus modsec
+      cluster as a deliberate offstage-RCE forensic-modeling choice
+      (forensic capture begins after operator notices anomalous traffic,
+      not at compromise). Correlation-chain bullet at line 35-36
+      corrected from "immediately after" to "~14h before" to match the
+      synthesis-format note.
+
 === v0.5.2 release — 2026-04-26 (operator config tree expansion) ===
 
 Surfaced fifteen previously-buried operator tunables in the

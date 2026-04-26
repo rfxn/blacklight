@@ -146,7 +146,7 @@ teardown() {
         # Call the tier-gate logic inline using the actual bl_run_step body
         # by invoking the sub-path through bl_is_unattended + tier routing
         tier="suggested"; verb="defend.modsec"; yes=""; dry_run=""; pending_tmp="$pf"
-        case_id="CASE-2026-0001"; step_id="s-mod-01"; args_json="[]"; diff=""
+        case_id="CASE-2026-0001"; step_id="s-mod-01"; args_json="[]"; diff=""; reasoning="test"
         case "$tier" in
             suggested|destructive)
                 bl_run_preflight_tier "$tier" "$verb" "$args_json" || echo "PREFLIGHT_FAIL"
@@ -159,7 +159,7 @@ teardown() {
                         echo "MODSEC_AUTO_APPLY"
                     fi
                 elif [[ "$yes" != "yes" && "$dry_run" != "yes" ]]; then
-                    bl_run_prompt_operator "$step_id" "$tier" "$diff"
+                    bl_run_prompt_operator "$step_id" "$tier" "$diff" "$reasoning"
                 fi
                 ;;
         esac
