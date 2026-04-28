@@ -815,7 +815,7 @@ APF_DENY_EOF
     [[ "$output" == *"no active case"* ]]
 }
 
-@test "bl observe bundle: happy path with evidence creates .tgz bundle" {
+@test "bl observe bundle: happy path with evidence creates a bundle (auto codec)" {
     # Seed some evidence
     local fix_file
     fix_file="$BL_VAR_DIR/iptables_bundle.txt"
@@ -824,11 +824,11 @@ APF_DENY_EOF
     env BL_FIREWALL_DUMP_FIXTURE="$fix_file" \
         BL_VAR_DIR="$BL_VAR_DIR" ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" BL_HOST_LABEL="$BL_HOST_LABEL" \
         "$BL_SOURCE" observe firewall --backend iptables >/dev/null 2>&1 || true
-    # Build bundle
+    # Build bundle — auto codec resolves to .tar.zst when zstd is present, .tgz otherwise
     run "$BL_SOURCE" observe bundle --out-dir "$BL_VAR_DIR/outbox"
     [ "$status" -eq 0 ]
     local bundle_count
-    bundle_count=$(ls "$BL_VAR_DIR/outbox/"*.tgz 2>/dev/null | wc -l) || bundle_count=0
+    bundle_count=$(ls "$BL_VAR_DIR/outbox/"bundle-*.tgz "$BL_VAR_DIR/outbox/"bundle-*.tar.zst 2>/dev/null | wc -l) || bundle_count=0
     [ "$bundle_count" -ge 1 ]
 }
 
@@ -863,7 +863,7 @@ APF_DENY_EOF
     rm -rf "$extract_dir"
 }
 
-@test "bl observe bundle: codec zst produces bundle when zstd present" {
+@test "bl observe bundle: codec zst produces .tar.zst bundle when zstd present" {
     if ! command -v zstd >/dev/null 2>&1; then
         skip "zstd not installed in test environment"
     fi
@@ -875,6 +875,14 @@ APF_DENY_EOF
         "$BL_SOURCE" observe firewall --backend iptables >/dev/null 2>&1 || true
     run "$BL_SOURCE" observe bundle --format zst --out-dir "$BL_VAR_DIR/outbox"
     [ "$status" -eq 0 ]
+    # Extension matches codec — .tar.zst for zst, .tgz for gz (DESIGN.md §10.2/§10.4).
+    local bundle_count
+    bundle_count=$(ls "$BL_VAR_DIR/outbox/"bundle-*.tar.zst 2>/dev/null | wc -l) || bundle_count=0
+    [ "$bundle_count" -ge 1 ]
+    # And explicitly NOT a .tgz — guards against the regression of hardcoded extension.
+    local tgz_count
+    tgz_count=$(ls "$BL_VAR_DIR/outbox/"bundle-*.tgz 2>/dev/null | wc -l) || tgz_count=0
+    [ "$tgz_count" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------

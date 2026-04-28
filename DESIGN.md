@@ -28,7 +28,7 @@ Scope: architecture, command surface, runtime flow, state model, safety gates, e
 │                                                                           │
 │  bash 4.1+ (CentOS 6 / RHEL 6 floor, December 2009 / November 2010).      │
 │  26 numbered source parts in src/bl.d/; ~10,700-line assembled binary;    │
-│  137 reusable bl_* functions exposed as a bash SDK (see §17).             │
+│  155 reusable bl_* functions exposed as a bash SDK (see §17).             │
 │                                                                           │
 │  observe  consult  run  defend  clean  case  setup  flush  trigger        │
 │                                                                           │
@@ -547,10 +547,14 @@ Apache transfer record fields: `client_ip`, `method`, `path`, `status`, `bytes`,
 
 ### 10.2 Bundle shape
 
-Evidence bundles are `tar + gzip -5` (or `zstd -3` if available):
+Evidence bundles are `tar + gzip -5` (or `tar + zstd -3` if available). The
+filename extension matches the codec so plain `tar xf` resolves on hosts
+without magic-byte detection (CentOS 6 floor): `.tgz` for gzip, `.tar.zst`
+for zstd.
 
 ```
-bundle-<host>-<window>.tgz
+bundle-<host>-<window>.tgz       # gzip path (default)
+bundle-<host>-<window>.tar.zst   # zstd path (when `command -v zstd` succeeds)
 ├── MANIFEST.json           (host, window, sources, sha256s, bl version)
 ├── summary.md              (≤2 KB first-read — top IOCs, counts, hot paths)
 ├── transfer.log.jsonl      (pre-parsed Apache/nginx access records)
@@ -585,7 +589,10 @@ The first file the agent reads. ≤2 KB. Structured:
 
 - Default: `gzip -5` — portable to CentOS 6 / bash 4.1 baseline without EPEL.
 - Upgrade: `zstd -3` if `command -v zstd` succeeds — ~1.3× smaller, faster compress.
-- Extension is `.tgz` regardless; tar magic-byte detects codec on decompress.
+- Extension matches codec: `.tgz` for gzip, `.tar.zst` for zstd. Plain
+  `tar xf <bundle>` resolves on the CentOS 6 floor (tar 1.23, no magic-byte
+  detection); zstd hosts pick up `.tar.zst` via the `--zstd` autodetect
+  added in tar 1.31.
 
 ---
 

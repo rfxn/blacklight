@@ -2,6 +2,38 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== bundle extension matches codec (.tgz / .tar.zst) — 2026-04-28 ===
+
+bl_bundle_build hardcoded the bundle filename to *.tgz regardless of
+codec; the zstd path produced a `.tgz` containing zstd data, so plain
+`tar xf <bundle>` failed on hosts without magic-byte detection (CentOS
+6 floor, tar 1.23, no `--zstd` autodetect — that landed in tar 1.31).
+The pragmatic fix is to make the extension match the codec rather than
+push the burden onto every consumer to know which decompressor to call.
+
+[Change] src/bl.d/42-observe-router.sh — derive bundle extension from
+         codec (gz → .tgz, zst → .tar.zst); plain `tar xf` resolves on
+         the CentOS 6 floor for both paths and tar 1.31+ autodetects
+         .tar.zst on modern hosts.
+[Change] src/bl.d/41-observe-collectors.sh — function-header comment
+         on bl_bundle_build updated to name both extensions.
+[Change] DESIGN.md §10.2 — bundle-shape diagram shows both filenames.
+[Change] DESIGN.md §10.4 — compression note replaces "tar magic-byte
+         detects codec on decompress" with the codec-matched extension
+         contract and explicit tar-version provenance.
+[Change] tests/04-observe.bats — happy-path test renamed to "auto codec"
+         and accepts either extension; "codec zst" test strengthened to
+         assert .tar.zst presence AND .tgz absence (regression guard).
+[Change] tests/03-models.bats — auto-codec bundle assertion accepts
+         either extension.
+[Change] bl — regenerated from 27 parts via 'make bl'.
+
+Verification: bash -n + shellcheck clean on touched files (no new
+warnings); make -C tests test (debian12) → 404 tests, 0 failed in 141s;
+make -C tests test-rocky9 → 404 tests, 0 failed in 137s. Both test
+images carry zstd, so the auto path resolves to .tar.zst — the new
+regression guard exercises it.
+
 === bl <verb> [...] --help bubble-up at any depth — 2026-04-28 ===
 
 `bl <verb> --help` already routed to bl_help_<verb>, but `bl <verb>

@@ -47,7 +47,8 @@ teardown() {
     printf '{"ts":"2026-04-25T00:00:00Z","host":"test","source":"apache.transfer","record":{}}\n' > "$BL_VAR_DIR/cases/CASE-2026-0042/evidence/obs-0001-apache.json"
     run "$BL_SOURCE" observe bundle --out-dir "$BL_VAR_DIR/outbox"
     [ "$status" -eq 0 ]
-    ls "$BL_VAR_DIR/outbox/" | grep -q '\.tgz$'
+    # auto codec: .tar.zst when zstd present, .tgz otherwise (DESIGN.md §10.2)
+    ls "$BL_VAR_DIR/outbox/" | grep -qE '\.(tgz|tar\.zst)$'
 }
 
 @test "bl_messages_call --no-llm-summary skips Sonnet entirely" {

@@ -233,7 +233,16 @@ bl_bundle_build() {
     fi
 
     local host_safe="${host_label//./_}"
-    local bundle_path="$out_dir/bundle-${host_safe}-${window_str}.tgz"
+    # Extension matches codec so plain `tar xf` resolves on hosts without
+    # tar magic-byte detection (CentOS 6 floor): .tgz for gzip, .tar.zst
+    # for zstd. DESIGN.md §10.2 / §10.4 are the canonical statement.
+    local bundle_ext
+    case "$codec" in
+        gz)  bundle_ext="tgz" ;;
+        zst) bundle_ext="tar.zst" ;;
+        *)   bundle_ext="tgz" ;;
+    esac
+    local bundle_path="$out_dir/bundle-${host_safe}-${window_str}.${bundle_ext}"
 
     # MANIFEST.json
     jq -n -c \

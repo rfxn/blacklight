@@ -1609,5 +1609,5 @@ bl_observe_substrate() {
 }
 
 # ---------------------------------------------------------------------------
-# bl_bundle_build — package current case evidence into a .tgz bundle
+# bl_bundle_build — package current case evidence (.tgz for gz, .tar.zst for zst)
 # ---------------------------------------------------------------------------
