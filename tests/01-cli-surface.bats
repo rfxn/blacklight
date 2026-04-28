@@ -153,6 +153,31 @@ teardown() {
     done
 }
 
+@test "bl <verb> <subverb> --help bubbles up to verb-level help" {
+    # Bubble-up shim: --help at any depth routes to bl_help_<verb>, so we
+    # don't have to author per-subcommand help blocks. Sample the common
+    # depth-2 / depth-3 invocations rather than enumerate every subverb.
+    local cases=(
+        "observe file --help"
+        "observe log apache --help"
+        "observe fs --mtime-cluster --help"
+        "consult --new --help"
+        "run observe.file --help"
+        "defend firewall --help"
+        "clean htaccess --help"
+        "case show --help"
+        "flush --outbox --help"
+    )
+    local c
+    for c in "${cases[@]}"; do
+        # shellcheck disable=SC2086 # intentional word-split on $c
+        run "$BL_SOURCE" $c
+        [ "$status" -eq 0 ] || { echo "case='$c' status=$status output=$output"; return 1; }
+        local verb="${c%% *}"
+        [[ "$output" == bl*"$verb"*—* ]] || { echo "case='$c' output=$output"; return 1; }
+    done
+}
+
 @test "bl --version matches src/bl.d/00-header.sh BL_VERSION" {
     run "$BL_SOURCE" --version
     [ "$status" -eq 0 ]

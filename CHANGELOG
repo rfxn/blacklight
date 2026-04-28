@@ -2,6 +2,29 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== bl <verb> [...] --help bubble-up at any depth — 2026-04-28 ===
+
+`bl <verb> --help` already routed to bl_help_<verb>, but `bl <verb>
+<subverb> --help` (e.g. `bl observe file --help`, `bl run observe.file
+--help`) fell through to the verb dispatcher and was rejected as an
+unknown sub-verb or flag. Authoring per-subcommand help blocks would
+add 18-20 new help functions and ongoing drift surface. Cheaper to
+bubble the help intent up.
+
+[Change] src/bl.d/90-main.sh — replace position-2-only help match with
+         a scan over "${@:2}". If any argument is -h/--help/help, route
+         to bl_help_<verb> regardless of depth. Setup must still be
+         matched here (before the setup) bypass arm) so it does not
+         route to bl_setup() and reject --help as an unknown flag.
+[New]    tests/01-cli-surface.bats — "bl <verb> <subverb> --help bubbles
+         up to verb-level help" iterates 9 representative depth-2/3
+         invocations across observe/consult/run/defend/clean/case/flush.
+[Change] bl — regenerated from 27 parts via 'make bl'.
+
+Verification: bash -n + shellcheck clean (no new warnings on touched
+files); make -C tests test (debian12) → 404 tests, 0 failed in 140s;
+make -C tests test-rocky9 → 404 tests, 0 failed in 135s.
+
 === bl_defend_firewall: refuse private/loopback/link-local by default — 2026-04-26 (Tier-2C) ===
 
 bl defend firewall <ip> applied a deny rule against any syntactically

@@ -17,28 +17,28 @@ main() {
             ;;
     esac
 
-    # Per-verb help bypass — 'bl <verb> --help' must work pre-seed.
-    # NOTE: setup MUST be in this list AND match BEFORE the setup) arm
-    #       below, otherwise 'bl setup --help' routes to bl_setup()
-    #       and is rejected as an unknown flag (BL_EX_USAGE=64).
-    if (( $# >= 2 )); then
-        case "$2" in
-            -h|--help|help)
-                case "$1" in
-                    observe)  bl_help_observe;  return "$BL_EX_OK" ;;
-                    consult)  bl_help_consult;  return "$BL_EX_OK" ;;
-                    run)      bl_help_run;      return "$BL_EX_OK" ;;
-                    defend)   bl_help_defend;   return "$BL_EX_OK" ;;
-                    clean)    bl_help_clean;    return "$BL_EX_OK" ;;
-                    case)     bl_help_case;     return "$BL_EX_OK" ;;
-                    setup)    bl_help_setup;    return "$BL_EX_OK" ;;
-                    flush)    bl_help_flush;    return "$BL_EX_OK" ;;
-                    trigger)  bl_help_trigger;  return "$BL_EX_OK" ;;
-                    *)
-                        bl_error_envelope usage "unknown command: $1" "(use \`bl --help\` for a list of commands)"
-                        return "$BL_EX_USAGE"
-                        ;;
-                esac
+    # Per-verb help bubble-up — 'bl <verb> [...] --help' at any depth routes
+    # to the verb's help. Avoids authoring per-subcommand help blocks; setup
+    # MUST be matched here (before the setup) bypass below) so it does not
+    # route to bl_setup() and reject --help as an unknown flag.
+    local _bl_help_seen=0 _bl_arg
+    for _bl_arg in "${@:2}"; do
+        case "$_bl_arg" in -h|--help|help) _bl_help_seen=1; break ;; esac
+    done
+    if (( _bl_help_seen )); then
+        case "$1" in
+            observe)  bl_help_observe;  return "$BL_EX_OK" ;;
+            consult)  bl_help_consult;  return "$BL_EX_OK" ;;
+            run)      bl_help_run;      return "$BL_EX_OK" ;;
+            defend)   bl_help_defend;   return "$BL_EX_OK" ;;
+            clean)    bl_help_clean;    return "$BL_EX_OK" ;;
+            case)     bl_help_case;     return "$BL_EX_OK" ;;
+            setup)    bl_help_setup;    return "$BL_EX_OK" ;;
+            flush)    bl_help_flush;    return "$BL_EX_OK" ;;
+            trigger)  bl_help_trigger;  return "$BL_EX_OK" ;;
+            *)
+                bl_error_envelope usage "unknown command: $1" "(use \`bl --help\` for a list of commands)"
+                return "$BL_EX_USAGE"
                 ;;
         esac
     fi
