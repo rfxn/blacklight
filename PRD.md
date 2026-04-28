@@ -197,9 +197,12 @@ Four operator profiles, in priority order:
 - **No live LLM in CI.** `BL_DISABLE_LLM=1` short-circuits LLM calls; the test
   suite is fixture-driven, not session-driven.
 
-The tiebreaker on every build decision is the four judging weights —
-**Impact 30 / Demo 25 / Managed-Agents 20 / Depth 20**. A change that does
-not raise at least one weight is wrong.
+The tiebreaker on every build decision is whether the change raises at
+least one of: operator trust on a real host, fit with the substrate the
+operator already runs (ModSec, APF/CSF, LMD/ClamAV, cron), curator depth
+across Managed Agents primitives, or demo legibility from "operator types
+something" to "result that explains itself". A change that raises none of
+these is wrong.
 
 ---
 
@@ -608,9 +611,9 @@ roadmap pressure:
 
 ---
 
-## 12. Roadmap (post-submission)
+## 12. Roadmap
 
-The hackathon ships the foundational node. The roadmap extends it without
+v0.6.x ships the foundational node. The roadmap extends it without
 violating the supercharge-not-rearchitect pitch.
 
 **Phase P1 — stabilization + community release (Weeks 1–4).**

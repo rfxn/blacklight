@@ -147,7 +147,7 @@ The cumulative effect of #1, #2, #5, #7 is that blacklight currently lives in a 
 - Memory writes are last-write-wins with application-level retry.
 - File GC is conservative (deletion lags live-session lifecycle).
 
-None of this is fatal — blacklight ships with the stack it has — but the **demo narrative bias toward Managed Agents primitives is weaker than the strategy doc assumes** (see `PIVOT-v2.md`). If items #2 and #1 land in the public surface before submission, blacklight's positioning sharpens materially: skills become real description-routed primitives, and per-session install latency disappears from the demo recording.
+None of this is fatal — blacklight ships with the stack it has — but the **strategic positioning toward Managed Agents primitives is weaker than the strategy doc assumes** (see `PIVOT-v2.md`). When items #2 and #1 land in the public surface, blacklight's positioning sharpens materially: skills become real description-routed primitives, and per-session install latency disappears from the operator runbook.
 
 ---
 

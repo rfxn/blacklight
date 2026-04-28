@@ -290,7 +290,7 @@ Today the model is hard-coded per verb (Sonnet 4.6 for summaries, Opus for case-
 - A complementary anti-pattern in §9 of the curator prompt: do not use the sandbox to perform actions that should be wrapper-emitted (no editing host config, no shell-out to ssh, no calls to live external services that bypass the wrapper). The sandbox is a calculator and a parser, not a remote-exec channel.
 - A test-suite check (BATS): the curator-mock fixture exercises both branches — at least one fixture step shows curator using the sandbox for a reasoning aid, at least one shows emit-step for a host-touching action. The mock asserts the right branch was taken.
 
-**Why this matters:** the bash tool is the highest-leverage Managed Agents primitive that's currently underused. Articulating the decision rule unlocks the agent for ad-hoc verification mid-investigation without re-introducing the host-mutation surface that the wrapper protects against. The judging-weight axis "Managed-Agents/curator use" reads more deeply when the curator visibly uses the full primitive surface, not just the FP-gate path.
+**Why this matters:** the bash tool is the highest-leverage Managed Agents primitive that's currently underused. Articulating the decision rule unlocks the agent for ad-hoc verification mid-investigation without re-introducing the host-mutation surface that the wrapper protects against. The visible curator depth comes from using the full primitive surface — sandbox math + regex verification + dry-run validation alongside the FP-gate path — not from emitting more steps.
 
 #### 34. Environment provisioning — persistent image / `setup_script` probe
 
@@ -486,7 +486,7 @@ Operators running hundreds or thousands of investigations need cost attribution 
 - **Prometheus / OpenMetrics export** at `/var/run/blacklight/metrics` (text-format file scraped by node_exporter or a sidecar) for fleet-wide observability.
 - **Operator alerts on cost anomalies** — configurable threshold (`cost_alert_per_case_usd` in blacklight.conf) emits a notification (item 18) when crossed.
 
-**Why this matters:** cost-blind operation is fine for a hackathon demo and unworkable for an MSP running thousands of investigations a month. Per-case cost attribution makes `bl` deployable at scale.
+**Why this matters:** cost-blind operation is fine for a single-incident exercise and unworkable for an MSP running thousands of investigations a month. Per-case cost attribution makes `bl` deployable at scale.
 
 ---
 

@@ -12,7 +12,7 @@ A portable bash CLI that puts an agent on the same Linux defensive stack you alr
 [![Version](https://img.shields.io/github/v/tag/rfxn/blacklight?label=version&color=22d3ee&labelColor=09090b&sort=semver)](https://github.com/rfxn/blacklight/tags)
 [![License](https://img.shields.io/badge/license-GPL--2.0-22d3ee?labelColor=09090b)](LICENSE)
 [![Bash 4.1+](https://img.shields.io/badge/bash-4.1%2B-4ade80?labelColor=09090b)](#why-this-stack)
-[![Tests](https://img.shields.io/badge/tests-399%20BATS%20%2F%2019%20files-4ade80?labelColor=09090b)](#proof)
+[![Tests](https://img.shields.io/badge/tests-404%20BATS%20%2F%2019%20files-4ade80?labelColor=09090b)](#proof)
 [![Opus 4.7](https://img.shields.io/badge/powered%20by-Opus%204.7-d97757?labelColor=09090b)](#why-this-stack)
 [![Managed Agents](https://img.shields.io/badge/Anthropic-Managed%20Agents-a78bfa?labelColor=09090b)](#why-this-stack)
 
@@ -21,9 +21,9 @@ A portable bash CLI that puts an agent on the same Linux defensive stack you alr
 </div>
 
 > [!IMPORTANT]
-> **v0.6.0 hackathon build, Cerebral Valley "Built with 4.7" April 2026.**
+> **v0.6.1 build, originally written April 2026.**
 > Production-shape, not production-tested at fleet scale. External operator beta is roadmap P1.
-> The full docs site at [**blacklight.rfxn.com**](https://blacklight.rfxn.com) is the richer surface: this README, design notes, demo trace, talk material, and operator collateral, all rendered with proper navigation.
+> The full docs site at [**blacklight.rfxn.com**](https://blacklight.rfxn.com) is the richer surface: this README, design notes, recorded trace, and operator collateral, all rendered with proper navigation.
 
 ---
 
@@ -106,27 +106,27 @@ The full motion (observation → consult → defense → clean → case close) i
 
 ## Verify yourself
 
-A judge or operator can verify install + smoke + version in under 60 seconds without an Anthropic API key:
+An operator can verify install + smoke + version in under 60 seconds without an Anthropic API key:
 
 ```bash
 git clone https://github.com/rfxn/blacklight && cd blacklight
 make bl                                       # assemble bl from src/bl.d/NN-*.sh
-./bl --version                                # → bl 0.6.0
+./bl --version                                # → bl 0.6.1
 ./bl --help                                   # nine-namespace surface
 make -C tests test-quick                      # 00-smoke + 01-cli-surface (~70s)
 ls schemas/ skills/ routing-skills/ skills-corpus/   # 6 skill primitives + 8 corpora
-git log --oneline | head -20                  # steady commit cadence
+git log --oneline | head -20                  # commit cadence
 ```
 
 | Suite | Command | Coverage |
 |---|---|---|
 | Inner-loop | `make -C tests test-quick` | 00-smoke + 01-cli-surface (~70s) |
-| Pre-commit | `make -C tests test` + `make -C tests test-rocky9` | 399 BATS, fixture-driven |
+| Pre-commit | `make -C tests test` + `make -C tests test-rocky9` | 404 BATS, fixture-driven |
 | Release | `make -C tests test-all` | 6-distro matrix (debian12, rocky9, ubuntu2404, centos7, rocky8, ubuntu2004) |
 | Live API | `make live-trace` | `BL_LIVE`-gated; requires `ANTHROPIC_API_KEY` |
 
 > [!TIP]
-> The test suite never makes a live API call. `tests/helpers/curator-mock.bash` shims `curl` against `tests/fixtures/step-*.json`. A judge with no API key can run the full 399-test suite.
+> The test suite never makes a live API call. `tests/helpers/curator-mock.bash` shims `curl` against `tests/fixtures/step-*.json`. Anyone without an API key can run the full 404-test suite.
 
 ---
 
@@ -416,7 +416,7 @@ Explicit non-goals. Not in this version, not in any version:
 - **Not an EDR.** No kernel sensor, no endpoint telemetry agent, no platform to roll out fleetwide.
 - **Not a SIEM.** No log-aggregation substrate; `bl observe` consumes existing logs in place.
 - **Not a daemon.** `bl` is invoked once per operator thought and exits. State lives in `/var/lib/bl/` and the Anthropic-hosted session.
-- **Not a fleet manager.** v0.6.0 is single-host. Fleet propagation rides the customer's existing Puppet/Ansible/Salt/Chef.
+- **Not a fleet manager.** v0.6.x is single-host. Fleet propagation rides the operator's existing Puppet/Ansible/Salt/Chef.
 - **Not multi-tenant SaaS.** The Anthropic workspace is operator-provisioned and operator-owned. Per-tenant isolation is platform-native.
 - **Not a replacement for ModSec/APF/LMD/ClamAV/YARA.** `bl` directs them: supercharge, not rearchitect.
 - **Not Python.** Zero language runtime on the host. `bl` is bash; the agent runs in Anthropic's sandbox.
@@ -428,9 +428,9 @@ Explicit non-goals. Not in this version, not in any version:
 
 Behavioral verification is committed evidence, not a claim. Four artifacts:
 
-- **399 BATS tests across 19 files**, fixture-driven (no live API calls in CI). Pre-commit gate: debian12 + rocky9 must be green before every commit. Full release matrix runs across debian12, rocky9, ubuntu2404, centos7, rocky8, ubuntu2004. Of the 399 registered tests, 7 are environment-conditional skips (root user, missing `journalctl`/`crontab`/`zstd`, non-Linux host) and 6 are integration-deferred skips with substitute coverage paths documented inline at each `skip` site.
+- **404 BATS tests across 19 files**, fixture-driven (no live API calls in CI). Pre-commit gate: debian12 + rocky9 must be green before every commit. Full release matrix runs across debian12, rocky9, ubuntu2404, centos7, rocky8, ubuntu2004. Of the 404 registered tests, 7 are environment-conditional skips (root user, missing `journalctl`/`crontab`/`zstd`, non-Linux host) and 6 are integration-deferred skips with substitute coverage paths documented inline at each `skip` site.
 - **Live integration smoke**. [`tests/live/setup-live.bats`](tests/live/setup-live.bats) (`BL_LIVE`-gated) exercises the full provision path against the real Managed Agents API: workspace setup, agent ensure/archive, environment ensure, memory-store CRUD, Files upload, Skills create/update with CAS, session create, wake event, polled step-emit consume.
-- **Committed live trace**. [`tests/live/evidence/`](tests/live/evidence/) is a recorded run against the live Managed Agents API. Setup-phase scenes (workspace bootstrap, agent + environment provisioning, case allocation, observation substrate assembly) are clean and endpoint-verified against the real workspace. The session-creation step in the recording hit a drift in the Managed Agents beta API that has since been closed in source; see [`ANTHROPIC-API-NOTES.md`](ANTHROPIC-API-NOTES.md) for the gated-runtime detail. The 399-test BATS suite exercises the full emit / bridge / consume / writeback path under fixture mock.
+- **Committed live trace**. [`tests/live/evidence/`](tests/live/evidence/) is a recorded run against the live Managed Agents API. Setup-phase scenes (workspace bootstrap, agent + environment provisioning, case allocation, observation substrate assembly) are clean and endpoint-verified against the real workspace. The session-creation step in the recording hit a drift in the Managed Agents beta API that has since been closed in source; see [`ANTHROPIC-API-NOTES.md`](ANTHROPIC-API-NOTES.md) for the gated-runtime detail. The 404-test BATS suite exercises the full emit / bridge / consume / writeback path under fixture mock.
 - **Stress corpus**. [`exhibits/fleet-01/`](exhibits/fleet-01/) is a deterministic, byte-identical, ~360k-token APSB25-94 forensic bundle (apache + modsec + fs + cron + proc + journal + maldet) with attack needles buried in realistic noise. Cross-stream correlation is the only resolution path; no single stream resolves the case.
 
 ---

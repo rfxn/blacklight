@@ -2,6 +2,34 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== post-hackathon collateral cleanup — 2026-04-28 ===
+
+Tracked-docs pass dropping hackathon-pitch / judges / submission-window
+framing now that the Cerebral Valley "Built with 4.7" submission window
+has closed (2026-04-26). Day-1-through-Day-6 build-log content in
+HACKATHON_TIMELINE.md preserved as historical record; post-2026-04-27
+work cycles appended as a closing block.
+
+[Change] README.md — judges-language stripped; v0.6.0 → v0.6.1 and
+         399 → 404 test-count drift swept (badge, verify-yourself
+         block, suite table, Proof block, live trace footnote).
+[Change] PRD.md — judging-weights tiebreaker replaced with the
+         operator-trust ladder (operator trust · substrate fit ·
+         curator depth · demo legibility); §12 "Roadmap
+         (post-submission)" → "Roadmap" with v0.6.x lead-in.
+[Change] FUTURE.md — judging-weight axis references in #33 (curator
+         bash tool) and #24 (cost telemetry) reframed as curator-depth
+         and single-incident framing.
+[Change] HACKATHON_TIMELINE.md — header reframed (v0.6.1 + post-
+         hackathon HEAD); closing section appended covering Tier-1 /
+         Tier-2 fixture-exercise findings + PLAN-T3 punch list. Days
+         1-6 left intact as build log.
+[Change] ANTHROPIC-API-NOTES.md — "before submission" framing in the
+         architectural-impact block dropped.
+
+Verification: docs-only — no shell code touched; bash -n / shellcheck
+not applicable.
+
 === v0.6.1 — 2026-04-28 ===
 
 Tag-only release covering two post-submission fixes:

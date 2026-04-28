@@ -6,8 +6,8 @@ happened off-plan. Detail lives elsewhere: `CHANGELOG` for per-phase notes,
 `DESIGN.md` for architecture, `PIVOT-v2.md` for strategy.
 
 - **Start:** 2026-04-21 19:48 CT (`Initial commit — blacklight hackathon start`)
-- **Submission target:** 2026-04-26 (current state)
-- **HEAD:** main · v0.6.0 · 399/0 hermetic on debian12 + rocky9, 4/4 live
+- **Hackathon submission:** 2026-04-26 (Cerebral Valley "Built with 4.7", v0.5.x snapshot at `M15-final`)
+- **Post-hackathon HEAD:** main · v0.6.1 · 404 BATS / 19 files hermetic on debian12 + rocky9, 4/4 live
 
 ---
 
@@ -182,3 +182,14 @@ fallback.
 - **Specs (committed):** `docs/specs/2026-04-{24,25}-*.md`.
 - **Milestone plans (archived):** `.rdf/archive/2026-04-{24,25,26}-M*/PLAN-M*.md`.
 - **Phase deliverables (governance flow):** `.rdf/work-output/phase-M*-*-result.md` (M13 P1/2/4/6/7/8/9 + earlier per-phase outputs).
+
+---
+
+## Post-hackathon — 2026-04-27 onward
+
+The hackathon submission window closed at the v0.5.x → v0.6.0 cutover on 2026-04-26. Work after that point is not milestone-scoped; it's operator-driven UX cleanup landing as small named tier punch lists rather than M-numbered plans.
+
+- **2026-04-27 — Tier-1 / Tier-2 fixture-exercise findings (`5e69637 → 056e67f`).** End-to-end exercise of `bl` against `tests/fixtures/` surfaced nine confirmed findings: five help-block alignment drifts (Tier-1), three small code/schema fixes (Tier-2 — `bl_observe_firewall` skipping leading-`#` headers in apf/csf rules, `substrate.category` source row added to `schemas/evidence-envelope`, `bl_defend_firewall` refusing private/loopback/link-local by default).
+- **2026-04-27 — PLAN-T3 punch list (`eca7fac → 0350042 → dbecd72`).** Two remaining findings shipped as a three-commit sequence: `--help` bubbling up through depth-2 verb dispatch (`90-main.sh`), bundle codec/extension alignment (`42-observe-router.sh` writes `.tar.zst`/`.tar.gz` matching codec instead of always `.tgz`), version bump 0.6.0 → 0.6.1.
+
+The repo settles at v0.6.1 with 404 BATS / 19 files green on the pre-commit matrix. Forward roadmap lives in `FUTURE.md` (Phase 1: GPG-signed releases, manifest rotation, `bl shell` REPL, evidence dedup, notification channels, `bl undo`); strategy in `PIVOT-v2.md`; spec in `DESIGN.md`.
