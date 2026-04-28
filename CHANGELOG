@@ -2,6 +2,28 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== v0.6.1 — 2026-04-28 ===
+
+Tag-only release covering two post-submission fixes:
+- T3-A: bundle extension matches codec (.tgz / .tar.zst).
+- T3-B: bl <verb> [...] --help bubble-up at any depth.
+
+Plus doc-counter resync — PRD.md / README.md / DESIGN.md test counts
+(348/373 → 399/404) and bl_* SDK function count (137 → 155) catch up
+to the post-M13 / M14 / M15 / M16 source state.
+
+[Change] src/bl.d/00-header.sh — BL_VERSION 0.6.0 → 0.6.1.
+[Change] PRD.md, README.md, DESIGN.md — test counts and function
+         counts resynced from source. README §"Who this is for"
+         expanded to name the sysadmin / DevOps profile, and the
+         Charlotte-comparison closer rewritten to lead with the
+         OSS-defender gap rather than a hosts count.
+[Change] CHANGELOG — header for the v0.6.1 cut.
+[Change] bl — regenerated from 27 parts via 'make bl'.
+
+Verification: bash -n + shellcheck clean; make -C tests test-quick →
+34 tests, 0 failed (debian12 smoke + CLI surface).
+
 === bundle extension matches codec (.tgz / .tar.zst) — 2026-04-28 ===
 
 bl_bundle_build hardcoded the bundle filename to *.tgz regardless of

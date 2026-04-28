@@ -670,7 +670,7 @@ The current build clears each of these gates:
    confirmation and a quarantine entry written.
 5. `bl case close` archives the case brief to Files; the brief is mountable
    as precedent on a subsequent case.
-6. The full BATS suite — 373 tests across 19 files — runs green on Debian 12
+6. The full BATS suite — 399 tests across 19 files — runs green on Debian 12
    and Rocky 9 (the minimum pre-commit matrix); release matrix adds
    ubuntu2404, centos7, rocky8, ubuntu2004.
 7. Zero operator-local data in the repo. Reference data (`~/admin/work/proj/depot/polyshell/`,
@@ -696,11 +696,11 @@ codebase calibrates against them as follows.
 | 6 | README "Why Managed Agents" + "Why Opus 4.7 + 1M" | Plus this PRD, DESIGN.md, and 8 docs/ specifications: `action-tiers`, `case-layout`, `exit-codes`, `managed-agents`, `security-model`, `setup-flow`, `state-schema`, `threat-context` |
 | 7 | Zero operator-local data | Verified at every commit; `.git/info/exclude` carries the working-file fence |
 | 8 | Submitted by Sun 2026-04-26 16:00 EDT | Submitted on schedule; M13 (Skills primitive realignment) + M14 (cPanel Stage 4 + LMD trigger + unattended) + M15 (live API correctness) shipped post-submission |
-| 9 | Steady commit cadence | 26 numbered source parts, 373 BATS tests across 19 files, 9 milestones M0→M15 |
+| 9 | Steady commit cadence | 26 numbered source parts, 399 BATS tests across 19 files, 9 milestones M0→M15 |
 
 ### 14.1 Beyond the MVP — what 0.5.0 ships that wasn't on the original list
 
-- **Bash SDK surface** — 137 reusable `bl_*` primitives across 14
+- **Bash SDK surface** — 155 reusable `bl_*` primitives across 14
   families (see §5.0.1); other bash tooling can source `bl` and call
   the Managed Agents primitives directly.
 - **`install.sh` / `uninstall.sh`** — curl-pipe-bash one-liner, RPM

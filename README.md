@@ -12,7 +12,7 @@ A portable bash CLI that puts an agent on the same Linux defensive stack you alr
 [![Version](https://img.shields.io/github/v/tag/rfxn/blacklight?label=version&color=22d3ee&labelColor=09090b&sort=semver)](https://github.com/rfxn/blacklight/tags)
 [![License](https://img.shields.io/badge/license-GPL--2.0-22d3ee?labelColor=09090b)](LICENSE)
 [![Bash 4.1+](https://img.shields.io/badge/bash-4.1%2B-4ade80?labelColor=09090b)](#why-this-stack)
-[![Tests](https://img.shields.io/badge/tests-348%20BATS%20%2F%2017%20files-4ade80?labelColor=09090b)](#proof)
+[![Tests](https://img.shields.io/badge/tests-399%20BATS%20%2F%2019%20files-4ade80?labelColor=09090b)](#proof)
 [![Opus 4.7](https://img.shields.io/badge/powered%20by-Opus%204.7-d97757?labelColor=09090b)](#why-this-stack)
 [![Managed Agents](https://img.shields.io/badge/Anthropic-Managed%20Agents-a78bfa?labelColor=09090b)](#why-this-stack)
 
@@ -121,12 +121,12 @@ git log --oneline | head -20                  # steady commit cadence
 | Suite | Command | Coverage |
 |---|---|---|
 | Inner-loop | `make -C tests test-quick` | 00-smoke + 01-cli-surface (~70s) |
-| Pre-commit | `make -C tests test` + `make -C tests test-rocky9` | 348 BATS, fixture-driven |
+| Pre-commit | `make -C tests test` + `make -C tests test-rocky9` | 399 BATS, fixture-driven |
 | Release | `make -C tests test-all` | 6-distro matrix (debian12, rocky9, ubuntu2404, centos7, rocky8, ubuntu2004) |
 | Live API | `make live-trace` | `BL_LIVE`-gated; requires `ANTHROPIC_API_KEY` |
 
 > [!TIP]
-> The test suite never makes a live API call. `tests/helpers/curator-mock.bash` shims `curl` against `tests/fixtures/step-*.json`. A judge with no API key can run the full 348-test suite.
+> The test suite never makes a live API call. `tests/helpers/curator-mock.bash` shims `curl` against `tests/fixtures/step-*.json`. A judge with no API key can run the full 399-test suite.
 
 ---
 
@@ -170,11 +170,12 @@ Polyglot signatures had been flagging the artifacts since late February: PHP hid
 
 ## Who this is for
 
-Anyone running a defensive Linux stack (ModSecurity / Apache / iptables / nftables / cron / syslog) without a Charlotte-class platform budget and without time for a multi-quarter platform rollout. The substrate is industry-standard; blacklight is vendor-agnostic about which detection tools sit on top of it.
+Most defensive teams are not on Charlotte. They are running ModSecurity, Apache, iptables, nftables, ClamAV, fail2ban, syslog, cron (the OSS Linux defensive stack the industry has built since 2002), and they do not have an enterprise EDR contract, a dedicated security team, or runway for a multi-quarter platform rollout. blacklight is the agentic-defensive baseline for that audience: drop in over an existing stack, plug in an Anthropic API key, and the operator has a curator-driven case desk on the same hosts they already maintain. The art of the possible, at the edge of what is possible, in bash, today.
 
 | Operator profile | What `bl` gives them |
 |---|---|
 | **L1 SOC analyst** at a managed hosting provider or MSP | `bl trigger <hit>` opens a case from any post-scan hook; the curator drives observation, defense, and cleanup. The L1 confirms tier-gated steps. |
+| **Sysadmin / DevOps without dedicated security headcount** | The agent IS the security team for the case. No SIEM, no SOAR, no extra analysts. One key, one bash file, one curator session resumable for 30 days. |
 | **L2 engineer** running open Linux infrastructure | One curator session per case, resumable for 30 days. New evidence attaches via the Files API; the curator extends the hypothesis instead of restarting. |
 | **Hosting product owner / sysadmin on small fleets** | GPL v2, zero license cost, single bash file, `$ANTHROPIC_API_KEY` is the only credential. Operator pays Anthropic API usage; that is the entire cost. |
 | **Defender already running rfxn tools** (LMD/APF/BFD) | First-class trigger adapter for LMD `post_scan_hook`; same install discipline and operator vocabulary as the existing rfxn portfolio. |
@@ -199,7 +200,7 @@ The first wave of agentic defensive tooling, including **CrowdStrike Charlotte A
 | Compatible with $10/month customer margins | No | Yes |
 | Auditable in 30 minutes | No (closed platform) | Yes (single bash file + markdown) |
 
-The OSS Linux defensive stack runs on the order of **hundreds of millions of hosts** Charlotte structurally cannot reach. Full positioning in [`PRD.md`](PRD.md) §10.
+Most defenders sit outside the EDR/XDR perimeter, running the OSS Linux defensive stack on the order of **hundreds of millions of hosts** Charlotte structurally cannot reach, working harder than they should because platform-bound tooling does not deploy where they live. blacklight is the counter for that gap: agentic defense on the substrate the defender already owns, with the floor at bash 4.1 and the ceiling at Opus 4.7. Full positioning in [`PRD.md`](PRD.md) §10.
 
 ---
 
@@ -211,7 +212,7 @@ Three layers, clear separation of concerns:
 flowchart TB
     subgraph A["Layer A · bl on the host · bash 4.1+, curl, jq"]
         direction TB
-        A1[26 src/bl.d/ parts → assembled bl · ~10,700 lines · 136 bl_* fns]
+        A1[26 src/bl.d/ parts → assembled bl · ~10,700 lines · 155 bl_* fns]
         A2[bl observe · consult · run · defend · clean · case · setup · trigger · flush]
     end
     subgraph B["Layer B · Managed Agent session · Anthropic-hosted · Opus 4.7 · 1M ctx"]
@@ -427,9 +428,9 @@ Explicit non-goals. Not in this version, not in any version:
 
 Behavioral verification is committed evidence, not a claim. Four artifacts:
 
-- **348 BATS tests across 17 files**, fixture-driven (no live API calls in CI). Pre-commit gate: debian12 + rocky9 must be green before every commit. Full release matrix runs across debian12, rocky9, ubuntu2404, centos7, rocky8, ubuntu2004. Of the 348 registered tests, 7 are environment-conditional skips (root user, missing `journalctl`/`crontab`/`zstd`, non-Linux host) and 6 are integration-deferred skips with substitute coverage paths documented inline at each `skip` site.
+- **399 BATS tests across 19 files**, fixture-driven (no live API calls in CI). Pre-commit gate: debian12 + rocky9 must be green before every commit. Full release matrix runs across debian12, rocky9, ubuntu2404, centos7, rocky8, ubuntu2004. Of the 399 registered tests, 7 are environment-conditional skips (root user, missing `journalctl`/`crontab`/`zstd`, non-Linux host) and 6 are integration-deferred skips with substitute coverage paths documented inline at each `skip` site.
 - **Live integration smoke**. [`tests/live/setup-live.bats`](tests/live/setup-live.bats) (`BL_LIVE`-gated) exercises the full provision path against the real Managed Agents API: workspace setup, agent ensure/archive, environment ensure, memory-store CRUD, Files upload, Skills create/update with CAS, session create, wake event, polled step-emit consume.
-- **Committed live trace**. [`tests/live/evidence/`](tests/live/evidence/) is a recorded run against the live Managed Agents API. Setup-phase scenes (workspace bootstrap, agent + environment provisioning, case allocation, observation substrate assembly) are clean and endpoint-verified against the real workspace. The hypothesis-turn poll closed before the curator's first emit landed in the recorded run; the architectural wiring is endpoint-by-endpoint verified in the trace's setup output, and the wrapper-side step-emit consume path is exercised by the 348-test BATS suite under fixture mock. Re-record locally with `make live-trace` (override the polling window with `BL_LIVE_TRACE_HYPO_TIMEOUT=240`).
+- **Committed live trace**. [`tests/live/evidence/`](tests/live/evidence/) is a recorded run against the live Managed Agents API. Setup-phase scenes (workspace bootstrap, agent + environment provisioning, case allocation, observation substrate assembly) are clean and endpoint-verified against the real workspace. The session-creation step in the recording hit a drift in the Managed Agents beta API that has since been closed in source; see [`ANTHROPIC-API-NOTES.md`](ANTHROPIC-API-NOTES.md) for the gated-runtime detail. The 399-test BATS suite exercises the full emit / bridge / consume / writeback path under fixture mock.
 - **Stress corpus**. [`exhibits/fleet-01/`](exhibits/fleet-01/) is a deterministic, byte-identical, ~360k-token APSB25-94 forensic bundle (apache + modsec + fs + cron + proc + journal + maldet) with attack needles buried in realistic noise. Cross-stream correlation is the only resolution path; no single stream resolves the case.
 
 ---
