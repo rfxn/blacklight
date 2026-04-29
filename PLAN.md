@@ -185,7 +185,7 @@ observable behavior change; existing `tests/03-models.bats` and
 
 ### Phase 4: bl_setup_seed_skills_native + multipart helper
 
-**Status:** pending
+**Status:** complete
 
 **Mode:** serial-agent
 
