@@ -109,14 +109,13 @@ teardown() {
     mkdir -p "$fake_repo/routing-skills/test-skill"
     printf 'desc' > "$fake_repo/routing-skills/test-skill/description.txt"
     printf '# body' > "$fake_repo/routing-skills/test-skill/SKILL.md"
-    # Pre-compute sha and seed state.json so seed functions see no-op
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/test-skill/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/test-skill/SKILL.md" | awk '{print $1}')
+    # Pre-compute bundle sha (mirror bl_setup_seed_skills_native algorithm) so
+    # seed functions see no-op for this skill.
+    local bundle_sha
+    bundle_sha=$(find "$fake_repo/routing-skills/test-skill" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
     _state_json_seeded
-    jq --arg ds "$ds" --arg bs "$bs" \
-        '.skills["test-skill"] = {id:"skill_P6FIXTURE001", version:"1",
-            description_sha256:$ds, body_sha256:$bs}
+    jq --arg sha "$bundle_sha" \
+        '.skills["test-skill"] = {id:"skill_P6FIXTURE001", version:"1", sha256:$sha}
          | .agent.skill_versions["test-skill"] = "1"' \
         "$BL_VAR_DIR/state/state.json" > "$BL_VAR_DIR/state/state.json.tmp"
     command mv "$BL_VAR_DIR/state/state.json.tmp" "$BL_VAR_DIR/state/state.json"
@@ -167,8 +166,8 @@ teardown() {
     jq -n '{schema_version:1,
         agent:{id:"agent_M8_TEST",version:2,skill_versions:{}},
         env_id:"env_M8_TEST",
-        skills:{"s1":{id:"skill_1",version:"1",description_sha256:"a",body_sha256:"b"},
-                "s2":{id:"skill_2",version:"1",description_sha256:"c",body_sha256:"d"}},
+        skills:{"s1":{id:"skill_1",version:"1",sha256:"a"},
+                "s2":{id:"skill_2",version:"1",sha256:"c"}},
         files:{"/skills/f1.md":{file_id:"file_1",content_sha256:"e",uploaded_at:"2026-04-25T00:00:00Z"},
                "/skills/f2.md":{file_id:"file_2",content_sha256:"f",uploaded_at:"2026-04-25T00:00:00Z"},
                "/skills/f3.md":{file_id:"file_3",content_sha256:"g",uploaded_at:"2026-04-25T00:00:00Z"}},
@@ -245,14 +244,13 @@ teardown() {
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
     printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
+    # Bundle sha (mirror bl_setup_seed_skills_native) so seed_skills sees no-op.
+    local bundle_sha
+    bundle_sha=$(find "$fake_repo/routing-skills/skill-x" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
     # Pre-seed state with agent_M8_TEST + skill sha match → seed_skills no-op; ensure_agent PATCHes
     _state_json_seeded
-    jq --arg ds "$ds" --arg bs "$bs" \
-        '.skills["skill-x"] = {id:"skill_P6FIXTURE001", version:"1",
-            description_sha256:$ds, body_sha256:$bs}
+    jq --arg sha "$bundle_sha" \
+        '.skills["skill-x"] = {id:"skill_P6FIXTURE001", version:"1", sha256:$sha}
          | .agent.skill_versions["skill-x"] = "1"' \
         "$BL_VAR_DIR/state/state.json" > "$BL_VAR_DIR/state/state.json.tmp"
     command mv "$BL_VAR_DIR/state/state.json.tmp" "$BL_VAR_DIR/state/state.json"
@@ -291,16 +289,16 @@ teardown() {
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
     printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
-    # Pre-seed state.json: no agent, but env + memstore + skills sha match → only agent API fires
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
+    # Pre-seed state.json: no agent, but env + memstore + skill (id empty → still
+    # triggers create) — sha key carried in canonical form for schema parity.
+    local bundle_sha
+    bundle_sha=$(find "$fake_repo/routing-skills/skill-x" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
     mkdir -p "$BL_VAR_DIR/state"
     jq -n \
-        --arg ds "$ds" --arg bs "$bs" \
+        --arg sha "$bundle_sha" \
         '{schema_version:1, agent:{id:"",version:0,skill_versions:{}},
           env_id:"env_M8_TEST", skills:{
-            "skill-x":{id:"",version:"",description_sha256:$ds, body_sha256:$bs}},
+            "skill-x":{id:"",version:"",sha256:$sha}},
           files:{}, files_pending_deletion:[],
           case_memstores:{"_default":"memstore_case_M8"},
           case_files:{}, case_id_counter:{}, case_current:"",
@@ -536,19 +534,17 @@ teardown() {
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
     printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     printf 'original corpus content' > "$fake_repo/skills-corpus/corpus-x.md"
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
-    # Pre-populate state.json with OLD corpus sha (so sha mismatch triggers upload)
-    # Skills match so seed_skills is a no-op; only corpus triggers Files API
+    # Pre-populate state.json with OLD corpus sha (so sha mismatch triggers upload).
+    # Skills bundle sha matches so seed_skills is a no-op; only corpus triggers Files API.
+    local bundle_sha
+    bundle_sha=$(find "$fake_repo/routing-skills/skill-x" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
     mkdir -p "$BL_VAR_DIR/state"
     jq -n \
-        --arg ds "$ds" --arg bs "$bs" \
+        --arg sha "$bundle_sha" \
         '{schema_version: 1,
           agent: {id: "agent_M8_TEST", version: 3, skill_versions: {"skill-x":"1"}},
           env_id: "env_M8_TEST",
-          skills: {"skill-x": {id: "skill_P6FIXTURE001", version: "1",
-              description_sha256: $ds, body_sha256: $bs}},
+          skills: {"skill-x": {id: "skill_P6FIXTURE001", version: "1", sha256: $sha}},
           files: {"/skills/corpus-x.md": {file_id:"file_OLD",
               content_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
               uploaded_at: "2026-04-24T00:00:00Z"}},
@@ -613,7 +609,7 @@ teardown() {
         agent: {id: "agent_TODELETE", version: 1, skill_versions: {}},
         env_id: "env_TODELETE",
         skills: {"s1": {id: "skill_TODELETE", version: "1",
-            description_sha256: "aaa", body_sha256: "bbb"}},
+            sha256: "aaa"}},
         files: {"/skills/f1.md": {file_id:"file_TODELETE",
             content_sha256: "ccc", uploaded_at: "2026-04-25T00:00:00Z"}},
         files_pending_deletion: [],
@@ -1146,15 +1142,14 @@ teardown() {
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
     printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
+    local bundle_sha
+    bundle_sha=$(find "$fake_repo/routing-skills/skill-x" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
     _state_json_seeded
     # Override env_id to a pre-M17 env (no packages in live fetch response)
     jq '.env_id = "env_OLD_NO_PKGS"
-        | .skills["skill-x"] = {id:"skill_P6FIXTURE001",version:"1",description_sha256:$ds,body_sha256:$bs}
+        | .skills["skill-x"] = {id:"skill_P6FIXTURE001",version:"1",sha256:$sha}
         | .agent.skill_versions["skill-x"] = "1"' \
-        --arg ds "$ds" --arg bs "$bs" \
+        --arg sha "$bundle_sha" \
         "$BL_STATE_DIR/state.json" > "$BL_STATE_DIR/state.json.tmp"
     command mv "$BL_STATE_DIR/state.json.tmp" "$BL_STATE_DIR/state.json"
     export BL_REPO_ROOT="$fake_repo"

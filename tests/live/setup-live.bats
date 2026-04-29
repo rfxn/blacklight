@@ -144,40 +144,12 @@ setup() {
     done
     [ -z "$missing_titles" ] || { echo "missing routing-skill display_title(s):$missing_titles"; return 1; }
 
-    # (d) Run 5 fixture case prompts through the curator (cost-capped at 5 prompts);
-    # assert that BL_CURL_TRACE_LOG captures skill-invocation events matching verb->skill mapping.
-    # Uses a fresh session scoped to this test; does NOT depend on state from test 3.
-    local trace_log
-    trace_log=$(mktemp)
-    export BL_CURL_TRACE_LOG="$trace_log"
-    # Verb->skill mapping (5 verbs; authoring-incident-briefs excluded from cost cap)
-    local verb_skill_pairs=(
-        "synthesize:synthesizing-evidence"
-        "prescribe:prescribing-defensive-payloads"
-        "curate:curating-cases"
-        "gate:gating-false-positives"
-        "extract:extracting-iocs"
-    )
-    local pair verb skill_name missing_verbs=""
-    # Open a fresh case; events sent below should trigger routing-skill invocation per verb.
-    run "$BL_SOURCE" consult --new --trigger "M17-P8-routing-probe"
-    [ "$status" -eq 0 ] || { echo "consult --new failed: $output"; BL_CURL_TRACE_LOG=""; rm -f "$trace_log"; return 1; }
-    local case_id
-    case_id=$(printf '%s\n' "$output" | grep -oE 'CASE-[0-9]{4}-[0-9]{4}' | tail -1)
-    [ -n "$case_id" ] || { echo "no case_id from consult --new"; BL_CURL_TRACE_LOG=""; rm -f "$trace_log"; return 1; }
-    for pair in "${verb_skill_pairs[@]}"; do
-        verb="${pair%%:*}"
-        skill_name="${pair##*:}"
-        # Fire a minimal case-step event that should trigger the routing skill
-        run "$BL_SOURCE" consult --prompt "$case_id" "skill routing probe: $verb context for $skill_name"
-        # Check trace log for a skill invocation event referencing this skill name
-        if ! grep -q "$skill_name" "$trace_log" 2>/dev/null; then
-            missing_verbs="${missing_verbs} ${verb}(${skill_name})"
-        fi
-    done
-    BL_CURL_TRACE_LOG=""
-    rm -f "$trace_log"
-    [ -z "$missing_verbs" ] || { echo "skill routing miss for verb(s):$missing_verbs (see BL_CURL_TRACE_LOG)"; return 1; }
+    # NOTE: A sub-test (d) for verb→skill routing via `bl consult --prompt` was
+    # dropped at sentinel review — `--prompt` is not (yet) a flag on `bl consult`.
+    # Sub-tests (a)/(b)/(c) cover M17's load-bearing deltas (env packages,
+    # agent skills:[] with version "latest", routing-skill display titles)
+    # without requiring live curator turns. Verb→skill routing verification
+    # is a follow-on item (FUTURE.md) once a real consult-prompt UX exists.
 }
 
 @test "bl setup --reset --force: archive verb retires the agent live" {
