@@ -81,6 +81,39 @@ IFS='|' read -ra patterns <<< "${BL_CURATOR_MOCK_PATTERNS_CSV:-}"
 IFS='|' read -ra fixtures <<< "${BL_CURATOR_MOCK_FIXTURES_CSV:-}"
 IFS='|' read -ra statuses <<< "${BL_CURATOR_MOCK_STATUSES_CSV:-}"
 matched=0
+# Skills API multipart contract validator (M17 PR-feedback bug #1):
+# Live Anthropic API rejects:
+#   - POST /v1/skills* without `files[]=@...` (singular `file=@...` returns 400
+#     "No files provided. Please provide files using 'files[]' field.")
+#   - POST /v1/skills (create) without a non-empty `display_title=...` field.
+# Hermetic tests previously matched on URL+method alone, so those bugs landed
+# green. This validator simulates the real API contract: any multipart POST
+# to /v1/skills* missing the required fields returns the canonical 400 body.
+if [[ "$method" == "POST" && "$url" == *"/v1/skills"* && "${#multipart_fields[@]}" -gt 0 ]]; then
+    has_files_array=0
+    has_singular_file=0
+    has_display_title=0
+    for _f in "${multipart_fields[@]}"; do
+        case "$_f" in
+            'files[]=@'*)         has_files_array=1 ;;
+            'file=@'*)            has_singular_file=1 ;;
+            'display_title='?*)   has_display_title=1 ;;
+        esac
+    done
+    if (( has_singular_file == 1 && has_files_array == 0 )); then
+        printf '%s\n%s' '{"type":"error","error":{"type":"invalid_request_error","message":"No files provided. Please provide files using '"'"'files[]'"'"' field."}}' '400'
+        exit 0
+    fi
+    if (( has_files_array == 0 )); then
+        printf '%s\n%s' '{"type":"error","error":{"type":"invalid_request_error","message":"files[] field is required"}}' '400'
+        exit 0
+    fi
+    # Create endpoint (POST /v1/skills with no /<id>/versions suffix): require display_title.
+    if [[ "$url" =~ /v1/skills([?#].*)?$ ]] && (( has_display_title == 0 )); then
+        printf '%s\n%s' '{"type":"error","error":{"type":"invalid_request_error","message":"display_title field is required"}}' '400'
+        exit 0
+    fi
+fi
 _mock_wrap_for_list() {
     local raw="$1" wrap_url="$2"
     case "$wrap_url" in

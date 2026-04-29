@@ -99,6 +99,18 @@ _source_bl() {
     # POST to /v1/skills must appear in the request log
     grep -q 'POST.*v1/skills' "$BL_MOCK_REQUEST_LOG"
 
+    # M17 PR-feedback contract (live API verified 2026-04-29): create POST must
+    # use `files[]=@...` (array notation, not singular `file=@...`) AND must include
+    # a non-empty `display_title=` form field. Mock validator returns HTTP 400 if
+    # missing — the prior `[ "$status" -eq 0 ]` check already gates this — but the
+    # explicit grep makes the contract assertion legible at the test surface.
+    grep -q 'multipart:.*files\[\]=@' "$BL_MOCK_REQUEST_LOG"
+    grep -q 'multipart:.*display_title=synthesizing-evidence' "$BL_MOCK_REQUEST_LOG"
+    # Singular `file=@` (the bug shape) MUST NOT appear.
+    local singular_hits
+    singular_hits=$(awk '/multipart:.*[^[:alnum:]]file=@/{c++} END{print c+0}' "$BL_MOCK_REQUEST_LOG")
+    [ "$singular_hits" -eq 0 ]
+
     # state.json must have the skill entry populated
     local skill_id
     skill_id=$(jq -r '.skills["synthesizing-evidence"].id // empty' "$BL_STATE_DIR/state.json")
@@ -171,6 +183,13 @@ _source_bl() {
     local bare_creates
     bare_creates=$(awk '/POST.*v1\/skills$/{c++} END{print c+0}' "$BL_MOCK_REQUEST_LOG")
     [ "$bare_creates" -eq 0 ]
+
+    # M17 PR-feedback: version-create must also use `files[]=@...` array notation.
+    # No `display_title` required on this path (SKILL.md is source of truth on bumps).
+    grep -q 'multipart:.*files\[\]=@' "$BL_MOCK_REQUEST_LOG"
+    local singular_hits
+    singular_hits=$(awk '/multipart:.*[^[:alnum:]]file=@/{c++} END{print c+0}' "$BL_MOCK_REQUEST_LOG")
+    [ "$singular_hits" -eq 0 ]
 
     # state.json sha256 must be updated to new value
     local new_sha
@@ -275,12 +294,86 @@ _source_bl() {
     tmp_zip=$(mktemp)
     printf 'fake-zip-payload' > "$tmp_zip"
 
-    local files_arr=("file=@${tmp_zip};filename=test-skill.zip")
+    # M17 PR-feedback contract (live API verified 2026-04-29):
+    # - field name MUST be `files[]=@...` (array notation), not singular `file=@...`
+    # - POST /v1/skills create requires a `display_title=...` form field.
+    local files_arr=("files[]=@${tmp_zip};filename=test-skill.zip" "display_title=test-skill")
     run bl_api_call_multipart POST "/v1/skills" files_arr "$BL_API_BETA_SKILLS"
     rm -f "$tmp_zip"
     [ "$status" -eq 0 ]
     # Response body must be parseable JSON (skills-create-success.json)
     printf '%s' "$output" | jq -e '.id' > /dev/null
+}
+
+# ---------------------------------------------------------------------------
+# T9-adopt: workspace-adopt — fresh state.json + workspace skill with same
+# display_title → adopt the workspace ID and route to version-bump (no 400).
+# Regression case for the live-API "Skill cannot reuse an existing
+# display_title" 400, which fired any time state.json was reset (mktemp,
+# host migration, `setup --reset`) but the workspace was not.
+# ---------------------------------------------------------------------------
+
+@test "bl_setup_seed_skills_native: adopts existing workspace Skill on display_title match" {
+    local rs_dir
+    rs_dir=$(_make_fake_rs_dir "extracting-iocs")
+
+    # Reset routes and re-register the GET /v1/skills route to return our adoption-target
+    # fixture FIRST. The default skills-mock registers an empty-list response; route
+    # iteration matches first-hit, so a plain `add_route` after init would be shadowed.
+    bl_curator_mock_reset_routes
+    bl_curator_mock_add_route 'GET.*/v1/skills$' 'skills-list-with-adopt-target.json' 200
+    bl_curator_mock_add_route 'POST.*/v1/skills/[^/]+/versions' 'skills-version-bump-success.json' 200
+    bl_curator_mock_add_route 'POST.*/v1/skills$' 'skills-create-success.json' 201
+
+    export BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/curl-requests.log"
+    command touch "$BL_MOCK_REQUEST_LOG"
+
+    _source_bl
+    run bl_setup_seed_skills_native apply "$rs_dir"
+    [ "$status" -eq 0 ]
+
+    # Adoption fired → went down the version-bump path on the workspace ID.
+    [[ "$output" == *"adopted existing workspace Skill extracting-iocs → skill_ADOPTED_FROM_WORKSPACE"* ]]
+    grep -q 'POST.*v1/skills/skill_ADOPTED_FROM_WORKSPACE/versions' "$BL_MOCK_REQUEST_LOG"
+    # Bare create POST MUST NOT fire — adoption converted it into a version-bump.
+    local bare_creates
+    bare_creates=$(awk '/POST.*v1\/skills$/{c++} END{print c+0}' "$BL_MOCK_REQUEST_LOG")
+    [ "$bare_creates" -eq 0 ]
+
+    # state.json must record the ADOPTED id (not a fresh create id) AND the new sha+version.
+    local stored_id stored_sha stored_ver
+    stored_id=$(jq -r '.skills["extracting-iocs"].id // empty' "$BL_STATE_DIR/state.json")
+    stored_sha=$(jq -r '.skills["extracting-iocs"].sha256 // empty' "$BL_STATE_DIR/state.json")
+    stored_ver=$(jq -r '.skills["extracting-iocs"].version // empty' "$BL_STATE_DIR/state.json")
+    [ "$stored_id" = "skill_ADOPTED_FROM_WORKSPACE" ]
+    [ -n "$stored_sha" ]
+    [ -n "$stored_ver" ]
+    rm -rf "$rs_dir"
+}
+
+# ---------------------------------------------------------------------------
+# T9: SKILL.md frontmatter `display_title:` override is honored on create
+# ---------------------------------------------------------------------------
+
+@test "bl_setup_seed_skills_native: display_title frontmatter override is sent on create" {
+    local rs_dir
+    rs_dir=$(mktemp -d)
+    mkdir -p "$rs_dir/extracting-iocs"
+    printf -- '---\nname: extracting-iocs\ndisplay_title: "IOC Extraction (custom)"\ndescription: Test fixture skill body. Use when testing.\n---\n# body\n' \
+        > "$rs_dir/extracting-iocs/SKILL.md"
+    printf 'foundations\n' > "$rs_dir/extracting-iocs/foundations.md"
+
+    export BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/curl-requests.log"
+    command touch "$BL_MOCK_REQUEST_LOG"
+
+    _source_bl
+    run bl_setup_seed_skills_native apply "$rs_dir"
+    [ "$status" -eq 0 ]
+
+    # The frontmatter override (with the spaces + parens) must appear verbatim in the multipart log.
+    # grep -F so the parens are matched literally (not regex grouping).
+    grep -Fq 'display_title=IOC Extraction (custom)' "$BL_MOCK_REQUEST_LOG"
+    rm -rf "$rs_dir"
 }
 
 # ---------------------------------------------------------------------------

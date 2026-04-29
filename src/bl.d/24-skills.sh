@@ -82,13 +82,37 @@ bl_skills_get() {
 }
 
 bl_skills_delete() {
-    # bl_skills_delete <skill-id> — idempotent (404→0); 0/65/69
+    # bl_skills_delete <skill-id> — cascade-delete versions then skill; idempotent on 404.
+    # Skills API requires:
+    #   1. The Skills beta header (`skills-2025-10-02,...`) on every endpoint;
+    #      MA header returns 404 even on existing skills (different namespace).
+    #   2. All versions deleted before the skill itself: `Cannot delete skill with
+    #      existing versions. Delete all versions first.` (HTTP 400).
+    # 404 (skill already gone) → treat as success so reset / gc paths are idempotent
+    # against partial prior runs.
     local skill_id="$1"
     [[ -z "$skill_id" ]] && { bl_error_envelope skills "bl_skills_delete: skill-id required"; return "$BL_EX_USAGE"; }
+    local list_resp version_id versions_rc=0
+    list_resp=$(bl_api_call GET "/v1/skills/$skill_id/versions" "" "$BL_API_BETA_SKILLS" 2>/dev/null) || versions_rc=$?   # 2>/dev/null + capture rc: 404 means the skill is already gone — treat as success below
+    if (( versions_rc == 0 )); then
+        while IFS= read -r version_id; do
+            [[ -z "$version_id" ]] && continue
+            bl_api_call DELETE "/v1/skills/$skill_id/versions/$version_id" "" "$BL_API_BETA_SKILLS" >/dev/null || true   # || true: skip-and-continue is intentional; the final skill-delete will surface any genuine residue with a real error code
+        done < <(printf '%s' "$list_resp" | jq -r '.data[]?.version // empty' 2>/dev/null)   # 2>/dev/null: malformed list response → empty stream → empty cascade, defer error to skill-delete
+    fi
     local rc=0
-    bl_api_call DELETE "/v1/skills/$skill_id" >/dev/null || rc=$?
-    if (( rc == 0 )) || (( rc == 72 )); then
+    bl_api_call DELETE "/v1/skills/$skill_id" "" "$BL_API_BETA_SKILLS" >/dev/null || rc=$?
+    # 404 (BL_EX_PREFLIGHT_FAIL=65 from generic-4xx mapping) → idempotent success when
+    # the skill no longer exists (another reset already removed it, or workspace was
+    # GC'd between adoption and delete).
+    if (( rc == 0 )); then
         return "$BL_EX_OK"
     fi
-    return $rc
+    if (( rc == BL_EX_PREFLIGHT_FAIL )); then
+        # Confirm the skill is genuinely gone (vs. an auth/4xx other than 404) by GET-probing.
+        if ! bl_api_call GET "/v1/skills/$skill_id" "" "$BL_API_BETA_SKILLS" >/dev/null 2>&1; then
+            return "$BL_EX_OK"
+        fi
+    fi
+    return "$rc"
 }

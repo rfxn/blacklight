@@ -432,7 +432,19 @@ bl_setup_seed_skills_native() {
     local tmp_dir="${BL_TMP_DIR:-$(command mktemp -d)}"
     command mkdir -p "$tmp_dir" 2>/dev/null || true   # pre-existing dir → ok
     local d name bundle_sha existing_id existing_sha new_id new_version create_resp version_resp
-    local fm_desc desc_size
+    local fm_desc desc_size fm_display_title display_title
+    # Pre-fetch workspace skills for display_title-based adoption. Skills API rejects
+    # POST /v1/skills with HTTP 400 "Skill cannot reuse an existing display_title" when
+    # a custom skill with the same display_title already exists in the workspace —
+    # which happens any time state.json is reset (fresh `mktemp -d`, host migration,
+    # operator-driven `setup --reset`) but the workspace was not. Adopting the existing
+    # skill ID converts the would-be-conflict-create into a version-bump (or no-op when
+    # the bundle sha matches), so a stale-state-vs-live-workspace mismatch self-heals.
+    # Apply mode only — dry-run must remain side-effect-free.
+    local workspace_skills_json=""
+    if [[ "$mode" == "apply" ]]; then
+        workspace_skills_json=$(bl_api_call GET "/v1/skills" "" "$BL_API_BETA_SKILLS" 2>/dev/null) || workspace_skills_json=""   # 2>/dev/null + || fallthrough: workspace lookup is best-effort; missing data falls through to the create path which surfaces the real 400 with diagnostics
+    fi
     for d in "$rs_dir"/*/; do
         [[ -d "$d" ]] || continue
         name=$(basename "$d")
@@ -445,6 +457,15 @@ bl_setup_seed_skills_native() {
         # In apply mode → fail-fast; in dry-run → warn + skip the skill (preserve preview
         # value for the rest of the bundle so the operator sees the full diff).
         fm_desc=$(command awk '/^---/{if(found){exit}else{found=1;next}} found && /^description:/{sub(/^description:[[:space:]]*/,""); print; exit}' "$d/SKILL.md")
+        # Optional `display_title:` frontmatter; fallback to the directory basename.
+        # Skills API requires a non-empty `display_title` form field on create
+        # (live test sub-test (c) asserts equality with the basename).
+        fm_display_title=$(command awk '/^---/{if(found){exit}else{found=1;next}} found && /^display_title:/{sub(/^display_title:[[:space:]]*/,""); gsub(/^["'"'"']|["'"'"']$/,""); print; exit}' "$d/SKILL.md")
+        if printf '%s' "$fm_display_title" | grep -q '[^[:space:]]'; then
+            display_title="$fm_display_title"
+        else
+            display_title="$name"
+        fi
         if ! printf '%s' "$fm_desc" | grep -q '[^[:space:]]'; then
             if [[ "$mode" == "dry-run" ]]; then
                 bl_warn "would skip skill $name — SKILL.md frontmatter missing/empty description (dry-run preview)"
@@ -471,6 +492,19 @@ bl_setup_seed_skills_native() {
 
         existing_id=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].id // empty')
         existing_sha=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].sha256 // empty')
+        # Workspace adoption: state.json has no record but a skill with this display_title
+        # already exists in the workspace → adopt the workspace ID so the next branch
+        # routes to the version-bump path (or no-op on sha match) instead of failing on
+        # the unique-display_title 400.
+        if [[ -z "$existing_id" && -n "$workspace_skills_json" ]]; then
+            local adopted_id
+            adopted_id=$(printf '%s' "$workspace_skills_json" | jq -r --arg t "$display_title" \
+                '[.data[]? | select(.display_title == $t and .source == "custom") | .id] | first // empty' 2>/dev/null)   # 2>/dev/null: malformed list response → empty match; falls through to create
+            if [[ -n "$adopted_id" ]]; then
+                bl_info "bl setup: adopted existing workspace Skill $name → $adopted_id (display_title match)"
+                existing_id="$adopted_id"
+            fi
+        fi
         if [[ "$bundle_sha" == "$existing_sha" && -n "$existing_id" ]]; then
             bl_info "bl setup: skill $name — no change (sha matches)"
             continue
@@ -491,11 +525,19 @@ bl_setup_seed_skills_native() {
             bl_error_envelope setup "bl_setup_seed_skills_native: zip failed for $name"
             return "$BL_EX_UPSTREAM_ERROR"
         }
+        # Skills API multipart contract (verified against live API 2026-04-29):
+        #   - Field name MUST be `files[]=@...` (array notation) on both create + version-create
+        #     paths; the singular `file=@...` form returns HTTP 400 "No files provided".
+        #   - POST /v1/skills additionally requires a `display_title` form field (no default).
+        #   - POST /v1/skills/<id>/versions takes the file alone — display_title is owned by
+        #     SKILL.md (frontmatter) on the canonical skill record.
         # shellcheck disable=SC2034  # files_arr passed by name to bl_api_call_multipart (nameref pattern)
-        local files_arr=("file=@${zip_path};filename=${name}.zip")
+        local files_arr=("files[]=@${zip_path};filename=${name}.zip")
         if [[ -z "$existing_id" ]]; then
-            # Create new skill
-            create_resp=$(bl_api_call_multipart POST "/v1/skills" files_arr "$BL_API_BETA_SKILLS") || return $?
+            # Create new skill — append display_title as a sibling form field.
+            # shellcheck disable=SC2034  # create_form passed by name to bl_api_call_multipart (nameref pattern)
+            local create_form=("${files_arr[@]}" "display_title=${display_title}")
+            create_resp=$(bl_api_call_multipart POST "/v1/skills" create_form "$BL_API_BETA_SKILLS") || return $?
             new_id=$(printf '%s' "$create_resp" | jq -r '.id // empty')
             new_version=$(printf '%s' "$create_resp" | jq -r '.latest_version // .version // empty')
             [[ -z "$new_id" ]] && {
@@ -512,9 +554,14 @@ bl_setup_seed_skills_native() {
             version_resp=$(bl_api_call_multipart POST "/v1/skills/${existing_id}/versions" files_arr "$BL_API_BETA_SKILLS") || return $?
             new_version=$(printf '%s' "$version_resp" | jq -r '.version // empty')
             bl_info "bl setup: bumped Skill $name → version $new_version"
+            # Always re-emit the full {id,version,sha256} shape — the adoption branch may
+            # have populated $existing_id from a workspace lookup with no prior state entry,
+            # so a partial-update (.version + .sha256 only) leaves .id null and fails the
+            # downstream agent-body compose preflight.
             existing_state=$(printf '%s' "$existing_state" | jq \
-                --arg n "$name" --arg v "$new_version" --arg sha "$bundle_sha" \
-                '.skills[$n].version = $v | .skills[$n].sha256 = $sha')
+                --arg n "$name" --arg id "$existing_id" \
+                --arg v "$new_version" --arg sha "$bundle_sha" \
+                '.skills[$n] = {id: $id, version: $v, sha256: $sha}')
         fi
         command rm -f "$zip_path"
     done
@@ -1059,16 +1106,20 @@ bl_setup_ensure_env() {
             [[ -n "$_out" ]] && printf -v "$_out" '%s' "$cached_env"
             return "$BL_EX_OK"
         fi
-        # Packages drifted — rename old env to archive name, then create new env.
+        # Packages drifted — archive old env via the documented archive verb, then create new env.
+        # POST /v1/environments/<id>/archive is the canonical archive endpoint (verified live
+        # 2026-04-29); the prior PATCH-rename approach returned HTTP 405 (Method Not Allowed)
+        # and silently leaked stale envs in the workspace on every drift cycle. Mirrors the
+        # agent-archive pattern (`POST /v1/agents/<id>/archive`) earlier in this file.
         bl_info "bl setup: env packages drift detected ($cached_env); archiving and recreating"
-        local archive_body_file rename_rc
+        local archive_body_file archive_rc
         archive_body_file=$(command mktemp)
-        jq -n --arg n "bl-curator-env-archive-$cached_env" '{name: $n}' > "$archive_body_file"
-        rename_rc=0
-        bl_api_call PATCH "/v1/environments/$cached_env" "$archive_body_file" >/dev/null || rename_rc=$?   # >/dev/null: response body not needed; rename is best-effort (rename_rc handled below)
+        printf '{}' > "$archive_body_file"
+        archive_rc=0
+        bl_api_call POST "/v1/environments/$cached_env/archive" "$archive_body_file" >/dev/null || archive_rc=$?   # >/dev/null: response body not needed; archive is terminal-state (no unarchive verb)
         command rm -f "$archive_body_file"
-        if (( rename_rc != 0 )); then
-            bl_warn "bl setup: env archive-rename failed (non-fatal); proceeding to create new env"
+        if (( archive_rc != 0 )); then
+            bl_warn "bl setup: env archive failed (non-fatal); proceeding to create new env"
         fi
     fi
     local body_file create_resp created_id rc

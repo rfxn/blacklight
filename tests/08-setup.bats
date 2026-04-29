@@ -1132,9 +1132,10 @@ teardown() {
 # P2 (M17): bl_setup_ensure_env packages-drift branch triggers new-env create
 # ---------------------------------------------------------------------------
 
-@test "bl_setup_ensure_env: packages drift triggers archive-rename and new env create" {
+@test "bl_setup_ensure_env: packages drift triggers archive verb and new env create" {
     # Simulate: cached env exists in state.json; live fetch returns no packages field
-    # (old env provisioned before M17) → drift detected → PATCH archive-rename,
+    # (old env provisioned before M17) → drift detected → POST /archive (canonical
+    # archive verb, replaces the M17 PATCH-rename which returned 405 against live API),
     # POST new env; state.json env_id updated to new id.
     local fake_repo
     fake_repo=$(mktemp -d)
@@ -1158,7 +1159,8 @@ teardown() {
     # Reset routes; register specific env_OLD_NO_PKGS routes before the catch-all.
     bl_curator_mock_reset_routes
     bl_curator_mock_add_route 'GET.*v1/environments/env_OLD_NO_PKGS' 'setup-env-fetch-no-packages.json' 200
-    bl_curator_mock_add_route 'PATCH.*v1/environments/env_OLD_NO_PKGS' 'setup-env-create-success.json' 200
+    # POST /archive route must precede the catch-all POST /v1/environments$ route.
+    bl_curator_mock_add_route 'POST.*v1/environments/env_OLD_NO_PKGS/archive' 'setup-env-create-success.json' 200
     bl_curator_mock_add_route 'POST.*v1/environments$' 'setup-env-create-with-pkgs.json' 201
     bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-cas-success.json' 200
     run "$BL_SOURCE" setup --sync
@@ -1167,8 +1169,12 @@ teardown() {
     # state.json env_id must be updated to the new env
     run jq -r '.env_id' "$BL_STATE_DIR/state.json"
     [ "$output" = "env_M17_PKGS" ]
-    # PATCH to archive the old env must appear in request log
-    grep -q 'PATCH.*environments/env_OLD_NO_PKGS' "$BL_VAR_DIR/curl-requests.log"
+    # POST /archive on the old env must appear in request log (canonical verb).
+    grep -q 'POST.*environments/env_OLD_NO_PKGS/archive' "$BL_VAR_DIR/curl-requests.log"
+    # No PATCH against /v1/environments/<id> — the prior verb returned 405 live.
+    local patch_calls
+    patch_calls=$(awk '/PATCH.*v1\/environments/{c++} END{print c+0}' "$BL_VAR_DIR/curl-requests.log")
+    [ "$patch_calls" -eq 0 ]
     # POST to create new env must appear in request log
     grep -q 'POST.*v1/environments' "$BL_VAR_DIR/curl-requests.log"
 }
