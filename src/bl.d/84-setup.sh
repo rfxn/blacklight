@@ -384,12 +384,12 @@ bl_setup_seed_skills() {
     # and 5xx (transient, propagate). Output uses curl's "<body>\n<http_code>" via -w
     # so it parses identically under real curl AND the test curl shim
     # (tests/helpers/curator-mock.bash) which dumps body+newline+status.
-    local probe_resp probe_status
+    local probe_resp probe_status probe_beta_hdr='anthropic-beta: '"$BL_API_BETA_MA"
     probe_resp=$(curl -sS --max-time 10 -w '\n%{http_code}' \
         "https://api.anthropic.com/v1/skills" \
         -H "x-api-key: ${ANTHROPIC_API_KEY:-}" \
         -H "anthropic-version: 2023-06-01" \
-        -H "anthropic-beta: managed-agents-2026-04-01" 2>&1) || true   # network/curl fail → status="" below → fallback path
+        -H "$probe_beta_hdr" 2>&1) || true   # network/curl fail → status="" below → fallback path
     probe_status="${probe_resp##*$'\n'}"
     if [[ "$probe_status" == "404" ]]; then
         bl_warn "bl setup: Skills API unavailable (HTTP 404); uploading routing-skills as corpus Files"

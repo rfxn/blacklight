@@ -3,23 +3,35 @@
 # API helpers — HTTPS wrappers for Anthropic Managed Agents endpoints.
 # ----------------------------------------------------------------------------
 
+# Beta-header constants — update here when Anthropic revises a beta family.
+# BL_API_BETA_MA:     core Managed Agents header (sessions, memory stores, agents) — used in bl_api_call default
+# BL_API_BETA_FILES:  Files API header — consumed in 23-files.sh (bl_files_create)
+# BL_API_BETA_SKILLS: Skills API header — consumed in 84-setup.sh P4 (bl_api_call_multipart)
+readonly BL_API_BETA_MA="managed-agents-2026-04-01"
+# shellcheck disable=SC2034  # consumed in 23-files.sh; assembled bl sees it but shellcheck per-file does not
+readonly BL_API_BETA_FILES="files-api-2025-04-14"
+# shellcheck disable=SC2034  # consumed in 84-setup.sh P4; not yet referenced in this file
+readonly BL_API_BETA_SKILLS="skills-2025-10-02,code-execution-2025-08-25,files-api-2025-04-14"
+
 bl_api_call() {
-    # Usage: bl_api_call <method> <url-suffix> [body-file]
+    # Usage: bl_api_call <method> <url-suffix> [body-file] [beta-header]
     # Returns: 0 on 2xx; 65 on 401/403/other 4xx; 69 on 5xx (after retry); 70 on 429 (after retry)
     local method="$1"
     local url_suffix="$2"
     local body_file="${3:-}"
+    local beta_header="${4:-$BL_API_BETA_MA}"
     local attempt=0
     local backoffs=(2 5 10 30)
     local resp http_status body body_args=()
 
     [[ -n "$body_file" ]] && body_args=(--data-binary "@$body_file")
+    local beta_hdr='anthropic-beta: '"${beta_header}"
 
     while (( attempt < 4 )); do
         resp=$(curl -sS --max-time 30 -w '\n%{http_code}' -X "$method" \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
-            -H "anthropic-beta: managed-agents-2026-04-01" \
+            -H "$beta_hdr" \
             -H "content-type: application/json" \
             ${body_args[@]+"${body_args[@]}"} \
             "https://api.anthropic.com${url_suffix}" 2>&1) || true   # retry handles curl exit; ${arr[@]+"${arr[@]}"} guards bash 4.1 set -u trap on empty arrays (CentOS 6 floor)
