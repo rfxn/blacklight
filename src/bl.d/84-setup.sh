@@ -360,9 +360,8 @@ bl_setup_seed_corpus() {
 }
 
 # bl_setup_seed_skills <mode> — mode: dry-run | apply
-# Probes /v1/skills availability; if the endpoint is live, creates/bumps routing Skills.
-# If /v1/skills returns 404 (endpoint unavailable), falls back to uploading each
-# routing-skill SKILL.md as a corpus File so the content remains available to sessions.
+# Dispatcher: probes Skills API availability; routes to _native (M17 Path A) when
+# the endpoint returns 2xx. Falls back to _as_files on 404 (retained through P8; Q4).
 bl_setup_seed_skills() {
     local mode="${1:-apply}"
     local repo_root
@@ -379,12 +378,9 @@ bl_setup_seed_skills() {
         return "$BL_EX_PREFLIGHT_FAIL"
     fi
 
-    # Probe Skills API availability. Distinguish 404 (endpoint not enabled in this
-    # workspace — Path A allowlist not granted) from 401/403 (auth failure, propagate)
-    # and 5xx (transient, propagate). Output uses curl's "<body>\n<http_code>" via -w
-    # so it parses identically under real curl AND the test curl shim
-    # (tests/helpers/curator-mock.bash) which dumps body+newline+status.
-    local probe_resp probe_status probe_beta_hdr='anthropic-beta: '"$BL_API_BETA_MA"
+    # Probe Skills API availability. Output uses curl's "<body>\n<http_code>" via -w
+    # so it parses identically under real curl AND the test curl shim.
+    local probe_resp probe_status probe_beta_hdr='anthropic-beta: '"$BL_API_BETA_SKILLS"
     probe_resp=$(curl -sS --max-time 10 -w '\n%{http_code}' \
         "https://api.anthropic.com/v1/skills" \
         -H "x-api-key: ${ANTHROPIC_API_KEY:-}" \
@@ -401,51 +397,92 @@ bl_setup_seed_skills() {
         return "$BL_EX_UPSTREAM_ERROR"
     fi
 
+    # Skills API available — use native path (M17 P4)
+    bl_setup_seed_skills_native "$mode" "$rs_dir"
+    return $?
+}
+
+# bl_setup_seed_skills_native <mode> <rs-dir> — native Skills API path (M17 P4).
+# For each routing-skill: computes sha256 of all bundled files (sorted by path);
+# compares to state.skills.<name>.sha256. If match → skip. If existing id → version-bump.
+# Else → create new skill. Updates state.skills.<name>.{id, version, sha256} via
+# atomic state.json write. Zip bundle created under BL_TMP_DIR.
+bl_setup_seed_skills_native() {
+    local mode="${1:-apply}"
+    local rs_dir="$2"
+    [[ -d "$rs_dir" ]] || {
+        bl_error_envelope setup "bl_setup_seed_skills_native: rs-dir not found: $rs_dir"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
+    # zip required for bundle construction
+    command -v zip >/dev/null 2>&1 || {   # zip absence → fail-fast; operator must install zip
+        bl_error_envelope setup "bl_setup_seed_skills_native: zip not found in PATH"
+        return "$BL_EX_PREFLIGHT_FAIL"
+    }
     local state_file="$BL_STATE_DIR/state.json"
     local existing_state="{}"
     [[ -f "$state_file" ]] && existing_state=$(command cat "$state_file")
-    local d name desc_file body_file desc_sha body_sha existing_id existing_desc_sha existing_body_sha new_id new_version
+    local tmp_dir="${BL_TMP_DIR:-$(command mktemp -d)}"
+    command mkdir -p "$tmp_dir" 2>/dev/null || true   # pre-existing dir → ok
+    local d name bundle_sha existing_id existing_sha new_id new_version create_resp version_resp
     for d in "$rs_dir"/*/; do
+        [[ -d "$d" ]] || continue
         name=$(basename "$d")
-        desc_file="$d/description.txt"
-        body_file="$d/SKILL.md"
-        [[ -r "$desc_file" && -r "$body_file" ]] || {
-            bl_warn "bl setup: skipping $name — missing description.txt or SKILL.md"
+        [[ -r "$d/SKILL.md" ]] || {
+            bl_warn "bl setup: skipping $name — missing SKILL.md"
             continue
         }
-        desc_sha=$(command sha256sum "$desc_file" | command awk '{print $1}')
-        body_sha=$(command sha256sum "$body_file" | command awk '{print $1}')
+        # Compute bundle sha256: sha256 of all files in the skill dir, sorted by path.
+        # Using find + sort to guarantee stable ordering across filesystems.
+        bundle_sha=$(find "$d" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | command awk '{print $1}')   # 2>/dev/null: sha256sum on symlinks or unreadable files → skip (sorted list still yields stable sha)
         existing_id=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].id // empty')
-        existing_desc_sha=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].description_sha256 // empty')
-        existing_body_sha=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].body_sha256 // empty')
-        if [[ "$desc_sha" == "$existing_desc_sha" && "$body_sha" == "$existing_body_sha" && -n "$existing_id" ]]; then
-            bl_debug "bl_setup_seed_skills: skip $name (no change)"
+        existing_sha=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].sha256 // empty')
+        if [[ "$bundle_sha" == "$existing_sha" && -n "$existing_id" ]]; then
+            bl_info "bl setup: skill $name — no change (sha matches)"
             continue
         fi
         if [[ "$mode" == "dry-run" ]]; then
             if [[ -z "$existing_id" ]]; then
-                printf 'would skills.create %s\n' "$name"
+                printf 'would skills.create %s (sha %s)\n' "$name" "${bundle_sha:0:8}"
             else
-                printf 'would skills.versions.create %s (desc/body sha changed)\n' "$name"
+                printf 'would skills.versions.create %s (sha changed %s → %s)\n' \
+                    "$name" "${existing_sha:0:8}" "${bundle_sha:0:8}"
             fi
             continue
         fi
+        # Build zip bundle: cd into rs_dir parent so zip root entry is <name>/SKILL.md etc.
+        local zip_path="$tmp_dir/${name}.zip"
+        command rm -f "$zip_path"
+        ( cd "$rs_dir" && zip -r "$zip_path" "$name/" >/dev/null 2>&1 ) || {   # 2>/dev/null: zip chatter irrelevant; exit code is the signal
+            bl_error_envelope setup "bl_setup_seed_skills_native: zip failed for $name"
+            return "$BL_EX_UPSTREAM_ERROR"
+        }
+        # shellcheck disable=SC2034  # files_arr passed by name to bl_api_call_multipart (nameref pattern)
+        local files_arr=("file=@${zip_path};filename=${name}.zip")
         if [[ -z "$existing_id" ]]; then
-            new_id=$(bl_skills_create "$name" "$desc_file" "$body_file") || return $?
-            new_version=$(bl_skills_get "$new_id" | jq -r '.version // empty')
+            # Create new skill
+            create_resp=$(bl_api_call_multipart POST "/v1/skills" files_arr "$BL_API_BETA_SKILLS") || return $?
+            new_id=$(printf '%s' "$create_resp" | jq -r '.id // empty')
+            new_version=$(printf '%s' "$create_resp" | jq -r '.latest_version // .version // empty')
+            [[ -z "$new_id" ]] && {
+                bl_error_envelope setup "bl_setup_seed_skills_native: create returned no id for $name"
+                return "$BL_EX_UPSTREAM_ERROR"
+            }
             bl_info "bl setup: created Skill $name → $new_id (version $new_version)"
             existing_state=$(printf '%s' "$existing_state" | jq \
-                --arg n "$name" --arg id "$new_id" --arg v "$new_version" \
-                --arg ds "$desc_sha" --arg bs "$body_sha" \
-                '.skills[$n] = {id: $id, version: $v, description_sha256: $ds, body_sha256: $bs}')
+                --arg n "$name" --arg id "$new_id" \
+                --arg v "$new_version" --arg sha "$bundle_sha" \
+                '.skills[$n] = {id: $id, version: $v, sha256: $sha}')
         else
-            new_version=$(bl_skills_versions_create "$existing_id" "$desc_file" "$body_file") || return $?
+            # Bump existing skill version
+            version_resp=$(bl_api_call_multipart POST "/v1/skills/${existing_id}/versions" files_arr "$BL_API_BETA_SKILLS") || return $?
+            new_version=$(printf '%s' "$version_resp" | jq -r '.version // empty')
             bl_info "bl setup: bumped Skill $name → version $new_version"
             existing_state=$(printf '%s' "$existing_state" | jq \
-                --arg n "$name" --arg v "$new_version" \
-                --arg ds "$desc_sha" --arg bs "$body_sha" \
-                '.skills[$n].version = $v | .skills[$n].description_sha256 = $ds | .skills[$n].body_sha256 = $bs')
+                --arg n "$name" --arg v "$new_version" --arg sha "$bundle_sha" \
+                '.skills[$n].version = $v | .skills[$n].sha256 = $sha')
         fi
+        command rm -f "$zip_path"
     done
     if [[ "$mode" != "dry-run" ]]; then
         local tmp_state="$state_file.tmp.$$"

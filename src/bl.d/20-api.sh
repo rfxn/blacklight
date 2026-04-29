@@ -306,6 +306,83 @@ bl_mem_list() {
     return $?
 }
 
+bl_api_call_multipart() {
+    # bl_api_call_multipart <method> <url-suffix> <files-array-name> [beta-header]
+    # Sends a multipart/form-data request. <files-array-name> is the name of a
+    # bash array (nameref via eval) containing entries of the form:
+    #   <field>=@<file>  or  <field>=@<file>;filename=<override>
+    # Returns: 0 on 2xx; 65 on 4xx auth; 69 on 5xx after 1 retry; 64 on usage error.
+    local method="$1"
+    local url_suffix="$2"
+    local files_array_name="$3"
+    local beta_header="${4:-$BL_API_BETA_SKILLS}"
+    [[ -z "$method" || -z "$url_suffix" || -z "$files_array_name" ]] && {
+        bl_error_envelope api "bl_api_call_multipart: method, url-suffix, and files-array-name required"
+        return "$BL_EX_USAGE"
+    }
+    # Build -F args from the named array via eval-based indirect expansion.
+    # _arr_len and _entry are assigned by eval; declare them first so local scope
+    # is established, then assign via eval.
+    local form_args=()
+    local _arr_len=0 _entry="" _i=0
+    # shellcheck disable=SC2016  # single-quote intentional: prevents premature $files_array_name expansion inside eval
+    eval '_arr_len=${#'"$files_array_name"'[@]}'
+    while (( _i < _arr_len )); do
+        # shellcheck disable=SC2016  # same reason as above
+        eval '_entry=${'"$files_array_name"'[$_i]}'
+        form_args+=(-F "$_entry")
+        _i=$(( _i + 1 ))
+    done
+    local beta_hdr='anthropic-beta: '"${beta_header}"
+    local attempt=0
+    local resp http_status body
+    while (( attempt < 2 )); do
+        resp=$(curl -sS --max-time 60 -w '\n%{http_code}' -X "$method" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "$beta_hdr" \
+            ${form_args[@]+"${form_args[@]}"} \
+            "https://api.anthropic.com${url_suffix}" 2>&1) || true   # retry handles curl exit; ${arr[@]+"${arr[@]}"} guards bash 4.1 set -u on empty arrays
+        http_status="${resp##*$'\n'}"
+        body="${resp%$'\n'*}"
+        case "$http_status" in
+            2??)
+                printf '%s' "$body"
+                return "$BL_EX_OK"
+                ;;
+            401|403)
+                bl_error_envelope api "bl_api_call_multipart: authentication failed (HTTP $http_status)"
+                bl_debug "bl_api_call_multipart: body=$body"
+                return "$BL_EX_PREFLIGHT_FAIL"
+                ;;
+            5??)
+                attempt=$(( attempt + 1 ))
+                if (( attempt >= 2 )); then
+                    bl_error_envelope api "bl_api_call_multipart: upstream error (HTTP $http_status) after retry; run 'bl setup --apply' to retry"
+                    return "$BL_EX_UPSTREAM_ERROR"
+                fi
+                bl_debug "bl_api_call_multipart: ${http_status}, retrying once"
+                sleep 5
+                ;;
+            4??)
+                bl_error_envelope api "bl_api_call_multipart: client error (HTTP $http_status)"
+                bl_debug "bl_api_call_multipart: body=$body"
+                return "$BL_EX_PREFLIGHT_FAIL"
+                ;;
+            *)
+                attempt=$(( attempt + 1 ))
+                if (( attempt >= 2 )); then
+                    bl_error_envelope api "bl_api_call_multipart: unexpected response (HTTP ${http_status:-?}) after retry"
+                    return "$BL_EX_UPSTREAM_ERROR"
+                fi
+                bl_debug "bl_api_call_multipart: unexpected status ${http_status:-?}, retrying"
+                sleep 5
+                ;;
+        esac
+    done
+    return "$BL_EX_UPSTREAM_ERROR"
+}
+
 # ----------------------------------------------------------------------------
 # Preflight — DESIGN.md §8.1 contract:
 # 1. Verify ANTHROPIC_API_KEY set + non-empty
