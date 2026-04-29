@@ -79,7 +79,7 @@ observable behavior change; existing `tests/03-models.bats` and
 
 ### Phase 2: config.packages adoption + env recreation
 
-**Status:** pending
+**Status:** complete
 
 **Mode:** serial-agent
 
