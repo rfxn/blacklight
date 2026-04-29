@@ -64,8 +64,8 @@ _make_6skill_repo_and_state() {
     local state_skills='{}'
     for sname in "${skill_names[@]}"; do
         mkdir -p "$repo/routing-skills/$sname"
-        printf '%s' "# SKILL: $sname" > "$repo/routing-skills/$sname/SKILL.md"
-        sha_val=$(find "$repo/routing-skills/$sname" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
+        printf -- '---\nname: %s\ndescription: test fixture skill body\n---\n# SKILL: %s\n' "$sname" "$sname" > "$repo/routing-skills/$sname/SKILL.md"
+        sha_val=$( ( cd "$repo/routing-skills/$sname" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
         state_skills=$(printf '%s' "$state_skills" | jq \
             --arg n "$sname" --arg id "skill_${sname}_ID" --arg sha "$sha_val" \
             '.[$n] = {id: ("skill_" + $n + "_ID"), version: "1", sha256: $sha}')
@@ -108,11 +108,11 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/test-skill"
     printf 'desc' > "$fake_repo/routing-skills/test-skill/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/test-skill/SKILL.md"
+    printf -- '---\nname: test-skill\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/test-skill/SKILL.md"
     # Pre-compute bundle sha (mirror bl_setup_seed_skills_native algorithm) so
     # seed functions see no-op for this skill.
     local bundle_sha
-    bundle_sha=$(find "$fake_repo/routing-skills/test-skill" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/test-skill" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     _state_json_seeded
     jq --arg sha "$bundle_sha" \
         '.skills["test-skill"] = {id:"skill_P6FIXTURE001", version:"1", sha256:$sha}
@@ -208,12 +208,12 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-a"
     printf 'desc' > "$fake_repo/routing-skills/skill-a/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-a/SKILL.md"
+    printf -- '---\nname: skill-a\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-a/SKILL.md"
     # Pre-populate state.json with sha match for skill-a so seed_skills_native skips.
     # Bundle sha mirrors bl_setup_seed_skills_native's algorithm (84-setup.sh ~line 437):
     # sha256 of all files in the skill dir, sorted by path, hashed twice.
     local bundle_sha
-    bundle_sha=$(find "$fake_repo/routing-skills/skill-a" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-a" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     _state_json_seeded
     jq --arg sha "$bundle_sha" \
         '.skills["skill-a"] = {id:"skill_P6FIXTURE001", version:"1", sha256:$sha}
@@ -243,10 +243,10 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     # Bundle sha (mirror bl_setup_seed_skills_native) so seed_skills sees no-op.
     local bundle_sha
-    bundle_sha=$(find "$fake_repo/routing-skills/skill-x" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-x" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     # Pre-seed state with agent_M8_TEST + skill sha match → seed_skills no-op; ensure_agent PATCHes
     _state_json_seeded
     jq --arg sha "$bundle_sha" \
@@ -288,11 +288,11 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     # Pre-seed state.json: no agent, but env + memstore + skill (id empty → still
     # triggers create) — sha key carried in canonical form for schema parity.
     local bundle_sha
-    bundle_sha=$(find "$fake_repo/routing-skills/skill-x" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-x" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     mkdir -p "$BL_VAR_DIR/state"
     jq -n \
         --arg sha "$bundle_sha" \
@@ -409,7 +409,7 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     export BL_REPO_ROOT="$fake_repo"
     bl_curator_mock_add_route 'POST.*v1/environments$' 'setup-env-create-success.json' 201
     bl_curator_mock_add_route 'GET.*v1/memory_stores' 'setup-memstore-list-empty.json' 200
@@ -482,12 +482,12 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     printf 'corpus content' > "$fake_repo/skills-corpus/corpus-x.md"
     # Pre-populate state.json with matching bundle sha for skill-x and content sha for corpus.
     # Bundle sha mirrors bl_setup_seed_skills_native's algorithm (84-setup.sh ~line 437).
     local bundle_sha corpus_sha
-    bundle_sha=$(find "$fake_repo/routing-skills/skill-x" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-x" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     corpus_sha=$(sha256sum "$fake_repo/skills-corpus/corpus-x.md" | awk '{print $1}')
     mkdir -p "$BL_VAR_DIR/state"
     jq -n \
@@ -532,12 +532,12 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     printf 'original corpus content' > "$fake_repo/skills-corpus/corpus-x.md"
     # Pre-populate state.json with OLD corpus sha (so sha mismatch triggers upload).
     # Skills bundle sha matches so seed_skills is a no-op; only corpus triggers Files API.
     local bundle_sha
-    bundle_sha=$(find "$fake_repo/routing-skills/skill-x" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-x" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     mkdir -p "$BL_VAR_DIR/state"
     jq -n \
         --arg sha "$bundle_sha" \
@@ -579,7 +579,7 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     printf 'corpus content' > "$fake_repo/skills-corpus/corpus-x.md"
     _state_json_seeded
     export BL_REPO_ROOT="$fake_repo"
@@ -864,7 +864,7 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     printf 'corpus content' > "$fake_repo/skills-corpus/corpus-x.md"
     _state_json_seeded
     export BL_REPO_ROOT="$fake_repo"
@@ -965,7 +965,7 @@ teardown() {
     # Provide one routing-skills entry so bl_setup_seed_skills does not abort
     mkdir -p "$fake_repo/routing-skills/test-skill"
     printf 'desc' > "$fake_repo/routing-skills/test-skill/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/test-skill/SKILL.md"
+    printf -- '---\nname: test-skill\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/test-skill/SKILL.md"
     printf '# foundations\n' > "$fake_repo/skills-corpus/foundations.md"
     _state_json_seeded
     export BL_REPO_ROOT="$fake_repo"
@@ -1141,9 +1141,9 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     local bundle_sha
-    bundle_sha=$(find "$fake_repo/routing-skills/skill-x" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-x" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     _state_json_seeded
     # Override env_id to a pre-M17 env (no packages in live fetch response)
     jq '.env_id = "env_OLD_NO_PKGS"

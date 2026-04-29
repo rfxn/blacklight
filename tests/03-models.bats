@@ -139,13 +139,18 @@ EOF
 }
 
 @test "no hardcoded anthropic-beta: string literal remains in src/bl.d/" {
-    # Parity guard: P1 replaced all \"anthropic-beta: <value>\" string literals
-    # with constant-driven construction.  Any new literal is a regression.
+    # Parity guard: P1 centralized beta-header values into BL_API_BETA_* constants.
+    # The legitimate concat pattern is `'anthropic-beta: '"$BL_API_BETA_MA"` —
+    # the prefix `anthropic-beta: ` lives in a string but the *value* comes
+    # from a variable. The bad pattern is `"anthropic-beta: <literal-value>"` /
+    # `'anthropic-beta: <literal-value>'` — value baked into the string.
+    # Distinguish by requiring a closing quote AFTER the value: a literal value
+    # is followed by `"` or `'`; a concat splits the string before the variable.
     local src_dir
     src_dir="${BL_REPO_ROOT}/src/bl.d"
     [[ ! -d "$src_dir" ]] && src_dir="/opt/blacklight-src/src/bl.d"
     local hits
-    hits=$(grep -rn '"anthropic-beta:' "$src_dir" 2>/dev/null) || true
+    hits=$(grep -rEn '["'\'']anthropic-beta:[[:space:]]+[a-z0-9._,-]+["'\'']' "$src_dir" 2>/dev/null) || true   # 2>/dev/null: silent on missing dir; empty $hits → assertion fires below
     [ -z "$hits" ]
 }
 

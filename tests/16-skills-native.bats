@@ -121,7 +121,7 @@ _source_bl() {
     # Compute the expected sha256 for this skill's bundle
     local skill_dir="$rs_dir/synthesizing-evidence"
     local sha
-    sha=$(find "$skill_dir" -type f | sort | xargs sha256sum | sha256sum | awk '{print $1}')
+    sha=$( ( cd "$skill_dir" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
 
     # Pre-seed state.json with matching sha256 and an id
     _seed_state_with_skill "synthesizing-evidence" "skill_EXISTING001" "$sha"

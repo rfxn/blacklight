@@ -36,9 +36,15 @@ bl_setup() {
             local gc_mode="apply"
             [[ "${1:-}" == "--dry-run" ]] && gc_mode="dry-run"
             bl_setup_local_preflight || return $?
-            bl_setup_gc
-            local _gc_rc=$?
-            (( _gc_rc != 0 )) && return "$_gc_rc"
+            # bl_setup_gc performs real DELETEs; honor dry-run by skipping it entirely.
+            # The skills/files-orphan phase has its own dry-run plumbing.
+            if [[ "$gc_mode" != "dry-run" ]]; then
+                bl_setup_gc
+                local _gc_rc=$?
+                (( _gc_rc != 0 )) && return "$_gc_rc"
+            else
+                printf 'bl setup --gc --dry-run: pending-deletion files GC skipped (dry-run mode)\n'
+            fi
             bl_setup_skills_gc "$gc_mode"
             return $?
             ;;
@@ -434,17 +440,26 @@ bl_setup_seed_skills_native() {
             bl_warn "bl setup: skipping $name — missing SKILL.md"
             continue
         }
-        # SKILL.md frontmatter description size cap — Anthropic Skills API rejects >1024 chars
-        # (spec §11b row 6). Parse the YAML frontmatter `description:` value and fail-fast.
+        # SKILL.md frontmatter description: must be present, non-empty, and ≤1024 chars
+        # (Anthropic Skills API spec). Parse the YAML frontmatter `description:` value and fail-fast.
         fm_desc=$(command awk '/^---/{if(found){exit}else{found=1;next}} found && /^description:/{sub(/^description:[[:space:]]*/,""); print; exit}' "$d/SKILL.md")
+        # Reject missing/empty description before reject-too-long so the operator sees the right error.
+        if ! printf '%s' "$fm_desc" | grep -q '[^[:space:]]'; then
+            bl_error_envelope setup "SKILL.md frontmatter must include a non-empty description: $d/SKILL.md"
+            return "$BL_EX_PREFLIGHT_FAIL"
+        fi
         desc_size=${#fm_desc}
         if (( desc_size > 1024 )); then
             bl_error_envelope setup "SKILL.md description exceeds 1024 chars: $d/SKILL.md ($desc_size)"
             return "$BL_EX_PREFLIGHT_FAIL"
         fi
-        # Compute bundle sha256: sha256 of all files in the skill dir, sorted by path.
-        # Using find + sort to guarantee stable ordering across filesystems.
-        bundle_sha=$(find "$d" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | command awk '{print $1}')   # 2>/dev/null: sha256sum on symlinks or unreadable files → skip (sorted list still yields stable sha)
+        # Compute bundle sha256: relative-path, null-delimited pipeline so the sha is
+        # stable across repo location AND safe against whitespace/newlines in filenames.
+        # `cd "$d" && find .` keeps paths relative; `-print0` + `sort -z` + `xargs -0`
+        # closes the whitespace gap; the trailing sha256sum hashes content + relative
+        # path, which is what we want (relative path is load-bearing for skill identity).
+        bundle_sha=$( ( cd "$d" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | command awk '{print $1}' ) )   # 2>/dev/null: unreadable files skipped; ordering still stable
+
         existing_id=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].id // empty')
         existing_sha=$(printf '%s' "$existing_state" | jq -r --arg n "$name" '.skills[$n].sha256 // empty')
         if [[ "$bundle_sha" == "$existing_sha" && -n "$existing_id" ]]; then
@@ -690,7 +705,7 @@ bl_setup_skills_gc() {
     }
 
     local skill_id skill_title
-    local orphan_found=0
+    local orphan_found=0 gc_failures=0
     while IFS=$'\t' read -r skill_id skill_title; do
         [[ -z "$skill_id" ]] && continue
         # Check if this skill's display_title is in our orphan set
@@ -714,20 +729,31 @@ bl_setup_skills_gc() {
             bl_error_envelope setup "bl_setup_skills_gc: GET /v1/skills/${skill_id}/versions failed"
             return "$BL_EX_UPSTREAM_ERROR"
         }
+        # Track per-skill version-delete outcomes; only proceed to skill-delete if all versions cleared.
+        local versions_failed=0
         while IFS= read -r version_id; do
             [[ -z "$version_id" ]] && continue
-            if ! bl_api_call DELETE "/v1/skills/${skill_id}/versions/${version_id}" "" "$BL_API_BETA_SKILLS" >/dev/null; then
+            if bl_api_call DELETE "/v1/skills/${skill_id}/versions/${version_id}" "" "$BL_API_BETA_SKILLS" >/dev/null; then
+                bl_info "bl_setup_skills_gc: deleted version ${version_id} of skill ${skill_id}"
+            else
                 bl_warn "bl_setup_skills_gc: version-delete failed for skill=${skill_id} version=${version_id}"
-                # Surface error but do NOT skip the skill-delete (cascade order is mandatory)
+                versions_failed=$((versions_failed + 1))
             fi
-            bl_info "bl_setup_skills_gc: deleted version ${version_id} of skill ${skill_id}"
         done < <(printf '%s' "$versions_resp" | jq -r '.data[].id // empty' 2>/dev/null)   # 2>/dev/null: jq diagnostic irrelevant; empty array → no iterations, no error
 
-        # Delete the skill itself after versions are cleared
-        if ! bl_api_call DELETE "/v1/skills/${skill_id}" "" "$BL_API_BETA_SKILLS" >/dev/null; then
-            bl_warn "bl_setup_skills_gc: skill-delete failed for ${skill_id} (${skill_title})"
-        else
+        # Skip skill-delete if any version delete failed — Skills API rejects skill-delete
+        # with versions present (HTTP 400 per 2026-04-28 probe). Logging "deleted" against
+        # an undeleted skill misleads the operator.
+        if (( versions_failed > 0 )); then
+            bl_warn "bl_setup_skills_gc: skipping skill-delete for ${skill_id} — ${versions_failed} version(s) still present"
+            gc_failures=$((gc_failures + 1))
+            continue
+        fi
+        if bl_api_call DELETE "/v1/skills/${skill_id}" "" "$BL_API_BETA_SKILLS" >/dev/null; then
             bl_info "bl_setup_skills_gc: deleted orphan skill ${skill_id} (${skill_title})"
+        else
+            bl_warn "bl_setup_skills_gc: skill-delete failed for ${skill_id} (${skill_title})"
+            gc_failures=$((gc_failures + 1))
         fi
     done < <(printf '%s' "$skills_list_resp" | jq -r '.data[] | [.id, (.display_title // .name // "")] | @tsv' 2>/dev/null)   # 2>/dev/null: jq diagnostic irrelevant; empty .data → no iterations
 
@@ -763,10 +789,11 @@ bl_setup_skills_gc() {
             continue
         fi
 
-        if ! bl_files_delete "$file_id" >/dev/null; then
-            bl_warn "bl_setup_skills_gc: file-delete failed for ${file_id} (${file_name})"
-        else
+        if bl_files_delete "$file_id" >/dev/null; then
             bl_info "bl_setup_skills_gc: deleted workspace file ${file_id} (${file_name})"
+        else
+            bl_warn "bl_setup_skills_gc: file-delete failed for ${file_id} (${file_name})"
+            gc_failures=$((gc_failures + 1))
         fi
     done < <(printf '%s' "$files_list_resp" | jq -r '.data[] | [.id, (.filename // ""), (.scope.type // "")] | @tsv' 2>/dev/null)   # 2>/dev/null: jq diagnostic irrelevant; empty .data → no iterations
 
@@ -774,6 +801,12 @@ bl_setup_skills_gc() {
         printf 'bl setup --gc: no orphan workspace files found matching routing-skill-name pattern\n'
     fi
 
+    # Exit non-zero if any DELETE failed across versions/skills/files — the operator must
+    # see the actual gc state, not a green summary while orphans remain.
+    if (( gc_failures > 0 )); then
+        bl_error_envelope setup "bl_setup_skills_gc: ${gc_failures} delete operation(s) failed; rerun bl setup --gc"
+        return "$BL_EX_UPSTREAM_ERROR"
+    fi
     return "$BL_EX_OK"
 }
 
@@ -998,14 +1031,19 @@ bl_setup_ensure_env() {
     fi
     if [[ -n "$cached_env" ]]; then
         # Packages-drift check: fetch live env; compare sorted apt list to canonical.
-        local live_env_resp live_pkgs_sorted drift=0
-        live_env_resp=$(bl_api_call GET "/v1/environments/$cached_env") || drift=1
-        if (( drift == 0 )); then
-            live_pkgs_sorted=$(printf '%s' "$live_env_resp" \
-                | jq -c '[.config.packages.apt // [] | .[] ] | sort' 2>/dev/null || printf '[]')   # 2>/dev/null: jq diagnostic on missing/malformed field — drift=1 already handles any failure
-            if [[ "$live_pkgs_sorted" != "$_canonical_pkgs" ]]; then
-                drift=1
-            fi
+        # Distinguish "fetch failed" (transient network / 5xx / timeout) from
+        # "packages mismatched" — only the latter justifies archive + recreate.
+        # Fetch failure: keep cached env unchanged, surface upstream error to operator.
+        local live_env_resp live_pkgs_sorted drift=0 fetch_rc=0
+        live_env_resp=$(bl_api_call GET "/v1/environments/$cached_env") || fetch_rc=$?
+        if (( fetch_rc != 0 )); then
+            bl_warn "bl setup: GET /v1/environments/$cached_env failed (rc=$fetch_rc); preserving cached env unchanged"
+            return "$fetch_rc"
+        fi
+        live_pkgs_sorted=$(printf '%s' "$live_env_resp" \
+            | jq -c '[.config.packages.apt // [] | .[] ] | sort' 2>/dev/null || printf '[]')   # 2>/dev/null: malformed packages.apt → empty list, downstream string compare flags drift
+        if [[ "$live_pkgs_sorted" != "$_canonical_pkgs" ]]; then
+            drift=1
         fi
         if (( drift == 0 )); then
             BL_STATE_ENV_ID="$cached_env"
@@ -1028,10 +1066,12 @@ bl_setup_ensure_env() {
     body_file=$(command mktemp)
     bl_setup_compose_env_body > "$body_file" || { command rm -f "$body_file"; return "$BL_EX_PREFLIGHT_FAIL"; }
     # On name collision (old env still carries bl-curator-env name): fall back to bl-curator-env-pkgs.
+    # Only retry the fallback name on 409 (BL_EX_CONFLICT=71) — auth/5xx/rate-limit
+    # propagate as the original error so the operator sees the real cause.
     rc=0
     create_resp=$(bl_api_call POST "/v1/environments" "$body_file") || rc=$?
-    if (( rc != 0 )); then
-        # Retry with fallback name on 409/name-conflict
+    if (( rc == BL_EX_CONFLICT )); then
+        bl_info "bl setup: env name conflict — retrying with fallback name bl-curator-env-pkgs"
         command rm -f "$body_file"
         body_file=$(command mktemp)
         jq -n '{
