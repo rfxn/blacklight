@@ -197,3 +197,11 @@ teardown() {
     [ "$status" -eq 64 ]
     [[ "$output" == *"unknown command"* ]]
 }
+
+@test "bl setup --gc --help: bubbles to setup help and --gc is a recognized option" {
+    # P6 added --gc to bl_setup; verify the verb dispatch does not drift from
+    # the help text and that the bubble-up shim routes correctly.
+    run "$BL_SOURCE" setup --gc --help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"--gc"* ]]
+}

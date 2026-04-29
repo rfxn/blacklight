@@ -123,6 +123,32 @@ EOF
     [ "$status" -eq 68 ]
 }
 
+# ---------------------------------------------------------------------------
+# Beta-header centralization (P1 parity guard)
+# ---------------------------------------------------------------------------
+
+@test "BL_API_BETA_MA / BL_API_BETA_FILES / BL_API_BETA_SKILLS constants defined in src/bl.d/20-api.sh" {
+    # Guard that P1 centralization constants remain present; prevents accidental
+    # removal during future refactors.
+    local api_src
+    api_src="${BL_REPO_ROOT}/src/bl.d/20-api.sh"
+    [[ ! -r "$api_src" ]] && api_src="/opt/blacklight-src/src/bl.d/20-api.sh"
+    grep -q 'readonly BL_API_BETA_MA=' "$api_src"
+    grep -q 'readonly BL_API_BETA_FILES=' "$api_src"
+    grep -q 'readonly BL_API_BETA_SKILLS=' "$api_src"
+}
+
+@test "no hardcoded anthropic-beta: string literal remains in src/bl.d/" {
+    # Parity guard: P1 replaced all \"anthropic-beta: <value>\" string literals
+    # with constant-driven construction.  Any new literal is a regression.
+    local src_dir
+    src_dir="${BL_REPO_ROOT}/src/bl.d"
+    [[ ! -d "$src_dir" ]] && src_dir="/opt/blacklight-src/src/bl.d"
+    local hits
+    hits=$(grep -rn '"anthropic-beta:' "$src_dir" 2>/dev/null) || true
+    [ -z "$hits" ]
+}
+
 @test "bl_messages_call Haiku BL_DISABLE_LLM=1 → bypassed (binary scan only)" {
     mkdir -p "$BL_VAR_DIR/fp-corpus"
     printf '<?php echo "hello"; ?>' > "$BL_VAR_DIR/fp-corpus/benign.php"
