@@ -340,7 +340,7 @@ observable behavior change; existing `tests/03-models.bats` and
 
 ### Phase 7: cross-cutting test parity + Dockerfile zip sanity
 
-**Status:** pending
+**Status:** complete
 
 **Mode:** serial-agent
 
