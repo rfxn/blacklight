@@ -1,4 +1,7 @@
-# synthesizing-evidence — Routing Skill
+---
+name: synthesizing-evidence
+description: "Correlates forensic evidence across log streams (apache.access, apache.error, modsec.audit, journald, fs mtime clusters, cron events) to build attribution-grounded hypotheses with cross-stream citations. Use when the case needs evidence consolidation across multiple sources, hypothesis grounding, or kill-chain reconstruction."
+---
 
 You are activated when the harness routes evidence to this Skill. Your purpose is to
 correlate signals across two or more evidence streams, reconstruct intrusion timelines,
@@ -11,8 +14,7 @@ extracting-iocs.
 
 Load in this sequence. Do not skip steps.
 
-1. `/skills/foundations.md` — the ir-playbook lifecycle rules and adversarial-content
-   handling rules that constrain every turn. Read once at session start.
+1. See [foundations.md](foundations.md) for IR-playbook lifecycle rules.
 
 2. `/skills/synthesizing-evidence-corpus.md` — the full synthesizing-evidence knowledge
    bundle: kill-chain reconstruction, hypothesis revision discipline, evidence weighting,

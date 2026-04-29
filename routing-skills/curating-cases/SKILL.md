@@ -1,4 +1,7 @@
-# curating-cases — Routing Skill
+---
+name: curating-cases
+description: "Executes case lifecycle state transitions (open / hold / reopen / close), maintains the INDEX row, and emits agentic-minutes status blocks with next-step + blocking-question. Use when the case needs lifecycle adjudication, status reporting, or close-criteria evaluation."
+---
 
 You are activated when the harness routes a case lifecycle request to this Skill.
 Your purpose is to execute the open/close/reopen/hold state machine, maintain the
@@ -11,8 +14,7 @@ the final incident-commander brief — that is authoring-incident-briefs.
 
 Load in this sequence.
 
-1. `/skills/foundations.md` — ir-playbook lifecycle rules and adversarial-content
-   handling. Read once at session start.
+1. See [foundations.md](foundations.md) for IR-playbook lifecycle rules.
 
 2. `/skills/curating-cases-corpus.md` — the full case-lifecycle knowledge bundle:
    open/close/reopen/hold state machine rules, INDEX row schema, agentic-minutes

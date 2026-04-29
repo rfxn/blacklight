@@ -1148,3 +1148,78 @@ teardown() {
     # POST to create new env must appear in request log
     grep -q 'POST.*v1/environments' "$BL_VAR_DIR/curl-requests.log"
 }
+
+# ---------------------------------------------------------------------------
+# P3 (M17): routing-skills SKILL.md frontmatter validation
+# Static structural check — no mock API required.
+# ---------------------------------------------------------------------------
+
+@test "routing-skills SKILL.md files have valid YAML frontmatter" {
+    # Expected routing-skill directory names (6 skills)
+    local skills=(
+        synthesizing-evidence
+        prescribing-defensive-payloads
+        curating-cases
+        gating-false-positives
+        extracting-iocs
+        authoring-incident-briefs
+    )
+    local rs_dir="${BL_REPO_ROOT}/routing-skills"
+
+    for skill in "${skills[@]}"; do
+        local skill_md="${rs_dir}/${skill}/SKILL.md"
+        # File must exist
+        [ -f "$skill_md" ]
+
+        # First line must be the YAML frontmatter opening delimiter
+        local first_line
+        first_line=$(head -n 1 "$skill_md")
+        [ "$first_line" = "---" ]
+
+        # Extract the frontmatter block (between the two --- delimiters)
+        local frontmatter
+        frontmatter=$(awk '/^---/{if(found){exit}else{found=1;next}} found{print}' "$skill_md")
+
+        # name field: present, non-empty, matches directory name (lowercase + digits + hyphens)
+        local fm_name
+        fm_name=$(printf '%s\n' "$frontmatter" | grep '^name:' | sed 's/^name:[[:space:]]*//')
+        [ -n "$fm_name" ]
+        [ "$fm_name" = "$skill" ]
+        # name must match pattern: only lowercase letters, digits, hyphens; ≤64 chars
+        [[ "$fm_name" =~ ^[a-z0-9-]+$ ]]
+        [ "${#fm_name}" -le 64 ]
+        # name must not contain reserved substrings
+        [[ "$fm_name" != *"anthropic"* ]]
+        [[ "$fm_name" != *"claude"* ]]
+
+        # description field: present, non-empty, ≤1024 chars, no XML tags
+        local fm_desc
+        fm_desc=$(printf '%s\n' "$frontmatter" | grep '^description:' | sed 's/^description:[[:space:]]*//')
+        [ -n "$fm_desc" ]
+        [ "${#fm_desc}" -le 1024 ]
+        # No XML tags (< followed by a letter or slash)
+        [[ "$fm_desc" != *"<"*">"* ]]
+
+        # The heading line "# <skill> — Routing Skill" must NOT appear in the file
+        local heading_pattern="# ${skill} — Routing Skill"
+        run grep -Fc "$heading_pattern" "$skill_md"
+        [ "$output" = "0" ]
+
+        # foundations.md reference must be present (per-skill bundle, Q3 option a)
+        run grep -Fc 'See [foundations.md](foundations.md) for IR-playbook lifecycle rules' "$skill_md"
+        [ "$output" = "1" ]
+
+        # per-skill foundations.md must exist and be within size bounds
+        local found_md="${rs_dir}/${skill}/foundations.md"
+        [ -f "$found_md" ]
+        local line_count
+        line_count=$(wc -l < "$found_md")
+        [ "$line_count" -ge 30 ]
+        [ "$line_count" -lt 500 ]
+
+        # SKILL.md body must be ≤500 lines
+        local skill_lines
+        skill_lines=$(wc -l < "$skill_md")
+        [ "$skill_lines" -le 500 ]
+    done
+}

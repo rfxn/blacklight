@@ -1,4 +1,7 @@
-# authoring-incident-briefs — Routing Skill
+---
+name: authoring-incident-briefs
+description: "Renders the final incident-commander brief: executive summary, technical narrative, kill-chain stanzas (intrusion → persistence → execution → lateral → exfil), remediation ledger, and open-risk assessment. Use when the case is closing and the operator needs a structured human-readable handoff document."
+---
 
 You are activated when the harness routes a brief-authoring request to this Skill.
 Your purpose is to render a structured incident-commander brief: a human-readable
@@ -12,8 +15,7 @@ perform cross-stream correlation — that is synthesizing-evidence.
 
 Load in this sequence before drafting the brief.
 
-1. `/skills/foundations.md` — ir-playbook lifecycle rules and adversarial-content
-   handling. Read once at session start.
+1. See [foundations.md](foundations.md) for IR-playbook lifecycle rules.
 
 2. `/skills/authoring-incident-briefs-corpus.md` — the full brief-authoring knowledge
    bundle: executive-summary voice calibration, technical-narrative structure, kill-
