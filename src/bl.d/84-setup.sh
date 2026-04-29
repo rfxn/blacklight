@@ -425,6 +425,7 @@ bl_setup_seed_skills_native() {
     local tmp_dir="${BL_TMP_DIR:-$(command mktemp -d)}"
     command mkdir -p "$tmp_dir" 2>/dev/null || true   # pre-existing dir → ok
     local d name bundle_sha existing_id existing_sha new_id new_version create_resp version_resp
+    local fm_desc desc_size
     for d in "$rs_dir"/*/; do
         [[ -d "$d" ]] || continue
         name=$(basename "$d")
@@ -432,6 +433,14 @@ bl_setup_seed_skills_native() {
             bl_warn "bl setup: skipping $name — missing SKILL.md"
             continue
         }
+        # SKILL.md frontmatter description size cap — Anthropic Skills API rejects >1024 chars
+        # (spec §11b row 6). Parse the YAML frontmatter `description:` value and fail-fast.
+        fm_desc=$(command awk '/^---/{if(found){exit}else{found=1;next}} found && /^description:/{sub(/^description:[[:space:]]*/,""); print; exit}' "$d/SKILL.md")
+        desc_size=${#fm_desc}
+        if (( desc_size > 1024 )); then
+            bl_error_envelope setup "SKILL.md description exceeds 1024 chars: $d/SKILL.md ($desc_size)"
+            return "$BL_EX_PREFLIGHT_FAIL"
+        fi
         # Compute bundle sha256: sha256 of all files in the skill dir, sorted by path.
         # Using find + sort to guarantee stable ordering across filesystems.
         bundle_sha=$(find "$d" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | command awk '{print $1}')   # 2>/dev/null: sha256sum on symlinks or unreadable files → skip (sorted list still yields stable sha)

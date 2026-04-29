@@ -210,13 +210,14 @@ teardown() {
     mkdir -p "$fake_repo/routing-skills/skill-a"
     printf 'desc' > "$fake_repo/routing-skills/skill-a/description.txt"
     printf '# body' > "$fake_repo/routing-skills/skill-a/SKILL.md"
-    # Pre-populate state.json with sha match for skill-a so seed_skills skips
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-a/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-a/SKILL.md" | awk '{print $1}')
+    # Pre-populate state.json with sha match for skill-a so seed_skills_native skips.
+    # Bundle sha mirrors bl_setup_seed_skills_native's algorithm (84-setup.sh ~line 437):
+    # sha256 of all files in the skill dir, sorted by path, hashed twice.
+    local bundle_sha
+    bundle_sha=$(find "$fake_repo/routing-skills/skill-a" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
     _state_json_seeded
-    jq --arg ds "$ds" --arg bs "$bs" \
-        '.skills["skill-a"] = {id:"skill_P6FIXTURE001", version:"1", description_sha256:$ds, body_sha256:$bs}
+    jq --arg sha "$bundle_sha" \
+        '.skills["skill-a"] = {id:"skill_P6FIXTURE001", version:"1", sha256:$sha}
          | .agent.skill_versions["skill-a"] = "1"' \
         "$BL_VAR_DIR/state/state.json" > "$BL_VAR_DIR/state/state.json.tmp"
     command mv "$BL_VAR_DIR/state/state.json.tmp" "$BL_VAR_DIR/state/state.json"
@@ -485,20 +486,19 @@ teardown() {
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
     printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     printf 'corpus content' > "$fake_repo/skills-corpus/corpus-x.md"
-    # Pre-populate state.json with matching hashes for both skill-x and corpus-x.md
-    local ds bs corpus_sha
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
+    # Pre-populate state.json with matching bundle sha for skill-x and content sha for corpus.
+    # Bundle sha mirrors bl_setup_seed_skills_native's algorithm (84-setup.sh ~line 437).
+    local bundle_sha corpus_sha
+    bundle_sha=$(find "$fake_repo/routing-skills/skill-x" -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
     corpus_sha=$(sha256sum "$fake_repo/skills-corpus/corpus-x.md" | awk '{print $1}')
     mkdir -p "$BL_VAR_DIR/state"
     jq -n \
-        --arg ds "$ds" --arg bs "$bs" --arg cs "$corpus_sha" \
+        --arg sha "$bundle_sha" --arg cs "$corpus_sha" \
         '{
             schema_version: 1,
             agent: {id: "agent_M8_TEST", version: 3, skill_versions: {"skill-x":"1"}},
             env_id: "env_M8_TEST",
-            skills: {"skill-x": {id: "skill_P6FIXTURE001", version: "1",
-                description_sha256: $ds, body_sha256: $bs}},
+            skills: {"skill-x": {id: "skill_P6FIXTURE001", version: "1", sha256: $sha}},
             files: {"/skills/corpus-x.md": {file_id:"file_P6FIXTURE001",
                 content_sha256: $cs, uploaded_at: "2026-04-25T00:00:00Z"}},
             files_pending_deletion: [],
@@ -785,14 +785,20 @@ teardown() {
 # Covered by bl_skills_create size guard from P1.
 # ---------------------------------------------------------------------------
 
-@test "bl setup --sync rejects description.txt > 1024 chars" {
+@test "bl setup --sync rejects SKILL.md frontmatter description > 1024 chars" {
     local fake_repo
     fake_repo=$(mktemp -d)
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/oversized-skill"
-    # Create description.txt > 1024 chars using printf (no python3 in container)
-    printf '%1025s' ' ' | tr ' ' 'x' > "$fake_repo/routing-skills/oversized-skill/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/oversized-skill/SKILL.md"
+    # M17 P4 _native path: description lives in SKILL.md YAML frontmatter, not description.txt.
+    # Build a SKILL.md with a description > 1024 chars to trip the validator (printf+tr — no python3).
+    {
+        printf -- '---\n'
+        printf 'name: oversized-skill\n'
+        printf 'description: '
+        printf '%1025s' ' ' | tr ' ' 'x'
+        printf '\n---\n# body\n'
+    } > "$fake_repo/routing-skills/oversized-skill/SKILL.md"
     mkdir -p "$BL_VAR_DIR/state"
     jq -n '{schema_version:1, agent:{id:"agent_M8_TEST",version:1,skill_versions:{}},
             env_id:"env_M8_TEST", skills:{}, files:{},
