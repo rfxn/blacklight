@@ -10596,15 +10596,24 @@ bl_setup_seed_skills_native() {
             continue
         }
         # SKILL.md frontmatter description: must be present, non-empty, and ≤1024 chars
-        # (Anthropic Skills API spec). Parse the YAML frontmatter `description:` value and fail-fast.
+        # (Anthropic Skills API spec). Parse the YAML frontmatter `description:` value.
+        # In apply mode → fail-fast; in dry-run → warn + skip the skill (preserve preview
+        # value for the rest of the bundle so the operator sees the full diff).
         fm_desc=$(command awk '/^---/{if(found){exit}else{found=1;next}} found && /^description:/{sub(/^description:[[:space:]]*/,""); print; exit}' "$d/SKILL.md")
-        # Reject missing/empty description before reject-too-long so the operator sees the right error.
         if ! printf '%s' "$fm_desc" | grep -q '[^[:space:]]'; then
+            if [[ "$mode" == "dry-run" ]]; then
+                bl_warn "would skip skill $name — SKILL.md frontmatter missing/empty description (dry-run preview)"
+                continue
+            fi
             bl_error_envelope setup "SKILL.md frontmatter must include a non-empty description: $d/SKILL.md"
             return "$BL_EX_PREFLIGHT_FAIL"
         fi
         desc_size=${#fm_desc}
         if (( desc_size > 1024 )); then
+            if [[ "$mode" == "dry-run" ]]; then
+                bl_warn "would skip skill $name — SKILL.md description exceeds 1024 chars ($desc_size; dry-run preview)"
+                continue
+            fi
             bl_error_envelope setup "SKILL.md description exceeds 1024 chars: $d/SKILL.md ($desc_size)"
             return "$BL_EX_PREFLIGHT_FAIL"
         fi
