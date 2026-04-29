@@ -33,8 +33,13 @@ bl_setup() {
             return $?
             ;;
         --gc)
+            local gc_mode="apply"
+            [[ "${1:-}" == "--dry-run" ]] && gc_mode="dry-run"
             bl_setup_local_preflight || return $?
             bl_setup_gc
+            local _gc_rc=$?
+            (( _gc_rc != 0 )) && return "$_gc_rc"
+            bl_setup_skills_gc "$gc_mode"
             return $?
             ;;
         --eval)
@@ -89,7 +94,8 @@ Subcommands:
                           --dry-run prints diff without API mutation
   --reset [--force]       Delete agent + Skills + workspace Files (destructive)
                           --force skips confirmation prompt
-  --gc                    Delete files_pending_deletion when no live sessions reference
+  --gc [--dry-run]        Delete files_pending_deletion + orphan v1 Skills + old workspace Files
+                          --dry-run prints planned deletes without executing
   --eval [--promote]      Run 50-case live promotion eval; gated --promote bumps versions
   --check                 Print state.json snapshot + per-resource health
   --install-hook lmd      Install bl-lmd-hook adapter into /etc/blacklight/hooks/
@@ -708,6 +714,129 @@ bl_setup_gc() {
         command mv "$tmp_state" "$BL_STATE_DIR/state.json"
     done < <(jq -r '.files_pending_deletion[].file_id // empty' "$BL_STATE_DIR/state.json")
     printf 'bl setup --gc: deleted %d, skipped %d\n' "$deleted" "$skipped"
+    return "$BL_EX_OK"
+}
+
+# bl_setup_skills_gc <mode> — garbage-collect orphan v1 Skills + old workspace Files.
+# mode: dry-run | apply (default: apply)
+#
+# Skills GC: GET /v1/skills; filter display_title ∈ {case-lifecycle, polyshell,
+#   modsec-patterns}. For each match: list versions → DELETE each version →
+#   DELETE the skill (cascade order mandatory: skill-delete with versions present
+#   returns HTTP 400 per 2026-04-28 probe).
+#
+# Files GC: GET /v1/files; filter scope.type == "workspace" AND filename matches
+#   <routing-skill-name>-skill.md for any of the 6 routing-skill names. DELETE
+#   each match.
+#
+# dry-run: logs the planned sequence without executing any DELETE.
+# Returns 0 on success or no-op; non-zero on unrecoverable error.
+bl_setup_skills_gc() {
+    local mode="${1:-apply}"
+    # Orphan skill display_title values from 2026-04-23 v1 upload
+    local orphan_titles=("case-lifecycle" "polyshell" "modsec-patterns")
+    # Routing-skill names — workspace files matching <name>-skill.md are cleaned
+    local routing_skill_names=(
+        "synthesizing-evidence"
+        "prescribing-defensive-payloads"
+        "curating-cases"
+        "gating-false-positives"
+        "extracting-iocs"
+        "authoring-incident-briefs"
+    )
+
+    # ── Phase 1: Skills GC ──────────────────────────────────────────────────
+    local skills_list_resp
+    skills_list_resp=$(bl_api_call GET "/v1/skills" "" "$BL_API_BETA_SKILLS") || {
+        bl_error_envelope setup "bl_setup_skills_gc: GET /v1/skills failed"
+        return "$BL_EX_UPSTREAM_ERROR"
+    }
+
+    local skill_id skill_title
+    local orphan_found=0
+    while IFS=$'\t' read -r skill_id skill_title; do
+        [[ -z "$skill_id" ]] && continue
+        # Check if this skill's display_title is in our orphan set
+        local is_orphan=0
+        local t
+        for t in "${orphan_titles[@]}"; do
+            [[ "$skill_title" == "$t" ]] && { is_orphan=1; break; }
+        done
+        (( is_orphan == 0 )) && continue
+        orphan_found=1
+
+        if [[ "$mode" == "dry-run" ]]; then
+            printf 'would gc skill: %s (display_title=%s) — list versions → delete each → delete skill\n' \
+                "$skill_id" "$skill_title"
+            continue
+        fi
+
+        # List versions for this skill — cascade: versions must be deleted before skill
+        local versions_resp version_id
+        versions_resp=$(bl_api_call GET "/v1/skills/${skill_id}/versions" "" "$BL_API_BETA_SKILLS") || {
+            bl_error_envelope setup "bl_setup_skills_gc: GET /v1/skills/${skill_id}/versions failed"
+            return "$BL_EX_UPSTREAM_ERROR"
+        }
+        while IFS= read -r version_id; do
+            [[ -z "$version_id" ]] && continue
+            if ! bl_api_call DELETE "/v1/skills/${skill_id}/versions/${version_id}" "" "$BL_API_BETA_SKILLS" >/dev/null; then
+                bl_warn "bl_setup_skills_gc: version-delete failed for skill=${skill_id} version=${version_id}"
+                # Surface error but do NOT skip the skill-delete (cascade order is mandatory)
+            fi
+            bl_info "bl_setup_skills_gc: deleted version ${version_id} of skill ${skill_id}"
+        done < <(printf '%s' "$versions_resp" | jq -r '.data[].id // empty' 2>/dev/null)   # 2>/dev/null: jq diagnostic irrelevant; empty array → no iterations, no error
+
+        # Delete the skill itself after versions are cleared
+        if ! bl_api_call DELETE "/v1/skills/${skill_id}" "" "$BL_API_BETA_SKILLS" >/dev/null; then
+            bl_warn "bl_setup_skills_gc: skill-delete failed for ${skill_id} (${skill_title})"
+        else
+            bl_info "bl_setup_skills_gc: deleted orphan skill ${skill_id} (${skill_title})"
+        fi
+    done < <(printf '%s' "$skills_list_resp" | jq -r '.data[] | [.id, (.display_title // .name // "")] | @tsv' 2>/dev/null)   # 2>/dev/null: jq diagnostic irrelevant; empty .data → no iterations
+
+    if (( orphan_found == 0 )); then
+        printf 'bl setup --gc: no orphan skills found (display_title not in {%s})\n' \
+            "$(IFS=,; printf '%s' "${orphan_titles[*]}")"
+    fi
+
+    # ── Phase 2: Workspace Files GC ─────────────────────────────────────────
+    local files_list_resp
+    files_list_resp=$(bl_api_call GET "/v1/files" "" "$BL_API_BETA_FILES,$BL_API_BETA_MA") || {
+        bl_error_envelope setup "bl_setup_skills_gc: GET /v1/files failed"
+        return "$BL_EX_UPSTREAM_ERROR"
+    }
+
+    local file_id file_name file_scope_type
+    local files_found=0
+    while IFS=$'\t' read -r file_id file_name file_scope_type; do
+        [[ -z "$file_id" ]] && continue
+        # Only target workspace-scoped files
+        [[ "$file_scope_type" != "workspace" ]] && continue
+        # Match filename against <routing-skill-name>-skill.md patterns
+        local is_target=0
+        local sn
+        for sn in "${routing_skill_names[@]}"; do
+            [[ "$file_name" == "${sn}-skill.md" ]] && { is_target=1; break; }
+        done
+        (( is_target == 0 )) && continue
+        files_found=1
+
+        if [[ "$mode" == "dry-run" ]]; then
+            printf 'would gc workspace file: %s (filename=%s)\n' "$file_id" "$file_name"
+            continue
+        fi
+
+        if ! bl_files_delete "$file_id" >/dev/null; then
+            bl_warn "bl_setup_skills_gc: file-delete failed for ${file_id} (${file_name})"
+        else
+            bl_info "bl_setup_skills_gc: deleted workspace file ${file_id} (${file_name})"
+        fi
+    done < <(printf '%s' "$files_list_resp" | jq -r '.data[] | [.id, (.filename // ""), (.scope.type // "")] | @tsv' 2>/dev/null)   # 2>/dev/null: jq diagnostic irrelevant; empty .data → no iterations
+
+    if (( files_found == 0 )); then
+        printf 'bl setup --gc: no orphan workspace files found matching routing-skill-name pattern\n'
+    fi
+
     return "$BL_EX_OK"
 }
 

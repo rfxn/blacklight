@@ -1365,3 +1365,180 @@ teardown() {
         [ "$skill_lines" -le 500 ]
     done
 }
+
+# ---------------------------------------------------------------------------
+# M17 P6: bl_setup_skills_gc — orphan Skills cascade-delete + workspace Files GC
+# ---------------------------------------------------------------------------
+
+@test "bl_setup_skills_gc cascades version-delete then skill-delete on v1 orphans" {
+    # Regression-case: verify DELETE /v1/skills/<id>/versions/<v> precedes
+    # DELETE /v1/skills/<id> for each orphan (cascade order per 2026-04-28 probe).
+    # Three orphans: case-lifecycle, polyshell, modsec-patterns.
+    # Three workspace routing-skill files also present and must be deleted.
+    local req_log
+    req_log=$(mktemp)
+    export BL_MOCK_REQUEST_LOG="$req_log"
+
+    # GET /v1/skills → returns 3 orphans + 1 live skill
+    bl_curator_mock_add_route 'GET.*v1/skills$' 'skills-gc-list-orphans.json' 200
+    # GET /v1/skills/<id>/versions → each orphan has one version
+    bl_curator_mock_add_route 'GET.*v1/skills/.*/versions$' 'skills-gc-versions-list.json' 200
+    # DELETE /v1/skills/<id>/versions/<v> → 200
+    bl_curator_mock_add_route 'DELETE.*v1/skills/.*/versions/.*' 'skills-list-empty.json' 200
+    # DELETE /v1/skills/<id> → 200
+    bl_curator_mock_add_route 'DELETE.*v1/skills/[^/]+$' 'skills-list-empty.json' 200
+    # GET /v1/files → 3 workspace routing-skill files + 1 case file + 1 unrelated
+    bl_curator_mock_add_route 'GET.*v1/files$' 'skills-gc-files-list.json' 200
+    # DELETE /v1/files/<id> → 200
+    bl_curator_mock_add_route 'DELETE.*v1/files/.*' 'skills-list-empty.json' 200
+
+    _state_json_seeded
+
+    run bash -c "
+        export BL_VAR_DIR='$BL_VAR_DIR'
+        export BL_STATE_DIR='$BL_VAR_DIR/state'
+        export BL_MOCK_REQUEST_LOG='$req_log'
+        '$BL_SOURCE' setup --gc
+    "
+    unset BL_MOCK_REQUEST_LOG
+
+    [ "$status" -eq 0 ]
+
+    # Verify the request log contains the expected cascade order for each orphan:
+    # version-delete must appear BEFORE skill-delete for each orphan skill id.
+    local log_content
+    log_content=$(cat "$req_log")
+
+    # At least 3 version-delete calls (one per orphan)
+    local ver_del_count
+    ver_del_count=$(printf '%s' "$log_content" | grep -c 'DELETE.*v1/skills/.*/versions/' || true)
+    [ "$ver_del_count" -ge 3 ]
+
+    # At least 3 skill-delete calls (one per orphan)
+    local skill_del_count
+    skill_del_count=$(printf '%s' "$log_content" | grep -cE 'DELETE.*v1/skills/[^/]+$' || true)
+    [ "$skill_del_count" -ge 3 ]
+
+    # For each orphan skill id, assert version-delete line appears before skill-delete line
+    local orphan_ids=("skill_ORPHAN_CL001" "skill_ORPHAN_PS002" "skill_ORPHAN_MS003")
+    local id
+    for id in "${orphan_ids[@]}"; do
+        local ver_line skill_line
+        ver_line=$(printf '%s' "$log_content" | grep -n "DELETE.*v1/skills/${id}/versions/" | head -1 | cut -d: -f1)
+        skill_line=$(printf '%s' "$log_content" | grep -n "DELETE.*v1/skills/${id}$" | head -1 | cut -d: -f1)
+        # Both must be present
+        [ -n "$ver_line" ]
+        [ -n "$skill_line" ]
+        # Version-delete line number must be strictly less than skill-delete line number
+        [ "$ver_line" -lt "$skill_line" ]
+    done
+
+    # Live skill (synthesizing-evidence) must NOT be deleted
+    local live_del_count
+    live_del_count=$(printf '%s' "$log_content" | grep -c 'DELETE.*skill_LIVE_SE004' || true)
+    [ "$live_del_count" -eq 0 ]
+
+    # Workspace routing-skill files must be deleted (3 matching, 2 non-matching skipped)
+    local file_del_count
+    file_del_count=$(printf '%s' "$log_content" | grep -c 'DELETE.*v1/files/' || true)
+    [ "$file_del_count" -eq 3 ]
+
+    # Non-matching files must NOT be deleted
+    local unrelated_del
+    unrelated_del=$(printf '%s' "$log_content" | grep -c 'DELETE.*file_UNRELATED' || true)
+    [ "$unrelated_del" -eq 0 ]
+
+    local case_del
+    case_del=$(printf '%s' "$log_content" | grep -c 'DELETE.*file_CASE_001' || true)
+    [ "$case_del" -eq 0 ]
+
+    rm -f "$req_log"
+}
+
+@test "bl_setup_skills_gc: no orphans found → no-op clean exit" {
+    # Only live skills present — none match the orphan display_title set
+    bl_curator_mock_add_route 'GET.*v1/skills$' 'skills-gc-list-no-orphans.json' 200
+    bl_curator_mock_add_route 'GET.*v1/files$' 'skills-gc-files-list.json' 200
+    bl_curator_mock_add_route 'DELETE.*v1/files/.*' 'skills-list-empty.json' 200
+
+    _state_json_seeded
+
+    run bash -c "
+        export BL_VAR_DIR='$BL_VAR_DIR'
+        export BL_STATE_DIR='$BL_VAR_DIR/state'
+        '$BL_SOURCE' setup --gc
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"no orphan skills"* ]]
+}
+
+@test "bl_setup_skills_gc: dry-run logs intent without executing deletes" {
+    local req_log
+    req_log=$(mktemp)
+
+    bl_curator_mock_add_route 'GET.*v1/skills$' 'skills-gc-list-orphans.json' 200
+    bl_curator_mock_add_route 'GET.*v1/files$' 'skills-gc-files-list.json' 200
+
+    _state_json_seeded
+
+    run bash -c "
+        export BL_VAR_DIR='$BL_VAR_DIR'
+        export BL_STATE_DIR='$BL_VAR_DIR/state'
+        export BL_MOCK_REQUEST_LOG='$req_log'
+        '$BL_SOURCE' setup --gc --dry-run
+    "
+    unset BL_MOCK_REQUEST_LOG
+
+    [ "$status" -eq 0 ]
+    # Output must describe planned operations
+    [[ "$output" == *"would gc skill"* ]]
+    [[ "$output" == *"would gc workspace file"* ]]
+
+    # No DELETE calls must have been issued
+    local del_count
+    del_count=$(grep -c 'DELETE' "$req_log" 2>/dev/null || true)
+    [ "$del_count" -eq 0 ]
+
+    rm -f "$req_log"
+}
+
+@test "bl_setup_skills_gc: only removes workspace files matching routing-skill-name pattern" {
+    # Files list has workspace files: 3 matching + 1 unrelated + 1 case-scoped
+    # Only the 3 matching workspace files should be deleted
+    local req_log
+    req_log=$(mktemp)
+    export BL_MOCK_REQUEST_LOG="$req_log"
+
+    bl_curator_mock_add_route 'GET.*v1/skills$' 'skills-gc-list-no-orphans.json' 200
+    bl_curator_mock_add_route 'GET.*v1/files$' 'skills-gc-files-list.json' 200
+    bl_curator_mock_add_route 'DELETE.*v1/files/.*' 'skills-list-empty.json' 200
+
+    _state_json_seeded
+
+    run bash -c "
+        export BL_VAR_DIR='$BL_VAR_DIR'
+        export BL_STATE_DIR='$BL_VAR_DIR/state'
+        export BL_MOCK_REQUEST_LOG='$req_log'
+        '$BL_SOURCE' setup --gc
+    "
+    unset BL_MOCK_REQUEST_LOG
+
+    [ "$status" -eq 0 ]
+
+    # Only the 3 routing-skill workspace files deleted
+    local del_count
+    del_count=$(grep -c 'DELETE.*v1/files/' "$req_log" 2>/dev/null || true)
+    [ "$del_count" -eq 3 ]
+
+    # Unrelated workspace file must not be touched
+    local unrelated
+    unrelated=$(grep -c 'file_UNRELATED' "$req_log" 2>/dev/null || true)
+    [ "$unrelated" -eq 0 ]
+
+    # Case-scoped file must not be touched
+    local case_f
+    case_f=$(grep -c 'file_CASE_001' "$req_log" 2>/dev/null || true)
+    [ "$case_f" -eq 0 ]
+
+    rm -f "$req_log"
+}

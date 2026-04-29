@@ -1,0 +1,9 @@
+{
+  "data": [
+    {"id": "skill_ORPHAN_CL001", "name": "case-lifecycle", "display_title": "case-lifecycle", "latest_version": "v001"},
+    {"id": "skill_ORPHAN_PS002", "name": "polyshell", "display_title": "polyshell", "latest_version": "v001"},
+    {"id": "skill_ORPHAN_MS003", "name": "modsec-patterns", "display_title": "modsec-patterns", "latest_version": "v001"},
+    {"id": "skill_LIVE_SE004", "name": "synthesizing-evidence", "display_title": "synthesizing-evidence", "latest_version": "v002"}
+  ],
+  "has_more": false
+}

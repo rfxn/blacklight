@@ -1,0 +1,10 @@
+{
+  "data": [
+    {"id": "file_WS_SE001", "filename": "synthesizing-evidence-skill.md", "scope": {"type": "workspace"}},
+    {"id": "file_WS_PDP002", "filename": "prescribing-defensive-payloads-skill.md", "scope": {"type": "workspace"}},
+    {"id": "file_WS_CC003", "filename": "curating-cases-skill.md", "scope": {"type": "workspace"}},
+    {"id": "file_CASE_001", "filename": "case-evidence.md", "scope": {"type": "case"}},
+    {"id": "file_UNRELATED", "filename": "other-document.md", "scope": {"type": "workspace"}}
+  ],
+  "has_more": false
+}
