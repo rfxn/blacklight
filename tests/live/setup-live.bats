@@ -83,6 +83,103 @@ setup() {
     [ -n "$session_id" ]
 }
 
+@test "M17 live integration: env packages + agent skills + verb routing" {
+    _live_skip_unless_live
+    # Depends on state.json from test 1 (--sync). Skip if provisioning failed.
+    [ -f "$BL_STATE_DIR/state.json" ] || skip "prior test (--sync) did not provision; cannot run M17 integration"
+
+    # (a) Assert live env has config.packages populated with canonical 9-name list.
+    local env_id
+    env_id=$(jq -r '.env_id // empty' "$BL_STATE_DIR/state.json")
+    [ -n "$env_id" ] || { echo "env_id missing from state.json"; return 1; }
+    local env_resp
+    env_resp=$(curl -sSf \
+        "https://api.anthropic.com/v1/environments/${env_id}" \
+        -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+        -H "anthropic-version: 2023-06-01" \
+        -H "anthropic-beta: managed-agents-2026-04-01")
+    # Canonical 9-package list (sorted for stable comparison)
+    local canonical_sorted="apache2 duckdb jq libapache2-mod-security2 modsecurity-crs pandoc weasyprint yara zstd"
+    local live_sorted
+    live_sorted=$(printf '%s' "$env_resp" | jq -r '(.config.packages.apt // []) | sort | join(" ")')
+    [ "$live_sorted" = "$canonical_sorted" ] || {
+        echo "packages mismatch: got '$live_sorted', want '$canonical_sorted'"; return 1;
+    }
+
+    # (b) Assert live agent has skills:[] with 6 custom routing-skill IDs (version: "latest") + pdf.
+    local agent_id
+    agent_id=$(jq -r '.agent.id // empty' "$BL_STATE_DIR/state.json")
+    [ -n "$agent_id" ] || { echo "agent_id missing from state.json"; return 1; }
+    local agent_resp
+    agent_resp=$(curl -sSf \
+        "https://api.anthropic.com/v1/agents/${agent_id}" \
+        -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+        -H "anthropic-version: 2023-06-01" \
+        -H "anthropic-beta: managed-agents-2026-04-01")
+    local custom_count
+    custom_count=$(printf '%s' "$agent_resp" | jq '[.skills[] | select(.type == "custom")] | length')
+    [ "$custom_count" -eq 6 ] || { echo "expected 6 custom skills, got $custom_count"; return 1; }
+    local pdf_present
+    pdf_present=$(printf '%s' "$agent_resp" | jq '[.skills[] | select(.type == "anthropic" and .skill_id == "pdf")] | length')
+    [ "$pdf_present" -eq 1 ] || { echo "pdf skill missing from agent"; return 1; }
+    # Each custom skill must carry version: "latest"
+    local non_latest
+    non_latest=$(printf '%s' "$agent_resp" | jq '[.skills[] | select(.type == "custom" and .version != "latest")] | length')
+    [ "$non_latest" -eq 0 ] || { echo "$non_latest custom skill(s) not pinned to version latest"; return 1; }
+
+    # (c) Assert each routing-skill display_title matches expected name.
+    local expected_names=("synthesizing-evidence" "prescribing-defensive-payloads" "curating-cases" "gating-false-positives" "extracting-iocs" "authoring-incident-briefs")
+    local skills_list_resp
+    skills_list_resp=$(curl -sSf \
+        "https://api.anthropic.com/v1/skills" \
+        -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+        -H "anthropic-version: 2023-06-01" \
+        -H "anthropic-beta: skills-2025-10-02,code-execution-2025-08-25,files-api-2025-04-14")
+    local sname missing_titles=""
+    for sname in "${expected_names[@]}"; do
+        local found
+        found=$(printf '%s' "$skills_list_resp" | jq -r --arg n "$sname" \
+            '[.data[] | select(.display_title == $n)] | length')
+        [ "$found" -ge 1 ] || missing_titles="${missing_titles} $sname"
+    done
+    [ -z "$missing_titles" ] || { echo "missing routing-skill display_title(s):$missing_titles"; return 1; }
+
+    # (d) Run 5 fixture case prompts through the curator (cost-capped at 5 prompts);
+    # assert that BL_CURL_TRACE_LOG captures skill-invocation events matching verb->skill mapping.
+    # Uses a fresh session scoped to this test; does NOT depend on state from test 3.
+    local trace_log
+    trace_log=$(mktemp)
+    export BL_CURL_TRACE_LOG="$trace_log"
+    # Verb->skill mapping (5 verbs; authoring-incident-briefs excluded from cost cap)
+    local verb_skill_pairs=(
+        "synthesize:synthesizing-evidence"
+        "prescribe:prescribing-defensive-payloads"
+        "curate:curating-cases"
+        "gate:gating-false-positives"
+        "extract:extracting-iocs"
+    )
+    local pair verb skill_name missing_verbs=""
+    # Open a fresh case; events sent below should trigger routing-skill invocation per verb.
+    run "$BL_SOURCE" consult --new --trigger "M17-P8-routing-probe"
+    [ "$status" -eq 0 ] || { echo "consult --new failed: $output"; BL_CURL_TRACE_LOG=""; rm -f "$trace_log"; return 1; }
+    local case_id
+    case_id=$(printf '%s\n' "$output" | grep -oE 'CASE-[0-9]{4}-[0-9]{4}' | tail -1)
+    [ -n "$case_id" ] || { echo "no case_id from consult --new"; BL_CURL_TRACE_LOG=""; rm -f "$trace_log"; return 1; }
+    for pair in "${verb_skill_pairs[@]}"; do
+        verb="${pair%%:*}"
+        skill_name="${pair##*:}"
+        # Fire a minimal case-step event that should trigger the routing skill
+        run "$BL_SOURCE" consult --prompt "$case_id" "skill routing probe: $verb context for $skill_name"
+        # Check trace log for a skill invocation event referencing this skill name
+        if ! grep -q "$skill_name" "$trace_log" 2>/dev/null; then
+            missing_verbs="${missing_verbs} ${verb}(${skill_name})"
+        fi
+    done
+    BL_CURL_TRACE_LOG=""
+    rm -f "$trace_log"
+    [ -z "$missing_verbs" ] || { echo "skill routing miss for verb(s):$missing_verbs (see BL_CURL_TRACE_LOG)"; return 1; }
+}
+
 @test "bl setup --reset --force: archive verb retires the agent live" {
     _live_skip_unless_live
     [ -f "$BL_STATE_DIR/state.json" ] || skip "prior test did not provision"

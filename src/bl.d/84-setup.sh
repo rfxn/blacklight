@@ -366,8 +366,8 @@ bl_setup_seed_corpus() {
 }
 
 # bl_setup_seed_skills <mode> — mode: dry-run | apply
-# Dispatcher: probes Skills API availability; routes to _native (M17 Path A) when
-# the endpoint returns 2xx. Falls back to _as_files on 404 (retained through P8; Q4).
+# Probes Skills API availability (safety gate); calls _native on 2xx. Non-2xx surfaces
+# error to operator — no fallback path (Path C removed in M17 P8; Q4).
 bl_setup_seed_skills() {
     local mode="${1:-apply}"
     local repo_root
@@ -391,19 +391,14 @@ bl_setup_seed_skills() {
         "https://api.anthropic.com/v1/skills" \
         -H "x-api-key: ${ANTHROPIC_API_KEY:-}" \
         -H "anthropic-version: 2023-06-01" \
-        -H "$probe_beta_hdr" 2>&1) || true   # network/curl fail → status="" below → fallback path
+        -H "$probe_beta_hdr" 2>&1) || true   # network/curl fail → status="" below → error path
     probe_status="${probe_resp##*$'\n'}"
-    if [[ "$probe_status" == "404" ]]; then
-        bl_warn "bl setup: Skills API unavailable (HTTP 404); uploading routing-skills as corpus Files"
-        bl_setup_seed_skills_as_files "$mode" "$rs_dir"
-        return $?
-    fi
     if [[ ! "$probe_status" =~ ^2 ]]; then
-        bl_error_envelope setup "Skills API probe failed (HTTP $probe_status); cannot seed skills"
+        bl_error_envelope setup "Skills API probe failed (HTTP $probe_status); cannot seed skills — verify beta-header trio in BL_API_BETA_SKILLS"
         return "$BL_EX_UPSTREAM_ERROR"
     fi
 
-    # Skills API available — use native path (M17 P4)
+    # Skills API available — use native path
     bl_setup_seed_skills_native "$mode" "$rs_dir"
     return $?
 }
@@ -503,64 +498,6 @@ bl_setup_seed_skills_native() {
         local tmp_state="$state_file.tmp.$$"
         printf '%s' "$existing_state" > "$tmp_state"
         command mv "$tmp_state" "$state_file"
-    fi
-    return "$BL_EX_OK"
-}
-
-# bl_setup_seed_skills_as_files <mode> <rs-dir> — Skills API fallback.
-# Uploads each routing-skill SKILL.md to the Files API so content is available to
-# sessions as corpus files mounted under /skills/<name>-skill.md.
-bl_setup_seed_skills_as_files() {
-    local mode="$1" rs_dir="$2"
-    local state_file="$BL_STATE_DIR/state.json"
-    local existing_state="{}"
-    [[ -f "$state_file" ]] && existing_state=$(command cat "$state_file")
-    local d name body_file mount_path content_sha existing_fid existing_sha new_fid
-    local upload_count=0 skip_count=0 supersede_count=0
-    for d in "$rs_dir"/*/; do
-        name=$(basename "$d")
-        body_file="$d/SKILL.md"
-        [[ -r "$body_file" ]] || {
-            bl_warn "bl setup: skipping $name (skills-as-files) — missing SKILL.md"
-            continue
-        }
-        mount_path="/skills/${name}-skill.md"
-        content_sha=$(command sha256sum "$body_file" | command awk '{print $1}')
-        existing_fid=$(printf '%s' "$existing_state" | jq -r --arg p "$mount_path" '.files[$p].file_id // empty')
-        existing_sha=$(printf '%s' "$existing_state" | jq -r --arg p "$mount_path" '.files[$p].content_sha256 // empty')
-        if [[ "$content_sha" == "$existing_sha" && -n "$existing_fid" ]]; then
-            skip_count=$((skip_count + 1))
-            bl_debug "bl_setup_seed_skills_as_files: skip $mount_path (sha matches)"
-            [[ "$mode" == "dry-run" ]] && printf 'would skip %s (no change)\n' "$mount_path"
-            continue
-        fi
-        if [[ "$mode" == "dry-run" ]]; then
-            printf 'would upload %s (skill fallback)\n' "$mount_path"
-            upload_count=$((upload_count + 1))
-            continue
-        fi
-        new_fid=$(bl_files_create "text/markdown" "$body_file") || return $?
-        bl_info "bl setup: uploaded ${mount_path} → $new_fid (skill fallback)"
-        existing_state=$(printf '%s' "$existing_state" | jq \
-            --arg p "$mount_path" --arg fid "$new_fid" --arg sha "$content_sha" \
-            --arg ts "$(command date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '.files[$p] = {file_id: $fid, content_sha256: $sha, uploaded_at: $ts}')
-        if [[ -n "$existing_fid" ]]; then
-            existing_state=$(printf '%s' "$existing_state" | jq \
-                --arg fid "$existing_fid" --arg p "$mount_path" \
-                --arg ts "$(command date -u +%Y-%m-%dT%H:%M:%SZ)" --arg new "$new_fid" \
-                '.files_pending_deletion += [{file_id: $fid, marked_at: $ts, reason: ("superseded by " + $new), previous_mount_path: $p}]')
-            supersede_count=$((supersede_count + 1))
-        fi
-        upload_count=$((upload_count + 1))
-    done
-    if [[ "$mode" != "dry-run" ]]; then
-        local tmp_state="$state_file.tmp.$$"
-        printf '%s' "$existing_state" > "$tmp_state"
-        command mv "$tmp_state" "$state_file"
-        bl_info "bl setup: skill fallback — $upload_count uploaded, $skip_count skipped, $supersede_count superseded"
-    else
-        bl_info "bl setup: skill fallback — would upload $upload_count, would skip $skip_count"
     fi
     return "$BL_EX_OK"
 }
