@@ -453,7 +453,7 @@ bl_setup_seed_skills_native() {
         # Build zip bundle: cd into rs_dir parent so zip root entry is <name>/SKILL.md etc.
         local zip_path="$tmp_dir/${name}.zip"
         command rm -f "$zip_path"
-        ( cd "$rs_dir" && zip -r "$zip_path" "$name/" >/dev/null 2>&1 ) || {   # 2>/dev/null: zip chatter irrelevant; exit code is the signal
+        ( cd "$rs_dir" && command zip -r "$zip_path" "$name/" >/dev/null 2>&1 ) || {   # 2>/dev/null: zip chatter irrelevant; exit code is the signal
             bl_error_envelope setup "bl_setup_seed_skills_native: zip failed for $name"
             return "$BL_EX_UPSTREAM_ERROR"
         }
