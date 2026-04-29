@@ -129,7 +129,7 @@ observable behavior change; existing `tests/03-models.bats` and
 
 ### Phase 3: Routing-skills frontmatter + foundations bundle
 
-**Status:** pending
+**Status:** complete
 
 **Mode:** serial-agent
 
