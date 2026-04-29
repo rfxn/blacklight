@@ -378,7 +378,7 @@ no production source change; per-phase regression tests already covered in P2-P6
 
 ### Phase 8: live-mode integration + ANTHROPIC-API-NOTES rewrite + Path C dead-code removal
 
-**Status:** pending
+**Status:** complete
 
 **Mode:** serial-agent
 
