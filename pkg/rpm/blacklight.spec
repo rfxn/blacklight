@@ -2,7 +2,7 @@
 # Customized for single-binary layout: /usr/bin/bl + /var/lib/bl state dirs
 #
 %define name    blacklight
-%define version 0.6.0
+%define version 0.7.0
 %define release 1%{?dist}
 
 Name:           %{name}
@@ -65,6 +65,35 @@ fi
 %doc /usr/share/doc/blacklight/CHANGELOG
 
 %changelog
+* Tue Apr 28 2026 R-fx Networks <proj@rfxn.com> - 0.7.0-1
+- M17 Managed Agents primitive correction:
+  Two primitives that were diagnosed at thinner-than-canonical depth in M13/M14
+  re-probed and corrected against the live API.
+  Environments now bake the curator's nine-deb package set via config.packages.apt
+  (apache2, libapache2-mod-security2, modsecurity-crs, yara, jq, zstd, duckdb,
+  pandoc, weasyprint); cold sessions stop re-installing per-case via the bash tool.
+  Routing skills are now first-class workspace Skills (six custom + pdf Anthropic
+  pre-built), seeded via bl_setup_seed_skills_native (multipart upload, sha256
+  bundle idempotency, version-bump branch on content change). bl_setup_seed_skills
+  routes to _native unconditionally; the Files-API workspace-files fallback path
+  (Path C / bl_setup_seed_skills_as_files) deleted. Curator agent body emits
+  skills:[] with version: "latest" auto-pickup; resources:[] reference of old
+  workspace skill files removed. prompts/curator-agent.md path-routing prose
+  stripped (-30 lines); description-router selection is platform-routed. Each
+  routing-skills/<name>/ now bundles a per-skill foundations.md Level-3 reference;
+  six SKILL.md files carry YAML frontmatter (name + description ≤1024 chars).
+  ANTHROPIC-API-NOTES.md §1 (Environments) and §2 (Skills allowlist) marked
+  RESOLVED 2026-04-28 — the §2 404 was a self-inflicted wrong-beta-header bug;
+  canonical trio skills-2025-10-02,code-execution-2025-08-25,files-api-2025-04-14
+  documented; new §11 captures research-preview-only Messages-API features
+  (cache_control, thinking) that Managed Agents does not surface. Beta-header
+  strings centralized in src/bl.d/20-api.sh as BL_API_BETA_{MA,FILES,SKILLS}
+  constants. bl_setup_skills_gc archives 3 v1 orphan skills (case-lifecycle,
+  polyshell, modsec-patterns) and deletes old workspace skill files via
+  bl setup --gc. tests/16-skills-native.bats new (8 tests); tests/Dockerfile +
+  tests/Dockerfile.rocky9 install zip + sanity check. 424/424 pre-commit matrix
+  on debian12 + rocky9.
+
 * Sun Apr 26 2026 R-fx Networks <proj@rfxn.com> - 0.6.0-1
 - M16 collectors + bridge milestone: modsec parser fix + canonical 8-hex
   corpus alignment; bl observe cron --from-file fixture-mode adapter;
