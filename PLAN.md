@@ -296,7 +296,7 @@ observable behavior change; existing `tests/03-models.bats` and
 
 ### Phase 6: skills-gc — orphan archive + old workspace files
 
-**Status:** pending
+**Status:** complete
 
 **Mode:** serial-agent
 
