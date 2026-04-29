@@ -1,14 +1,16 @@
 # tests/Dockerfile — blacklight test image
 # Layers blacklight runtime deps on the batsman base image.
 # Base already provides: bash coreutils findutils diffutils procps gawk sed grep gzip tar wget curl ca-certificates util-linux hostname parallel bats-core.
-# Missing and required by blacklight: jq zstd shellcheck.
+# Missing and required by blacklight: jq zstd shellcheck zip.
+# zip is required by bl_setup_seed_skills_native (M17 P4 — Skills API multipart upload).
 ARG BASE_IMAGE=blacklight-base-debian12
 FROM ${BASE_IMAGE}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    jq zstd shellcheck patch cron \
+    jq zstd shellcheck zip patch cron \
     apache2 libapache2-mod-security2 iptables nftables yara whois \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && command -v zip >/dev/null || { echo "FATAL: zip not installed; bl_setup_seed_skills_native requires it" >&2; exit 1; }
 
 # M6: mock LMD (maldet) + ClamAV (clamscan/clamdscan) shims so bl_defend_sig
 # can detect + invoke scanners without installing real binaries (~400MB).

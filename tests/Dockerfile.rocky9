@@ -1,12 +1,14 @@
 # tests/Dockerfile.rocky9 — blacklight test image (Rocky Linux 9)
 # Layers blacklight runtime deps on the batsman rocky9 base image.
 # Base already provides: bash findutils diffutils procps-ng gawk sed grep gzip tar wget curl ca-certificates util-linux hostname parallel bats-core, plus EPEL.
-# Missing and required by blacklight: jq zstd ShellCheck.
+# Missing and required by blacklight: jq zstd ShellCheck zip.
+# zip is required by bl_setup_seed_skills_native (M17 P4 — Skills API multipart upload).
 ARG BASE_IMAGE=blacklight-base-rocky9
 FROM ${BASE_IMAGE}
 
-RUN microdnf install -y jq zstd ShellCheck patch cronie \
-    httpd mod_security iptables nftables yara whois && microdnf clean all
+RUN microdnf install -y jq zstd ShellCheck zip patch cronie \
+    httpd mod_security iptables nftables yara whois && microdnf clean all \
+    && command -v zip >/dev/null || { echo "FATAL: zip not installed; bl_setup_seed_skills_native requires it" >&2; exit 1; }
 
 # M6: mock LMD/ClamAV shims (see tests/Dockerfile for rationale)
 RUN mkdir -p /usr/local/maldetect && \
