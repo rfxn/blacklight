@@ -10908,20 +10908,39 @@ bl_setup_eval() {
 
 # bl_setup_ensure_agent <mode> — mode: apply | dry-run
 # Creates or updates the bl-curator Managed Agent. On first-run: POST /v1/agents.
-# On subsequent: POST /v1/agents/<id> with {version, ...} CAS body (F9 fix).
+# On subsequent: compare state.agent.skill_versions (last-synced skill IDs) to the
+# current state.skills IDs. On drift, POST /v1/agents/<id> with optimistic-CAS body
+# {version: <current>, ...} (F9 fix). On 409, refetch GET, retry once.
 bl_setup_ensure_agent() {
     local mode="${1:-apply}"
     local state_file="$BL_STATE_DIR/state.json"
     local cached_id
     cached_id=$(jq -r '.agent.id // empty' "$state_file" 2>/dev/null || printf '')   # missing state → empty → first-run path
     if [[ -n "$cached_id" ]] && [[ "$mode" == "apply" ]]; then
-        # F9 fix — agents are versioned; the API uses POST, not PATCH.
-        # Update via POST /v1/agents/<id> with optimistic-CAS body
-        # {version: <current>, ...}.
-        # On 409 ("Concurrent modification detected"), refetch GET, update
-        # cached version in state.json, retry once.
-        bl_setup_update_agent_cas "$cached_id"
-        return $?
+        # Drift check: compare skill IDs last recorded in state.agent.skill_versions
+        # to current state.skills IDs. CAS-bump only if skill set changed.
+        local skill_names=("synthesizing-evidence" "prescribing-defensive-payloads"
+            "curating-cases" "gating-false-positives" "extracting-iocs" "authoring-incident-briefs")
+        local drift=0 sname cur_id last_id
+        for sname in "${skill_names[@]}"; do
+            cur_id=$(jq -r --arg n "$sname" '.skills[$n].id // empty' "$state_file" 2>/dev/null || printf '')
+            last_id=$(jq -r --arg n "$sname" '.agent.skill_versions[$n] // empty' "$state_file" 2>/dev/null || printf '')
+            if [[ "$cur_id" != "$last_id" ]]; then
+                drift=1
+                break
+            fi
+        done
+        if (( drift == 1 )); then
+            # F9 fix — agents are versioned; the API uses POST, not PATCH.
+            # Update via POST /v1/agents/<id> with optimistic-CAS body
+            # {version: <current>, ...}.
+            # On 409 ("Concurrent modification detected"), refetch GET, update
+            # cached version in state.json, retry once.
+            bl_setup_update_agent_cas "$cached_id"
+            return $?
+        fi
+        bl_info "bl setup: agent skill_versions unchanged — skipping CAS update"
+        return "$BL_EX_OK"
     fi
     if [[ "$mode" == "dry-run" ]]; then
         if [[ -z "$cached_id" ]]; then
@@ -10987,8 +11006,15 @@ bl_setup_update_agent_cas() {
         if (( rc == 0 )); then
             local new_version
             new_version=$(printf '%s' "$resp" | jq -r '.version // 0')
+            # Persist new version and update skill_versions snapshot so the next
+            # sync can detect drift without an extra GET call.
             local tmp_state="$state_file.tmp.$$"
-            jq --argjson v "$new_version" '.agent.version = $v' "$state_file" > "$tmp_state"
+            jq --argjson v "$new_version" \
+               '.agent.version = $v
+                | .agent.skill_versions = (
+                    .skills | to_entries | map({key: .key, value: .value.id}) | from_entries
+                  )' \
+               "$state_file" > "$tmp_state"
             command mv "$tmp_state" "$state_file"
             BL_STATE_AGENT_ID="$cached_id"
             BL_STATE_AGENT_VERSION="$new_version"
@@ -11173,6 +11199,11 @@ bl_setup_ensure_memstore() {
 }
 
 # bl_setup_compose_agent_body — emits agent-create JSON to stdout per setup-flow.md §4.2.
+# Reads 6 routing-skill IDs from state.json and emits skills:[] with 6 custom entries
+# (each {type:"custom", skill_id:<id>, version:"latest"}) plus {type:"anthropic", skill_id:"pdf"}.
+# Exits BL_EX_PREFLIGHT_FAIL if any routing-skill ID is missing (P4 not yet run).
+# Stable skill order: synthesizing-evidence, prescribing-defensive-payloads, curating-cases,
+# gating-false-positives, extracting-iocs, authoring-incident-briefs.
 bl_setup_compose_agent_body() {
     local repo_root resolved
     resolved=$(readlink -f "$0" 2>/dev/null || printf '.')   # readlink -f may fail when $0 is relative / sourced — fallback to cwd
@@ -11184,11 +11215,35 @@ bl_setup_compose_agent_body() {
     for f in "$prompt_file" "$step_schema" "$def_schema" "$int_schema"; do
         [[ -r "$f" ]] || { bl_error_envelope setup "input file missing: $f"; return "$BL_EX_PREFLIGHT_FAIL"; }
     done
+    # Stable routing-skill order (matches P3 SKILL.md set; order is deterministic for CAS drift detection)
+    local skill_names=(
+        "synthesizing-evidence"
+        "prescribing-defensive-payloads"
+        "curating-cases"
+        "gating-false-positives"
+        "extracting-iocs"
+        "authoring-incident-briefs"
+    )
+    local state_file="$BL_STATE_DIR/state.json"
+    local skill_ids_json="[]"
+    local sname sid
+    for sname in "${skill_names[@]}"; do
+        sid=""
+        if [[ -f "$state_file" ]]; then
+            sid=$(jq -r --arg n "$sname" '.skills[$n].id // empty' "$state_file" 2>/dev/null || printf '')
+        fi
+        if [[ -z "$sid" ]]; then
+            bl_error_envelope setup "routing-skill '$sname' has no id in state.json — run 'bl setup --apply' first to seed skills"
+            return "$BL_EX_PREFLIGHT_FAIL"
+        fi
+        skill_ids_json=$(printf '%s' "$skill_ids_json" | jq --arg id "$sid" '. + [$id]')
+    done
     jq -n \
         --rawfile prompt "$prompt_file" \
         --slurpfile stepRaw "$step_schema" \
         --slurpfile defRaw  "$def_schema" \
         --slurpfile intRaw  "$int_schema" \
+        --argjson skillIds "$skill_ids_json" \
         '{
             name: "bl-curator",
             model: "claude-opus-4-7",
@@ -11213,7 +11268,11 @@ bl_setup_compose_agent_body() {
                     description: "Walk obfuscation layers of a mounted shell sample.",
                     input_schema: ($intRaw[0] | del(.["$schema"], .["$id"], .title))
                 }
-            ]
+            ],
+            skills: (
+                [ $skillIds[] | {type: "custom", skill_id: ., version: "latest"} ]
+                + [{type: "anthropic", skill_id: "pdf"}]
+            )
         }'
 }
 
