@@ -16,27 +16,57 @@ Severity scale:
 
 ---
 
-## 1. Environments — no package install at create  ·  DEGRADED
+## 1. Environments — packages at create  ·  RESOLVED 2026-04-28
 
-**Tried:** `POST /v1/environments` with `{name, type:"cloud", packages:{apt:[apache2, libapache2-mod-security2, modsecurity-crs, yara, jq, zstd, duckdb, pandoc, weasyprint]}, networking:{type:"unrestricted"}}`.
+**Tried (original, 2026-04-24):** `POST /v1/environments` with `{name, type:"cloud", packages:{apt:[…]}, networking:{type:"unrestricted"}}`.
 
-**Got:** HTTP 400 — `type`, `packages`, `networking` all rejected as "Extra inputs are not permitted". The accepted body is `{name, config:{type:"cloud", networking:{type:"unrestricted"|"package_managers_and_custom"}}}`. There is no `packages`, `setup_script`, `image`, or `init` field anywhere in the public surface.
+**Got (original):** HTTP 400 — `type`, `packages`, `networking` all rejected as "Extra inputs are not permitted". The accepted body at the time appeared to be `{name, config:{type:"cloud", networking:{type:"unrestricted"|"package_managers_and_custom"}}}` with no `packages` field.
 
-**Workaround (current):** Curator system prompt drives `apt install` via the bash tool at session boot. `networking.type:"unrestricted"` is required so `apt` can reach mirrors. Cost: every fresh session pays the install latency before doing real work; per-session caching does not survive across sessions.
+**Workaround (original):** Curator system prompt drove `apt install` via the bash tool at session boot. Every fresh session paid install latency before real work.
 
-**Ideal:** A `config.setup_commands:[…]` or `config.image:"ghcr.io/.../bl-curator:0.4.0"` field, executed once at env-create and reused across all sessions bound to that env_id.
+### Re-probe 2026-04-28
+
+`config.packages` is accepted. The canonical body shape (managed-agents-2026-04-01):
+
+```json
+{
+  "name": "bl-curator-env",
+  "config": {
+    "type": "cloud",
+    "networking": {"type": "unrestricted"},
+    "packages": {
+      "apt": ["apache2", "libapache2-mod-security2", "modsecurity-crs", "yara",
+              "jq", "zstd", "duckdb", "pandoc", "weasyprint"]
+    }
+  }
+}
+```
+
+Package manager keys accepted: `apt`, `cargo`, `gem`, `go`, `npm`, `pip`. Packages installed at env-create and cached across all sessions sharing that `env_id` — no per-session install latency. Original DEGRADED finding is resolved; workaround in `prompts/curator-agent.md` removed in M17 P2/P5.
 
 ---
 
-## 2. Skills — workspace allowlist gate  ·  DEGRADED
+## 2. Skills — workspace allowlist gate  ·  RESOLVED 2026-04-28
 
-**Tried:** `POST /v1/skills` with `{name, description, body}` for the six routing skills. `OPTIONS /v1/skills` returns `Allow: POST`, suggesting the endpoint is alive.
+**Tried (original, 2026-04-24):** `POST /v1/skills` with `{name, description, body}` for the six routing skills. `OPTIONS /v1/skills` returns `Allow: POST`, suggesting the endpoint is alive.
 
-**Got:** HTTP 404 on POST/GET against `/v1/skills` for our workspace. The endpoint exists per the OPTIONS reflector, but is gated to allowlisted workspaces.
+**Got (original):** HTTP 404 on POST/GET against `/v1/skills`. Interpreted at the time as a server-side allowlist gate.
 
-**Workaround (current — Path C fallback in `bl_setup_seed_skills_as_files`):** Upload each `routing-skills/<name>/SKILL.md` as a workspace File at `/skills/<name>-skill.md`. Curator system prompt names the corpus paths explicitly. Loses Anthropic's description-routed skill selection — every "skill" is now visible as a static corpus file the agent has to choose from itself.
+**Workaround (original — Path C fallback in `bl_setup_seed_skills_as_files`):** Upload each `routing-skills/<name>/SKILL.md` as a workspace File at `/skills/<name>-skill.md`. Corpus paths named explicitly in the curator system prompt. Lost Anthropic's description-routed skill selection.
 
-**Ideal:** Open the allowlist, OR document explicitly that workspaces self-serve allowlist via a flag/contact. The 404 (vs. a 403 with reason) makes it indistinguishable from "endpoint moved" during integration debugging.
+Historical record — `OPTIONS /v1/skills` response header: `Allow: POST`
+
+### Re-probe 2026-04-28
+
+The 404 was a **self-inflicted integration bug**, not an Anthropic-side allowlist. Root cause: the original probe used the `managed-agents-2026-04-01` beta header alone, which does not cover the Skills endpoints. The Skills API requires a distinct beta-header set.
+
+**Canonical beta-header trio for Skills + Code Execution + Files API:**
+
+```
+anthropic-beta: skills-2025-10-02,code-execution-2025-08-25,files-api-2025-04-14
+```
+
+With the correct trio, `POST /v1/skills` and `GET /v1/skills` return 2xx. The allowlist finding is retracted. `bl_setup_seed_skills_as_files` (the Path C fallback) removed in M17 P8 (Q4 operator decision). Skills are now seeded via `bl_setup_seed_skills_native` with the correct beta header centralized in `BL_API_BETA_SKILLS` (`src/bl.d/20-api.sh`).
 
 ---
 
@@ -82,11 +112,15 @@ Severity scale:
 
 **Tried:** `GET /v1/agents?name=bl-curator`.
 
-**Got:** Returns the entire workspace agent list. The query parameter is silently accepted, not an error, but does no filtering.
+**Got (original, 2026-04-24):** Returns the entire workspace agent list. The query parameter was silently accepted — not an error, but no filtering.
 
 **Workaround:** Client-side filter via `jq -r '.data[] | select(.name == "bl-curator") | .id'`.
 
 **Ideal:** Either honor the filter server-side, or reject unknown query params with 400 so integrators know the filter is a no-op.
+
+### Re-probe 2026-04-28
+
+Anthropic improved the diagnostic: `GET /v1/agents?name=bl-curator` now returns **HTTP 400** with body `{"error": {"type": "invalid_request_error", "message": "unexpected query parameter: name"}}`. The filter is still not honored server-side, but the 400 response makes the no-op explicit rather than silent. Client-side `jq` filter remains the workaround.
 
 ---
 
@@ -138,16 +172,30 @@ Severity scale:
 
 ---
 
+## 11. Research-preview-only features blacklight does NOT yet leverage  ·  INFORMATIONAL
+
+The following features appear in Messages API docs but are **not exposed via the Managed Agents API** as of 2026-04-28:
+
+**`cache_control`** (prompt caching): The `cache_control: {type: "ephemeral"}` block can be placed on `system`, `tools`, or `messages` content in `messages.create`. Managed Agents sessions do not expose a per-call `messages.create` surface — the harness drives the session internally. There is no equivalent `cache_control` field on `POST /v1/sessions/<id>/events` or on the agent body itself.
+
+**`thinking`** (extended thinking / budget tokens): `thinking: {type: "enabled", budget_tokens: N}` is a `messages.create` parameter. `POST /v1/agents` rejects `thinking: {...}` at create time with HTTP 400 "Extra inputs are not permitted". No per-session thinking override is documented.
+
+**Implication for blacklight:** The curator currently uses `claude-opus-4-7` with the harness's default thinking behavior. Explicit thinking budget control and prompt-cache warm-up are not available within the Managed Agents surface. When Anthropic exposes these primitives in Managed Agents, the relevant knobs are:
+- thinking budget: agent body or per-session event parameter
+- cache anchor: corpus file pinning (Files API already in use)
+
+Track in `FUTURE.md` — implement when surface is available.
+
+---
+
 ## Architectural impact on blacklight
 
-The cumulative effect of #1, #2, #5, #7 is that blacklight currently lives in a **hybrid architecture**:
+The cumulative effect of #5 and #7 (still open as of 2026-04-28) means blacklight retains two hybrid patterns:
 
-- Skills route via Files (corpus), not via Anthropic's description-router.
-- Per-session env setup runs via bash tool, not a pre-baked image.
-- Memory writes are last-write-wins with application-level retry.
-- File GC is conservative (deletion lags live-session lifecycle).
+- Memory writes are last-write-wins with application-level retry (#5 unresolved).
+- File GC is conservative — deletion lags live-session lifecycle (#7 unresolved).
 
-None of this is fatal — blacklight ships with the stack it has — but the **strategic positioning toward Managed Agents primitives is weaker than the strategy doc assumes** (see `PIVOT-v2.md`). When items #2 and #1 land in the public surface, blacklight's positioning sharpens materially: skills become real description-routed primitives, and per-session install latency disappears from the operator runbook.
+Items #1 (packages) and #2 (Skills allowlist) are **resolved as of 2026-04-28** (M17): `config.packages.apt` is accepted at env-create; Skills seeded via the native `bl_setup_seed_skills_native` path with the correct beta-header trio. The strategic positioning toward Managed Agents primitives is now materially stronger — skills are description-routed primitives, and per-session install latency is gone from the operator runbook.
 
 ---
 

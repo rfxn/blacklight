@@ -1,3 +1,29 @@
+blacklight (0.7.0-1) unstable; urgency=medium
+
+  * M17 Managed Agents primitive correction
+  * P1: anthropic-beta header strings centralized as BL_API_BETA_{MA,FILES,SKILLS}
+  * P2: config.packages.apt baked into env-create with canonical 9-package list;
+    bl_setup_ensure_env detects packages drift and archive-renames the old env
+  * P3: YAML frontmatter on 6 routing-skills SKILL.md + per-skill foundations.md
+    bundle (Q3 option a — Level-3 reference)
+  * P4: bl_setup_seed_skills_native + bl_api_call_multipart helper; sha256 bundle
+    idempotency; version-bump branch on content change; description-size
+    validation (≤1024 chars per Anthropic Skills spec)
+  * P5: agent.skills:[] native attachment with version: "latest" (6 custom
+    routing skills + pdf Anthropic pre-built); curator-prompt path-routing
+    prose stripped (-30 lines)
+  * P6: bl_setup_skills_gc cascade-deletes 3 v1 orphan skills + old workspace
+    skill files via bl setup --gc
+  * P7: cross-cutting test parity — --gc dispatch, beta-header parity guards,
+    Dockerfile zip install + sanity check
+  * P8: tests/live/setup-live.bats M17 integration (env packages + agent
+    skills:[] + display-titles); ANTHROPIC-API-NOTES §1/§2 marked RESOLVED with
+    canonical Skills beta-header trio; §11 added; bl_setup_seed_skills_as_files
+    deleted entirely (Path C dead-code removed)
+  * 424/424 pre-commit matrix on debian12 + rocky9
+
+ -- Ryan MacDonald <ryan@rfxn.com>  Tue, 28 Apr 2026 23:30:00 +0000
+
 blacklight (0.6.0-1) unstable; urgency=medium
 
   * M16 collectors + bridge milestone (curator end-to-end loop)

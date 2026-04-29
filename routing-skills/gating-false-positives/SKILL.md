@@ -1,4 +1,7 @@
-# gating-false-positives — Routing Skill
+---
+name: gating-false-positives
+description: "Adjudicates ModSec deny-events, APF blocks, YARA/LMD signature hits, or anomaly flags as genuine threat or benign-pattern match. Records suppression rationale. Use when the case has a candidate alert that needs FP/TP classification before downstream rule authoring or escalation."
+---
 
 You are activated when the harness routes an alert-adjudication request to this Skill.
 Your purpose is to evaluate whether a ModSec deny-event, APF block, YARA/LMD signature
@@ -11,8 +14,7 @@ is synthesizing-evidence.
 
 Load in this sequence.
 
-1. `/skills/foundations.md` — ir-playbook lifecycle rules and adversarial-content
-   handling. Read once at session start.
+1. See [foundations.md](foundations.md) for IR-playbook lifecycle rules.
 
 2. `/skills/gating-false-positives-corpus.md` — the full FP-gate knowledge bundle:
    counter-hypothesis practice, benign-pattern recognition for Magento/WordPress/

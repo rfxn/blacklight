@@ -24,11 +24,12 @@ bl_files_create() {
         bl_error_envelope files "file exceeds 500 MB cap: $path ($size_bytes bytes)"
         return "$BL_EX_PREFLIGHT_FAIL"
     fi
+    local files_beta_hdr='anthropic-beta: '"$BL_API_BETA_FILES,$BL_API_BETA_MA"
     while (( attempt < 3 )); do
         resp=$(curl -sS --max-time 60 -w '\n%{http_code}' -X POST \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
-            -H "anthropic-beta: files-api-2025-04-14,managed-agents-2026-04-01" \
+            -H "$files_beta_hdr" \
             -F "file=@$path;type=$mime" \
             "https://api.anthropic.com/v1/files" 2>&1) || true   # retry handles curl exit
         http_status="${resp##*$'\n'}"

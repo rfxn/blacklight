@@ -2,6 +2,200 @@ blacklight — Defensive forensics, post-incident, operator-facing
 Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 https://github.com/rfxn/blacklight
 
+=== v0.7.0 — M17 Managed Agents primitive correction — 2026-04-28 ===
+
+Two Managed Agents primitives that were diagnosed at thinner-than-canonical
+depth in earlier milestones (M13 Path C Files-API workspace skill files;
+M14 per-session deb-set install via the bash tool) re-probed against the
+live API and corrected. The 2026-04-28 re-probe surfaced that both
+diagnoses had been wrong: config.packages on Environments is now accepted
+with the documented {apt, cargo, gem, go, npm, pip} shape, and Skills API
+endpoints had been returning 404 only because of a self-inflicted
+wrong-beta-header bug — the canonical trio is
+skills-2025-10-02,code-execution-2025-08-25,files-api-2025-04-14.
+
+M17 trades the bash-tool deb-install workaround for env-baked packages
+(cached across sessions sharing the same environment per docs) and
+trades the Files-API workspace-skill-files workaround (Path C) for native
+Skills resources attached to the agent via skills:[]. Routing skills are
+now first-class workspace artifacts: queryable, versionable, auditable.
+
+Operator-confirmed decisions (PLAN.md §Operator-confirmed decisions):
+Q1 version: "latest" in agent body (auto-pickup of skill version-bumps);
+Q2 networking unrestricted preserved (lockdown to limited deferred to a
+separate hardening milestone); Q3 (a) bundle a per-skill foundations.md
+Level-3 reference (each routing skill self-contained); Q4 retain
+bl_setup_seed_skills_as_files through P8 then delete (safety net through
+live-API integration); Q5 feature branch m17 (squash-merge to main on
+M17 close).
+
+Phase highlights (8 phases, 21 commits, +3315/-430 across 38 files):
+
+P1 — Beta-header centralization. Three constants near top of
+  src/bl.d/20-api.sh: BL_API_BETA_MA="managed-agents-2026-04-01",
+  BL_API_BETA_FILES="files-api-2025-04-14",
+  BL_API_BETA_SKILLS="skills-2025-10-02,code-execution-2025-08-25,files-api-2025-04-14".
+  bl_api_call gains optional 4th arg beta_header (default $BL_API_BETA_MA).
+  Three hardcoded "anthropic-beta:" sites replaced.
+
+P2 — config.packages adoption. bl_setup_compose_env_body emits
+  config.packages.apt with the canonical 9-package list (apache2,
+  libapache2-mod-security2, modsecurity-crs, yara, jq, zstd, duckdb,
+  pandoc, weasyprint). bl_setup_ensure_env detects packages drift via
+  jq-sorted set equality on config.packages.apt; on mismatch creates a
+  new env (renaming old to bl-curator-env-archive-<id>) and updates
+  state.env_id. Networking remains unrestricted (Q2). The stale
+  comment block stating "packages is NOT a valid field" deleted.
+
+P3 — Routing-skills frontmatter + foundations bundle. Six
+  routing-skills/<name>/SKILL.md files carry YAML frontmatter (name
+  matches directory; description ≤1024 chars, leads with action verb,
+  closes with "Use when …"). Six per-skill foundations.md created with
+  IR-playbook lifecycle content (Q3 option a — Level-3 reference,
+  bundled inside each skill's zip rather than hoisted inline or
+  stripped). Description distinctiveness verified pairwise.
+
+P4 — bl_setup_seed_skills_native + multipart helper.
+  bl_api_call_multipart in 20-api.sh: single curl invocation, 1 retry on
+  5xx, accepts files-array of <field>=@<file> entries.
+  bl_setup_seed_skills_native in 84-setup.sh: per-skill compute sha256
+  of SKILL.md + bundled files (sorted by path, hashed twice); compare to
+  state.skills.<name>.sha256; skip on match, version-bump on
+  existing-id, create-new on missing-id. Zip via command zip -r under
+  BL_TMP_DIR. Description-size validation (>1024 chars → exit 65).
+  bl_setup_seed_skills dispatcher routes to _native after probe success.
+  tests/16-skills-native.bats new (8 tests); tests/helpers/skills-mock.bash
+  shims curl against fixture responses.
+
+P5 — agent.skills:[] + pdf attach + curator-agent.md prose trim.
+  bl_setup_compose_agent_body emits skills:[] with 6 custom entries
+  (each {type:"custom", skill_id, version:"latest"}) plus
+  {type:"anthropic", skill_id:"pdf"}. resources:[] reference of old
+  workspace skill files removed. bl_setup_ensure_agent compares
+  state.agent.skill_versions to live agent skills array; CAS-bumps on
+  drift. prompts/curator-agent.md §3.1 path-naming routing prose
+  stripped (367 → 337 lines); replaced with a 2-line
+  platform-routes-skills sentence + under-routing fallback. Q1
+  version: "latest" gives auto-pickup of P4 version-bumps without
+  agent recompose; trade against operator-controlled rollout
+  acknowledged.
+
+P6 — skills-gc — orphan archive + old workspace files.
+  bl_setup_skills_gc(<mode>) cascade-deletes 3 v1 orphan skills
+  (case-lifecycle, polyshell, modsec-patterns from 2026-04-23) by
+  listing versions → DELETE per version → DELETE skill (cascade order
+  mandatory per the 2026-04-28 probe; skill-delete with versions
+  present returns 400). Lists workspace files filtered by
+  scope.type="workspace" AND filename matching <routing-skill-name>-skill.md;
+  DELETE per match. Wired only into bl setup --gc verb dispatch.
+  dry-run mode logs intent without DELETE writes.
+
+P7 — Cross-cutting test parity. tests/01-cli-surface.bats asserts
+  bl setup --gc verb dispatches without help-text drift.
+  tests/03-models.bats asserts BL_API_BETA_* constants exist + parity
+  guard against future hardcoded "anthropic-beta:" reintroduction.
+  tests/Dockerfile + tests/Dockerfile.rocky9 install zip and carry an
+  explicit command -v zip sanity check (P4 dependency; pulled forward
+  during P4 regression-fix sweep when full-matrix surfaced 18 failures
+  due to missing zip in container images).
+
+P8 — Live integration + ANTHROPIC notes rewrite + Path C dead-code
+  removal. tests/live/setup-live.bats extended with M17 integration
+  test gated by BL_LIVE=1 + ANTHROPIC_API_KEY: asserts live env has
+  config.packages with canonical 9-name list; asserts live agent has
+  skills:[] with 6 custom (each version: "latest") + pdf; asserts each
+  routing-skill display_title matches expected name.
+  ANTHROPIC-API-NOTES.md §1 (Environments — packages) marked RESOLVED
+  2026-04-28 with canonical accepted shape; §2 (Skills allowlist)
+  rewritten to attribute the original 404 to wrong-beta-header
+  self-inflicted gap, NOT Anthropic-side allowlist; canonical
+  beta-header trio documented; original OPTIONS Allow: POST retained
+  as historical record. §6 (?name= filter): re-probe note added —
+  Anthropic now returns 400 with "unexpected query parameter: name"
+  (improved diagnostic). New §11 captures research-preview-only
+  Messages-API features that Managed Agents does not surface
+  (cache_control, thinking). bl_setup_seed_skills_as_files function
+  deleted entirely; bl_setup_seed_skills dispatcher cleaned (no
+  _as_files fork; calls _native unconditionally after probe success).
+
+Sentinel review (manual-dispatch end-of-plan): PASS-with-MUST-FIX.
+The MUST-FIX (live-test sub-test (d) referenced bl consult --prompt,
+which is not a flag) was dropped — sub-tests (a)/(b)/(c) cover the
+M17 load-bearing claims (env packages, agent skills:[], routing-skill
+display titles) without requiring live curator turns. SHOULD-FIX
+sha-schema fixture sweep applied: 7 sites in tests/08-setup.bats
+migrated from the pre-P4 description_sha256+body_sha256 schema to the
+canonical state.skills.<name>.sha256 single-key form (suite was green
+by accident in those sites; future changes to _native's create vs
+version-bump branching could have silently regressed without the
+schema honesty). Six WATCH advisories captured in FUTURE.md "M17
+sentinel carry-forwards (2026-04-28)": skills-gc first-page-only
+pagination; ensure_env transient-network → spurious archive-recreate;
+foundations-corpus / curator-prompt drift after P5 trim;
+skill-version drift coupling under Q1 version: "latest"; DEV MODE
+escalation gap for new shell-out dependencies; pre-existing test-name
+drift in 08-setup.bats (names promise API-count assertions the
+bodies don't perform).
+
+[New] PLAN.md — M17 Managed Agents primitive correction (8 phases,
+         v0.6.1 → v0.7.0); operator-confirmed Q1-Q5 decisions.
+[Change] src/bl.d/00-header.sh — BL_VERSION 0.6.1 → 0.7.0.
+[Change] src/bl.d/20-api.sh — BL_API_BETA_MA / BL_API_BETA_FILES /
+         BL_API_BETA_SKILLS constants; bl_api_call optional
+         beta-header arg; bl_api_call_multipart helper.
+[Change] src/bl.d/23-files.sh — beta-header literal replaced with
+         "$BL_API_BETA_FILES,$BL_API_BETA_MA".
+[Change] src/bl.d/84-setup.sh — bl_setup_compose_env_body emits
+         config.packages.apt; bl_setup_ensure_env packages-drift
+         archive-rename branch; bl_setup_seed_skills_native (replaces
+         _as_files); bl_setup_compose_agent_body skills:[] with
+         version: "latest"; bl_setup_skills_gc; description-size
+         validation; bl_setup_seed_skills_as_files deleted.
+[Change] prompts/curator-agent.md — §3.1 path-routing prose stripped
+         (367 → 337 lines); replaced with platform-routes sentence +
+         under-routing fallback.
+[Change] routing-skills/<6 names>/SKILL.md — YAML frontmatter
+         (name + description); foundations.md reference rewritten;
+         "# <name> — Routing Skill" heading line removed.
+[New]    routing-skills/<6 names>/foundations.md — per-skill
+         IR-playbook lifecycle reference (Q3 option a).
+[New]    tests/16-skills-native.bats — 8 tests covering happy-path
+         create, sha256 idempotency, version-bump on content change,
+         missing-id branch, existing-id branch, dry-run mode,
+         multipart helper, dispatcher routing.
+[New]    tests/helpers/skills-mock.bash — curl shim for Skills API
+         endpoints (extends curator-mock pattern; no parallel infra).
+[New]    tests/fixtures/skills-{create-success,version-bump-success,
+         list-empty}.json — Skills API mock responses.
+[Change] tests/08-setup.bats — env-create-with-packages + agent-body
+         skills:[] + skills-gc fixtures; pre-P4 sha schema swept (7
+         sites migrated to state.skills.<name>.sha256).
+[Change] tests/01-cli-surface.bats — bl setup --gc verb dispatch test.
+[Change] tests/03-models.bats — BL_API_BETA_* constants + no-hardcoded-
+         anthropic-beta parity guards.
+[Change] tests/Dockerfile + tests/Dockerfile.rocky9 — install zip;
+         command -v zip sanity check (P4 multipart-upload dependency).
+[Change] tests/live/setup-live.bats — M17 live integration test
+         (gated by BL_LIVE=1; env packages + agent skills:[] +
+         display titles).
+[Change] ANTHROPIC-API-NOTES.md — §1 RESOLVED (Environments
+         packages); §2 RESOLVED (Skills allowlist diagnosis
+         corrected, canonical beta-header trio documented); §6
+         re-probe note (?name= filter); §11 new (research-preview-
+         only Messages-API features not surfaced via MA).
+[Change] FUTURE.md — "M17 sentinel carry-forwards (2026-04-28)"
+         section captures 6 WATCH advisories.
+[Change] README.md — v0.6.1 → v0.7.0 build banner + --version sample.
+[Change] pkg/rpm/blacklight.spec + pkg/deb/debian/changelog —
+         0.6.0 → 0.7.0 stanzas.
+[Change] bl — regenerated from 27 parts via 'make bl'.
+
+Verification: bash -n + shellcheck clean across all modified
+src/bl.d/ parts; make bl-check clean (no drift); make -C tests test
+424/424 on debian12; make -C tests test-rocky9 424/424 on rocky9
+(full pre-commit matrix on every code-changing phase commit per
+CLAUDE.md DEV MODE banner heavy-test escalation triggers).
+
 === post-hackathon collateral cleanup — 2026-04-28 ===
 
 Tracked-docs pass dropping hackathon-pitch / judges / submission-window

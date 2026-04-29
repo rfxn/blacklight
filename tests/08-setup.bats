@@ -42,6 +42,44 @@ _state_json_seeded() {
         }' > "$state_dir/state.json"
 }
 
+# _make_6skill_repo_and_state — create a fake repo with 6 routing-skill dirs
+# and a state.json with precomputed sha hashes so bl_setup_seed_skills_native
+# is a no-op for all 6 skills. Agent id is agent_M8_TEST (version 3).
+# skill_versions is empty (no prior CAS update recorded) so drift=1 on ensure_agent.
+# Sets BL_REPO_ROOT to the fake repo. Returns the fake repo path in $1 (out-var).
+_make_6skill_repo_and_state() {
+    local _out_repo="$1"
+    local repo
+    repo=$(mktemp -d)
+    _make_fake_repo "$repo"
+    local skill_names=(
+        "synthesizing-evidence"
+        "prescribing-defensive-payloads"
+        "curating-cases"
+        "gating-false-positives"
+        "extracting-iocs"
+        "authoring-incident-briefs"
+    )
+    local sname sha_val
+    local state_skills='{}'
+    for sname in "${skill_names[@]}"; do
+        mkdir -p "$repo/routing-skills/$sname"
+        printf -- '---\nname: %s\ndescription: test fixture skill body\n---\n# SKILL: %s\n' "$sname" "$sname" > "$repo/routing-skills/$sname/SKILL.md"
+        sha_val=$( ( cd "$repo/routing-skills/$sname" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
+        state_skills=$(printf '%s' "$state_skills" | jq \
+            --arg n "$sname" --arg id "skill_${sname}_ID" --arg sha "$sha_val" \
+            '.[$n] = {id: ("skill_" + $n + "_ID"), version: "1", sha256: $sha}')
+    done
+    _state_json_seeded
+    local tmp
+    tmp=$(mktemp)
+    jq --argjson s "$state_skills" '.skills = $s | .agent.skill_versions = {}' \
+        "$BL_VAR_DIR/state/state.json" > "$tmp"
+    command mv "$tmp" "$BL_VAR_DIR/state/state.json"
+    export BL_REPO_ROOT="$repo"
+    printf -v "$_out_repo" '%s' "$repo"
+}
+
 setup() {
     BL_SOURCE="${BL_SOURCE:-$BATS_TEST_DIRNAME/../bl}"
     BL_VAR_DIR="$(mktemp -d)"
@@ -50,6 +88,9 @@ setup() {
     export BL_REPO_ROOT="$BATS_TEST_DIRNAME/.."
     export ANTHROPIC_API_KEY="sk-ant-test-M13P6"
     bl_curator_mock_init
+    # Default env-GET route: bl_setup_ensure_env packages-drift check sees canonical
+    # packages and reuses the existing env (no recreation) unless a test overrides.
+    bl_curator_mock_add_route 'GET.*v1/environments/' 'setup-env-fetch-with-packages.json' 200
 }
 
 teardown() {
@@ -67,15 +108,14 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/test-skill"
     printf 'desc' > "$fake_repo/routing-skills/test-skill/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/test-skill/SKILL.md"
-    # Pre-compute sha and seed state.json so seed functions see no-op
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/test-skill/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/test-skill/SKILL.md" | awk '{print $1}')
+    printf -- '---\nname: test-skill\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/test-skill/SKILL.md"
+    # Pre-compute bundle sha (mirror bl_setup_seed_skills_native algorithm) so
+    # seed functions see no-op for this skill.
+    local bundle_sha
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/test-skill" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     _state_json_seeded
-    jq --arg ds "$ds" --arg bs "$bs" \
-        '.skills["test-skill"] = {id:"skill_P6FIXTURE001", version:"1",
-            description_sha256:$ds, body_sha256:$bs}
+    jq --arg sha "$bundle_sha" \
+        '.skills["test-skill"] = {id:"skill_P6FIXTURE001", version:"1", sha256:$sha}
          | .agent.skill_versions["test-skill"] = "1"' \
         "$BL_VAR_DIR/state/state.json" > "$BL_VAR_DIR/state/state.json.tmp"
     command mv "$BL_VAR_DIR/state/state.json.tmp" "$BL_VAR_DIR/state/state.json"
@@ -126,8 +166,8 @@ teardown() {
     jq -n '{schema_version:1,
         agent:{id:"agent_M8_TEST",version:2,skill_versions:{}},
         env_id:"env_M8_TEST",
-        skills:{"s1":{id:"skill_1",version:"1",description_sha256:"a",body_sha256:"b"},
-                "s2":{id:"skill_2",version:"1",description_sha256:"c",body_sha256:"d"}},
+        skills:{"s1":{id:"skill_1",version:"1",sha256:"a"},
+                "s2":{id:"skill_2",version:"1",sha256:"c"}},
         files:{"/skills/f1.md":{file_id:"file_1",content_sha256:"e",uploaded_at:"2026-04-25T00:00:00Z"},
                "/skills/f2.md":{file_id:"file_2",content_sha256:"f",uploaded_at:"2026-04-25T00:00:00Z"},
                "/skills/f3.md":{file_id:"file_3",content_sha256:"g",uploaded_at:"2026-04-25T00:00:00Z"}},
@@ -168,14 +208,15 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-a"
     printf 'desc' > "$fake_repo/routing-skills/skill-a/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-a/SKILL.md"
-    # Pre-populate state.json with sha match for skill-a so seed_skills skips
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-a/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-a/SKILL.md" | awk '{print $1}')
+    printf -- '---\nname: skill-a\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-a/SKILL.md"
+    # Pre-populate state.json with sha match for skill-a so seed_skills_native skips.
+    # Bundle sha mirrors bl_setup_seed_skills_native's algorithm (84-setup.sh ~line 437):
+    # sha256 of all files in the skill dir, sorted by path, hashed twice.
+    local bundle_sha
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-a" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     _state_json_seeded
-    jq --arg ds "$ds" --arg bs "$bs" \
-        '.skills["skill-a"] = {id:"skill_P6FIXTURE001", version:"1", description_sha256:$ds, body_sha256:$bs}
+    jq --arg sha "$bundle_sha" \
+        '.skills["skill-a"] = {id:"skill_P6FIXTURE001", version:"1", sha256:$sha}
          | .agent.skill_versions["skill-a"] = "1"' \
         "$BL_VAR_DIR/state/state.json" > "$BL_VAR_DIR/state/state.json.tmp"
     command mv "$BL_VAR_DIR/state/state.json.tmp" "$BL_VAR_DIR/state/state.json"
@@ -202,15 +243,14 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    # Bundle sha (mirror bl_setup_seed_skills_native) so seed_skills sees no-op.
+    local bundle_sha
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-x" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     # Pre-seed state with agent_M8_TEST + skill sha match → seed_skills no-op; ensure_agent PATCHes
     _state_json_seeded
-    jq --arg ds "$ds" --arg bs "$bs" \
-        '.skills["skill-x"] = {id:"skill_P6FIXTURE001", version:"1",
-            description_sha256:$ds, body_sha256:$bs}
+    jq --arg sha "$bundle_sha" \
+        '.skills["skill-x"] = {id:"skill_P6FIXTURE001", version:"1", sha256:$sha}
          | .agent.skill_versions["skill-x"] = "1"' \
         "$BL_VAR_DIR/state/state.json" > "$BL_VAR_DIR/state/state.json.tmp"
     command mv "$BL_VAR_DIR/state/state.json.tmp" "$BL_VAR_DIR/state/state.json"
@@ -248,17 +288,17 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
-    # Pre-seed state.json: no agent, but env + memstore + skills sha match → only agent API fires
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    # Pre-seed state.json: no agent, but env + memstore + skill (id empty → still
+    # triggers create) — sha key carried in canonical form for schema parity.
+    local bundle_sha
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-x" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     mkdir -p "$BL_VAR_DIR/state"
     jq -n \
-        --arg ds "$ds" --arg bs "$bs" \
+        --arg sha "$bundle_sha" \
         '{schema_version:1, agent:{id:"",version:0,skill_versions:{}},
           env_id:"env_M8_TEST", skills:{
-            "skill-x":{id:"",version:"",description_sha256:$ds, body_sha256:$bs}},
+            "skill-x":{id:"",version:"",sha256:$sha}},
           files:{}, files_pending_deletion:[],
           case_memstores:{"_default":"memstore_case_M8"},
           case_files:{}, case_id_counter:{}, case_current:"",
@@ -295,29 +335,16 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup: create-time 409 race → bl_api_call returns 71, ensure_agent re-probes + caches" {
+    # P5 (M17): compose_agent_body requires 6 routing-skill IDs. Use
+    # _make_6skill_repo_and_state so seed_skills is a no-op; clear agent.id so
+    # ensure_agent takes the first-run create path and exercises the 409→re-probe logic.
     local fake_repo
-    fake_repo=$(mktemp -d)
-    _make_fake_repo "$fake_repo"
-    mkdir -p "$fake_repo/routing-skills/skill-x"
-    printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
-    mkdir -p "$BL_VAR_DIR/state"
-    # state.json: no agent id → first-run path; skills match → skip seed
-    jq -n \
-        --arg ds "$ds" --arg bs "$bs" \
-        '{schema_version:1, agent:{id:"",version:0,skill_versions:{}},
-          env_id:"env_M8_TEST",
-          skills:{"skill-x":{id:"skill_P6FIXTURE001",version:"1",
-              description_sha256:$ds, body_sha256:$bs}},
-          files:{}, files_pending_deletion:[],
-          case_memstores:{"_default":"memstore_case_M8"},
-          case_files:{}, case_id_counter:{}, case_current:"",
-          session_ids:{}, last_sync:""}' \
-        > "$BL_VAR_DIR/state/state.json"
-    export BL_REPO_ROOT="$fake_repo"
+    _make_6skill_repo_and_state fake_repo
+    # Clear agent.id to force first-run create path
+    local tmp
+    tmp=$(mktemp)
+    jq '.agent.id = "" | .agent.version = 0' "$BL_STATE_DIR/state.json" > "$tmp"
+    command mv "$tmp" "$BL_STATE_DIR/state.json"
     # Method-qualified mock routes: POST → 409 (conflict); GET (list/re-probe) → hit
     bl_curator_mock_add_route 'POST.*v1/agents$' 'setup-agent-create-conflict.json' 409
     bl_curator_mock_add_route 'GET.*v1/agents' 'setup-agents-list-hit.json' 200
@@ -382,7 +409,7 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     export BL_REPO_ROOT="$fake_repo"
     bl_curator_mock_add_route 'POST.*v1/environments$' 'setup-env-create-success.json' 201
     bl_curator_mock_add_route 'GET.*v1/memory_stores' 'setup-memstore-list-empty.json' 200
@@ -455,22 +482,21 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     printf 'corpus content' > "$fake_repo/skills-corpus/corpus-x.md"
-    # Pre-populate state.json with matching hashes for both skill-x and corpus-x.md
-    local ds bs corpus_sha
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
+    # Pre-populate state.json with matching bundle sha for skill-x and content sha for corpus.
+    # Bundle sha mirrors bl_setup_seed_skills_native's algorithm (84-setup.sh ~line 437).
+    local bundle_sha corpus_sha
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-x" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     corpus_sha=$(sha256sum "$fake_repo/skills-corpus/corpus-x.md" | awk '{print $1}')
     mkdir -p "$BL_VAR_DIR/state"
     jq -n \
-        --arg ds "$ds" --arg bs "$bs" --arg cs "$corpus_sha" \
+        --arg sha "$bundle_sha" --arg cs "$corpus_sha" \
         '{
             schema_version: 1,
             agent: {id: "agent_M8_TEST", version: 3, skill_versions: {"skill-x":"1"}},
             env_id: "env_M8_TEST",
-            skills: {"skill-x": {id: "skill_P6FIXTURE001", version: "1",
-                description_sha256: $ds, body_sha256: $bs}},
+            skills: {"skill-x": {id: "skill_P6FIXTURE001", version: "1", sha256: $sha}},
             files: {"/skills/corpus-x.md": {file_id:"file_P6FIXTURE001",
                 content_sha256: $cs, uploaded_at: "2026-04-25T00:00:00Z"}},
             files_pending_deletion: [],
@@ -506,21 +532,19 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     printf 'original corpus content' > "$fake_repo/skills-corpus/corpus-x.md"
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
-    # Pre-populate state.json with OLD corpus sha (so sha mismatch triggers upload)
-    # Skills match so seed_skills is a no-op; only corpus triggers Files API
+    # Pre-populate state.json with OLD corpus sha (so sha mismatch triggers upload).
+    # Skills bundle sha matches so seed_skills is a no-op; only corpus triggers Files API.
+    local bundle_sha
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-x" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
     mkdir -p "$BL_VAR_DIR/state"
     jq -n \
-        --arg ds "$ds" --arg bs "$bs" \
+        --arg sha "$bundle_sha" \
         '{schema_version: 1,
           agent: {id: "agent_M8_TEST", version: 3, skill_versions: {"skill-x":"1"}},
           env_id: "env_M8_TEST",
-          skills: {"skill-x": {id: "skill_P6FIXTURE001", version: "1",
-              description_sha256: $ds, body_sha256: $bs}},
+          skills: {"skill-x": {id: "skill_P6FIXTURE001", version: "1", sha256: $sha}},
           files: {"/skills/corpus-x.md": {file_id:"file_OLD",
               content_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
               uploaded_at: "2026-04-24T00:00:00Z"}},
@@ -555,7 +579,7 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     printf 'corpus content' > "$fake_repo/skills-corpus/corpus-x.md"
     _state_json_seeded
     export BL_REPO_ROOT="$fake_repo"
@@ -585,7 +609,7 @@ teardown() {
         agent: {id: "agent_TODELETE", version: 1, skill_versions: {}},
         env_id: "env_TODELETE",
         skills: {"s1": {id: "skill_TODELETE", version: "1",
-            description_sha256: "aaa", body_sha256: "bbb"}},
+            sha256: "aaa"}},
         files: {"/skills/f1.md": {file_id:"file_TODELETE",
             content_sha256: "ccc", uploaded_at: "2026-04-25T00:00:00Z"}},
         files_pending_deletion: [],
@@ -757,14 +781,20 @@ teardown() {
 # Covered by bl_skills_create size guard from P1.
 # ---------------------------------------------------------------------------
 
-@test "bl setup --sync rejects description.txt > 1024 chars" {
+@test "bl setup --sync rejects SKILL.md frontmatter description > 1024 chars" {
     local fake_repo
     fake_repo=$(mktemp -d)
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/oversized-skill"
-    # Create description.txt > 1024 chars using printf (no python3 in container)
-    printf '%1025s' ' ' | tr ' ' 'x' > "$fake_repo/routing-skills/oversized-skill/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/oversized-skill/SKILL.md"
+    # M17 P4 _native path: description lives in SKILL.md YAML frontmatter, not description.txt.
+    # Build a SKILL.md with a description > 1024 chars to trip the validator (printf+tr — no python3).
+    {
+        printf -- '---\n'
+        printf 'name: oversized-skill\n'
+        printf 'description: '
+        printf '%1025s' ' ' | tr ' ' 'x'
+        printf '\n---\n# body\n'
+    } > "$fake_repo/routing-skills/oversized-skill/SKILL.md"
     mkdir -p "$BL_VAR_DIR/state"
     jq -n '{schema_version:1, agent:{id:"agent_M8_TEST",version:1,skill_versions:{}},
             env_id:"env_M8_TEST", skills:{}, files:{},
@@ -834,7 +864,7 @@ teardown() {
     _make_fake_repo "$fake_repo"
     mkdir -p "$fake_repo/routing-skills/skill-x"
     printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
     printf 'corpus content' > "$fake_repo/skills-corpus/corpus-x.md"
     _state_json_seeded
     export BL_REPO_ROOT="$fake_repo"
@@ -935,7 +965,7 @@ teardown() {
     # Provide one routing-skills entry so bl_setup_seed_skills does not abort
     mkdir -p "$fake_repo/routing-skills/test-skill"
     printf 'desc' > "$fake_repo/routing-skills/test-skill/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/test-skill/SKILL.md"
+    printf -- '---\nname: test-skill\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/test-skill/SKILL.md"
     printf '# foundations\n' > "$fake_repo/skills-corpus/foundations.md"
     _state_json_seeded
     export BL_REPO_ROOT="$fake_repo"
@@ -979,24 +1009,11 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "bl setup --sync: existing agent → CAS update succeeds, version bumps" {
+    # P5 (M17): drift check uses 6 routing-skill IDs. State has agent.id set but
+    # agent.skill_versions={} (prior CAS snapshot empty) vs state.skills with 6 IDs →
+    # drift=1 → CAS-bump fires. seed_skills sha matches prevent Skills API POSTs.
     local fake_repo
-    fake_repo=$(mktemp -d)
-    _make_fake_repo "$fake_repo"
-    mkdir -p "$fake_repo/routing-skills/skill-x"
-    printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
-    _state_json_seeded
-    # Pre-seed skill sha so seed_skills is a no-op; only ensure_agent fires
-    jq --arg ds "$ds" --arg bs "$bs" \
-        '.skills["skill-x"] = {id:"skill_P6FIXTURE001",version:"1",
-            description_sha256:$ds,body_sha256:$bs}
-         | .agent.skill_versions["skill-x"] = "1"' \
-        "$BL_STATE_DIR/state.json" > "$BL_STATE_DIR/state.json.tmp"
-    command mv "$BL_STATE_DIR/state.json.tmp" "$BL_STATE_DIR/state.json"
-    export BL_REPO_ROOT="$fake_repo"
+    _make_6skill_repo_and_state fake_repo
     bl_curator_mock_add_route 'POST.*v1/agents/[^/]*$' 'setup-agent-update-cas-success.json' 200
     run "$BL_SOURCE" setup --sync
     rm -rf "$fake_repo"
@@ -1007,24 +1024,10 @@ teardown() {
 }
 
 @test "bl setup --sync: existing agent → 409 conflict triggers refetch + retry" {
+    # P5 (M17): drift=1 (agent.skill_versions={}) triggers CAS. First POST → 409;
+    # GET refetch returns version 5; second POST succeeds at v5→v6.
     local fake_repo
-    fake_repo=$(mktemp -d)
-    _make_fake_repo "$fake_repo"
-    mkdir -p "$fake_repo/routing-skills/skill-x"
-    printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
-    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
-    local ds bs
-    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
-    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
-    _state_json_seeded
-    # Pre-seed skill sha so seed_skills is a no-op; only ensure_agent fires
-    jq --arg ds "$ds" --arg bs "$bs" \
-        '.skills["skill-x"] = {id:"skill_P6FIXTURE001",version:"1",
-            description_sha256:$ds,body_sha256:$bs}
-         | .agent.skill_versions["skill-x"] = "1"' \
-        "$BL_STATE_DIR/state.json" > "$BL_STATE_DIR/state.json.tmp"
-    command mv "$BL_STATE_DIR/state.json.tmp" "$BL_STATE_DIR/state.json"
-    export BL_REPO_ROOT="$fake_repo"
+    _make_6skill_repo_and_state fake_repo
     # First POST returns 409; GET returns version 5 (drift); second POST succeeds at v5→v6
     bl_curator_mock_add_route_sequence 'POST.*v1/agents/[^/]*$' \
         'setup-agent-update-cas-conflict.json:409' \
@@ -1045,18 +1048,40 @@ teardown() {
     # Live API (probed 2026-04-26) rejects skill_versions and skills[] at the
     # top level of agents.create — Skills attach via the agent's tools[] entry
     # (agent_toolset_20260401) plus separate skill bindings if the workspace is
-    # allowlisted. Body must carry name + model + system + tools[].
+    # allowlisted. Body must carry name + model + system + tools[] + skills[].
     # Custom tools must NOT include input_schema.additionalProperties or per-field
     # description (both rejected with HTTP 400).
-    local fake_repo body
+    # P5 (M17): compose_agent_body now requires 6 routing-skill IDs from state.json.
+    local fake_repo body state_dir
     fake_repo=$(mktemp -d)
     _make_fake_repo "$fake_repo"
+    state_dir="$BL_VAR_DIR/state"
+    mkdir -p "$state_dir"
+    jq -n '{
+        schema_version: 1,
+        agent: {id: "agent_M8_TEST", version: 3, skill_versions: {}},
+        env_id: "env_M8_TEST",
+        skills: {
+            "synthesizing-evidence":          {id: "skill_SE001",  version: "1", sha256: "aaa"},
+            "prescribing-defensive-payloads": {id: "skill_PDP001", version: "1", sha256: "bbb"},
+            "curating-cases":                 {id: "skill_CC001",  version: "1", sha256: "ccc"},
+            "gating-false-positives":         {id: "skill_GFP001", version: "1", sha256: "ddd"},
+            "extracting-iocs":                {id: "skill_EI001",  version: "1", sha256: "eee"},
+            "authoring-incident-briefs":      {id: "skill_AIB001", version: "1", sha256: "fff"}
+        },
+        files: {}, files_pending_deletion: [],
+        case_memstores: {}, case_files: {}, case_id_counter: {}, case_current: "",
+        session_ids: {}, last_sync: ""
+    }' > "$state_dir/state.json"
     export BL_REPO_ROOT="$fake_repo"
-    body=$(bash -c ". \"$BL_SOURCE\"; bl_setup_compose_agent_body")
+    body=$(bash -c "export BL_VAR_DIR='$BL_VAR_DIR'; export BL_STATE_DIR='$state_dir'; export BL_REPO_ROOT='$fake_repo'; . \"$BL_SOURCE\"; bl_setup_compose_agent_body")
     rm -rf "$fake_repo"
     printf '%s' "$body" | jq -e '.name == "bl-curator"'
     [ "$?" -eq 0 ]
     printf '%s' "$body" | jq -e '.model and .system and (.tools | type == "array") and (.tools | length >= 1)'
+    [ "$?" -eq 0 ]
+    # P5: skills[] must be present and have 7 entries (6 custom + pdf)
+    printf '%s' "$body" | jq -e '(.skills | type == "array") and (.skills | length == 7)'
     [ "$?" -eq 0 ]
     # Forbidden top-level fields (rejected by live API):
     printf '%s' "$body" | jq -e 'has("skill_versions") | not'
@@ -1065,4 +1090,456 @@ teardown() {
     [ "$?" -eq 0 ]
     printf '%s' "$body" | jq -e 'has("output_config") | not'
     [ "$?" -eq 0 ]
+    # resources:[] must NOT appear (old workspace skill files removed in P5)
+    printf '%s' "$body" | jq -e 'has("resources") | not'
+    [ "$?" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# P2 (M17): env body emits config.packages.apt with canonical list
+# Regression-case: tests/08-setup.bats::@test "env body emits config.packages.apt with canonical list"
+# ---------------------------------------------------------------------------
+
+@test "env body emits config.packages.apt with canonical list" {
+    # bl_setup_compose_env_body must emit config.packages.apt with exactly the
+    # 9 canonical package names (managed-agents-2026-04-01 re-probe 2026-04-28:
+    # config.packages.apt is now accepted at env-create).
+    local body
+    body=$(bash -c ". \"$BL_SOURCE\"; bl_setup_compose_env_body")
+    # top-level shape
+    run bash -c "printf '%s' '$body' | jq -e '.name == \"bl-curator-env\"'"
+    [ "$status" -eq 0 ]
+    run bash -c "printf '%s' '$body' | jq -e '.config.type == \"cloud\"'"
+    [ "$status" -eq 0 ]
+    run bash -c "printf '%s' '$body' | jq -e '.config.networking.type == \"unrestricted\"'"
+    [ "$status" -eq 0 ]
+    # config.packages.apt exists and has exactly 9 entries
+    run bash -c "printf '%s' '$body' | jq -e '(.config.packages.apt | type) == \"array\"'"
+    [ "$status" -eq 0 ]
+    run bash -c "printf '%s' '$body' | jq -e '(.config.packages.apt | length) == 9'"
+    [ "$status" -eq 0 ]
+    # Every canonical name is present (order-independent)
+    for pkg in apache2 libapache2-mod-security2 modsecurity-crs yara jq zstd duckdb pandoc weasyprint; do
+        run bash -c "printf '%s' '$body' | jq -e --arg p '$pkg' '.config.packages.apt | contains([\$p])'"
+        [ "$status" -eq 0 ]
+    done
+    # Networking remains unrestricted (Q2 — no lockdown in M17)
+    run bash -c "printf '%s' '$body' | jq -e '.config.networking.type == \"unrestricted\"'"
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# P2 (M17): bl_setup_ensure_env packages-drift branch triggers new-env create
+# ---------------------------------------------------------------------------
+
+@test "bl_setup_ensure_env: packages drift triggers archive verb and new env create" {
+    # Simulate: cached env exists in state.json; live fetch returns no packages field
+    # (old env provisioned before M17) → drift detected → POST /archive (canonical
+    # archive verb, replaces the M17 PATCH-rename which returned 405 against live API),
+    # POST new env; state.json env_id updated to new id.
+    local fake_repo
+    fake_repo=$(mktemp -d)
+    _make_fake_repo "$fake_repo"
+    mkdir -p "$fake_repo/routing-skills/skill-x"
+    printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
+    printf -- '---\nname: skill-x\ndescription: test fixture skill body\n---\n# body\n' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    local bundle_sha
+    bundle_sha=$( ( cd "$fake_repo/routing-skills/skill-x" && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' ) )
+    _state_json_seeded
+    # Override env_id to a pre-M17 env (no packages in live fetch response)
+    jq '.env_id = "env_OLD_NO_PKGS"
+        | .skills["skill-x"] = {id:"skill_P6FIXTURE001",version:"1",sha256:$sha}
+        | .agent.skill_versions["skill-x"] = "1"' \
+        --arg sha "$bundle_sha" \
+        "$BL_STATE_DIR/state.json" > "$BL_STATE_DIR/state.json.tmp"
+    command mv "$BL_STATE_DIR/state.json.tmp" "$BL_STATE_DIR/state.json"
+    export BL_REPO_ROOT="$fake_repo"
+    export BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/curl-requests.log"
+    command touch "$BL_MOCK_REQUEST_LOG"
+    # Reset routes; register specific env_OLD_NO_PKGS routes before the catch-all.
+    bl_curator_mock_reset_routes
+    bl_curator_mock_add_route 'GET.*v1/environments/env_OLD_NO_PKGS' 'setup-env-fetch-no-packages.json' 200
+    # POST /archive route must precede the catch-all POST /v1/environments$ route.
+    bl_curator_mock_add_route 'POST.*v1/environments/env_OLD_NO_PKGS/archive' 'setup-env-create-success.json' 200
+    bl_curator_mock_add_route 'POST.*v1/environments$' 'setup-env-create-with-pkgs.json' 201
+    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-cas-success.json' 200
+    run "$BL_SOURCE" setup --sync
+    rm -rf "$fake_repo"
+    [ "$status" -eq 0 ]
+    # state.json env_id must be updated to the new env
+    run jq -r '.env_id' "$BL_STATE_DIR/state.json"
+    [ "$output" = "env_M17_PKGS" ]
+    # POST /archive on the old env must appear in request log (canonical verb).
+    grep -q 'POST.*environments/env_OLD_NO_PKGS/archive' "$BL_VAR_DIR/curl-requests.log"
+    # No PATCH against /v1/environments/<id> — the prior verb returned 405 live.
+    local patch_calls
+    patch_calls=$(awk '/PATCH.*v1\/environments/{c++} END{print c+0}' "$BL_VAR_DIR/curl-requests.log")
+    [ "$patch_calls" -eq 0 ]
+    # POST to create new env must appear in request log
+    grep -q 'POST.*v1/environments' "$BL_VAR_DIR/curl-requests.log"
+}
+
+# ---------------------------------------------------------------------------
+# P3 (M17): routing-skills SKILL.md frontmatter validation
+# Static structural check — no mock API required.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# P5 (M17): agent body emits skills:[] array with 6 routing skills + pdf
+# Regression-case: tests/08-setup.bats::@test "agent body emits skills:[] array with 6 routing skills + pdf"
+# ---------------------------------------------------------------------------
+
+@test "agent body emits skills:[] array with 6 routing skills + pdf" {
+    # bl_setup_compose_agent_body must emit a skills:[] array containing:
+    #   - 6 custom entries: {type:"custom", skill_id:<id>, version:"latest"}
+    #     one per routing-skill name (stable order)
+    #   - 1 anthropic entry: {type:"anthropic", skill_id:"pdf"}
+    # Each custom entry must carry version:"latest" (Q1 operator decision).
+    # No resources:[] referencing old workspace skill files.
+    # If any state.skills.<name>.id is missing, function must exit non-zero.
+    local fake_repo body
+    fake_repo=$(mktemp -d)
+    _make_fake_repo "$fake_repo"
+    export BL_REPO_ROOT="$fake_repo"
+
+    # Populate state.json with all 6 routing-skill IDs (as seeded by P4)
+    local state_dir="$BL_VAR_DIR/state"
+    mkdir -p "$state_dir"
+    jq -n '{
+        schema_version: 1,
+        agent: {id: "agent_M8_TEST", version: 3, skill_versions: {}},
+        env_id: "env_M8_TEST",
+        skills: {
+            "synthesizing-evidence":          {id: "skill_SE001",  version: "1", sha256: "aaa"},
+            "prescribing-defensive-payloads": {id: "skill_PDP001", version: "1", sha256: "bbb"},
+            "curating-cases":                 {id: "skill_CC001",  version: "1", sha256: "ccc"},
+            "gating-false-positives":         {id: "skill_GFP001", version: "1", sha256: "ddd"},
+            "extracting-iocs":                {id: "skill_EI001",  version: "1", sha256: "eee"},
+            "authoring-incident-briefs":      {id: "skill_AIB001", version: "1", sha256: "fff"}
+        },
+        files: {}, files_pending_deletion: [],
+        case_memstores: {}, case_files: {}, case_id_counter: {}, case_current: "",
+        session_ids: {}, last_sync: ""
+    }' > "$state_dir/state.json"
+
+    body=$(bash -c "export BL_VAR_DIR='$BL_VAR_DIR'; export BL_STATE_DIR='$state_dir'; export BL_REPO_ROOT='$fake_repo'; . \"$BL_SOURCE\"; bl_setup_compose_agent_body")
+    local body_exit=$?
+    rm -rf "$fake_repo"
+    [ "$body_exit" -eq 0 ]
+
+    # skills[] must be present and be an array
+    run bash -c "printf '%s' '$body' | jq -e '(.skills | type) == \"array\"'"
+    [ "$status" -eq 0 ]
+
+    # skills[] must have exactly 7 entries
+    run bash -c "printf '%s' '$body' | jq -e '(.skills | length) == 7'"
+    [ "$status" -eq 0 ]
+
+    # Exactly 6 custom entries
+    run bash -c "printf '%s' '$body' | jq -e '[.skills[] | select(.type == \"custom\")] | length == 6'"
+    [ "$status" -eq 0 ]
+
+    # Each custom entry has version:"latest"
+    run bash -c "printf '%s' '$body' | jq -e '[.skills[] | select(.type == \"custom\") | .version == \"latest\"] | all'"
+    [ "$status" -eq 0 ]
+
+    # Each custom entry has a non-empty skill_id
+    run bash -c "printf '%s' '$body' | jq -e '[.skills[] | select(.type == \"custom\") | .skill_id | length > 0] | all'"
+    [ "$status" -eq 0 ]
+
+    # All 6 expected skill_ids are present
+    for sid in skill_SE001 skill_PDP001 skill_CC001 skill_GFP001 skill_EI001 skill_AIB001; do
+        run bash -c "printf '%s' '$body' | jq -e --arg s '$sid' '[.skills[] | select(.skill_id == \$s)] | length == 1'"
+        [ "$status" -eq 0 ]
+    done
+
+    # Exactly 1 anthropic entry with skill_id:"pdf"
+    run bash -c "printf '%s' '$body' | jq -e '[.skills[] | select(.type == \"anthropic\" and .skill_id == \"pdf\")] | length == 1'"
+    [ "$status" -eq 0 ]
+
+    # No resources:[] field referencing old workspace skill files
+    run bash -c "printf '%s' '$body' | jq -e 'has(\"resources\") | not'"
+    [ "$status" -eq 0 ]
+}
+
+@test "agent body: missing skill id in state causes preflight error" {
+    # If any state.skills.<name>.id is empty/missing, bl_setup_compose_agent_body
+    # must exit non-zero with an operator-actionable error message.
+    local fake_repo
+    fake_repo=$(mktemp -d)
+    _make_fake_repo "$fake_repo"
+    export BL_REPO_ROOT="$fake_repo"
+
+    local state_dir="$BL_VAR_DIR/state"
+    mkdir -p "$state_dir"
+    # Seed 5 skills with IDs but leave "extracting-iocs" missing its id
+    jq -n '{
+        schema_version: 1,
+        agent: {id: "agent_M8_TEST", version: 3, skill_versions: {}},
+        env_id: "env_M8_TEST",
+        skills: {
+            "synthesizing-evidence":          {id: "skill_SE001",  version: "1", sha256: "aaa"},
+            "prescribing-defensive-payloads": {id: "skill_PDP001", version: "1", sha256: "bbb"},
+            "curating-cases":                 {id: "skill_CC001",  version: "1", sha256: "ccc"},
+            "gating-false-positives":         {id: "skill_GFP001", version: "1", sha256: "ddd"},
+            "extracting-iocs":                {id: "",             version: "",  sha256: "eee"},
+            "authoring-incident-briefs":      {id: "skill_AIB001", version: "1", sha256: "fff"}
+        },
+        files: {}, files_pending_deletion: [],
+        case_memstores: {}, case_files: {}, case_id_counter: {}, case_current: "",
+        session_ids: {}, last_sync: ""
+    }' > "$state_dir/state.json"
+
+    run bash -c "export BL_VAR_DIR='$BL_VAR_DIR'; export BL_STATE_DIR='$state_dir'; export BL_REPO_ROOT='$fake_repo'; . \"$BL_SOURCE\"; bl_setup_compose_agent_body"
+    rm -rf "$fake_repo"
+    [ "$status" -ne 0 ]
+    # Error message must instruct operator to run bl setup --apply first
+    [[ "$output" == *"--apply"* ]] || [[ "$output" == *"setup"* ]]
+}
+
+@test "routing-skills SKILL.md files have valid YAML frontmatter" {
+    # Expected routing-skill directory names (6 skills)
+    local skills=(
+        synthesizing-evidence
+        prescribing-defensive-payloads
+        curating-cases
+        gating-false-positives
+        extracting-iocs
+        authoring-incident-briefs
+    )
+    local rs_dir="${BL_REPO_ROOT}/routing-skills"
+
+    for skill in "${skills[@]}"; do
+        local skill_md="${rs_dir}/${skill}/SKILL.md"
+        # File must exist
+        [ -f "$skill_md" ]
+
+        # First line must be the YAML frontmatter opening delimiter
+        local first_line
+        first_line=$(head -n 1 "$skill_md")
+        [ "$first_line" = "---" ]
+
+        # Extract the frontmatter block (between the two --- delimiters)
+        local frontmatter
+        frontmatter=$(awk '/^---/{if(found){exit}else{found=1;next}} found{print}' "$skill_md")
+
+        # name field: present, non-empty, matches directory name (lowercase + digits + hyphens)
+        local fm_name
+        fm_name=$(printf '%s\n' "$frontmatter" | grep '^name:' | sed 's/^name:[[:space:]]*//')
+        [ -n "$fm_name" ]
+        [ "$fm_name" = "$skill" ]
+        # name must match pattern: only lowercase letters, digits, hyphens; ≤64 chars
+        [[ "$fm_name" =~ ^[a-z0-9-]+$ ]]
+        [ "${#fm_name}" -le 64 ]
+        # name must not contain reserved substrings
+        [[ "$fm_name" != *"anthropic"* ]]
+        [[ "$fm_name" != *"claude"* ]]
+
+        # description field: present, non-empty, ≤1024 chars, no XML tags
+        local fm_desc
+        fm_desc=$(printf '%s\n' "$frontmatter" | grep '^description:' | sed 's/^description:[[:space:]]*//')
+        [ -n "$fm_desc" ]
+        [ "${#fm_desc}" -le 1024 ]
+        # No XML tags (< followed by a letter or slash)
+        [[ "$fm_desc" != *"<"*">"* ]]
+
+        # The heading line "# <skill> — Routing Skill" must NOT appear in the file
+        local heading_pattern="# ${skill} — Routing Skill"
+        run grep -Fc "$heading_pattern" "$skill_md"
+        [ "$output" = "0" ]
+
+        # foundations.md reference must be present (per-skill bundle, Q3 option a)
+        run grep -Fc 'See [foundations.md](foundations.md) for IR-playbook lifecycle rules' "$skill_md"
+        [ "$output" = "1" ]
+
+        # per-skill foundations.md must exist and be within size bounds
+        local found_md="${rs_dir}/${skill}/foundations.md"
+        [ -f "$found_md" ]
+        local line_count
+        line_count=$(wc -l < "$found_md")
+        [ "$line_count" -ge 30 ]
+        [ "$line_count" -lt 500 ]
+
+        # SKILL.md body must be ≤500 lines
+        local skill_lines
+        skill_lines=$(wc -l < "$skill_md")
+        [ "$skill_lines" -le 500 ]
+    done
+}
+
+# ---------------------------------------------------------------------------
+# M17 P6: bl_setup_skills_gc — orphan Skills cascade-delete + workspace Files GC
+# ---------------------------------------------------------------------------
+
+@test "bl_setup_skills_gc cascades version-delete then skill-delete on v1 orphans" {
+    # Regression-case: verify DELETE /v1/skills/<id>/versions/<v> precedes
+    # DELETE /v1/skills/<id> for each orphan (cascade order per 2026-04-28 probe).
+    # Three orphans: case-lifecycle, polyshell, modsec-patterns.
+    # Three workspace routing-skill files also present and must be deleted.
+    local req_log
+    req_log=$(mktemp)
+    export BL_MOCK_REQUEST_LOG="$req_log"
+
+    # GET /v1/skills → returns 3 orphans + 1 live skill
+    bl_curator_mock_add_route 'GET.*v1/skills$' 'skills-gc-list-orphans.json' 200
+    # GET /v1/skills/<id>/versions → each orphan has one version
+    bl_curator_mock_add_route 'GET.*v1/skills/.*/versions$' 'skills-gc-versions-list.json' 200
+    # DELETE /v1/skills/<id>/versions/<v> → 200
+    bl_curator_mock_add_route 'DELETE.*v1/skills/.*/versions/.*' 'skills-list-empty.json' 200
+    # DELETE /v1/skills/<id> → 200
+    bl_curator_mock_add_route 'DELETE.*v1/skills/[^/]+$' 'skills-list-empty.json' 200
+    # GET /v1/files → 3 workspace routing-skill files + 1 case file + 1 unrelated
+    bl_curator_mock_add_route 'GET.*v1/files$' 'skills-gc-files-list.json' 200
+    # DELETE /v1/files/<id> → 200
+    bl_curator_mock_add_route 'DELETE.*v1/files/.*' 'skills-list-empty.json' 200
+
+    _state_json_seeded
+
+    run bash -c "
+        export BL_VAR_DIR='$BL_VAR_DIR'
+        export BL_STATE_DIR='$BL_VAR_DIR/state'
+        export BL_MOCK_REQUEST_LOG='$req_log'
+        '$BL_SOURCE' setup --gc
+    "
+    unset BL_MOCK_REQUEST_LOG
+
+    [ "$status" -eq 0 ]
+
+    # Verify the request log contains the expected cascade order for each orphan:
+    # version-delete must appear BEFORE skill-delete for each orphan skill id.
+    local log_content
+    log_content=$(cat "$req_log")
+
+    # At least 3 version-delete calls (one per orphan)
+    local ver_del_count
+    ver_del_count=$(printf '%s' "$log_content" | grep -c 'DELETE.*v1/skills/.*/versions/' || true)
+    [ "$ver_del_count" -ge 3 ]
+
+    # At least 3 skill-delete calls (one per orphan)
+    local skill_del_count
+    skill_del_count=$(printf '%s' "$log_content" | grep -cE 'DELETE.*v1/skills/[^/]+$' || true)
+    [ "$skill_del_count" -ge 3 ]
+
+    # For each orphan skill id, assert version-delete line appears before skill-delete line
+    local orphan_ids=("skill_ORPHAN_CL001" "skill_ORPHAN_PS002" "skill_ORPHAN_MS003")
+    local id
+    for id in "${orphan_ids[@]}"; do
+        local ver_line skill_line
+        ver_line=$(printf '%s' "$log_content" | grep -n "DELETE.*v1/skills/${id}/versions/" | head -1 | cut -d: -f1)
+        skill_line=$(printf '%s' "$log_content" | grep -n "DELETE.*v1/skills/${id}$" | head -1 | cut -d: -f1)
+        # Both must be present
+        [ -n "$ver_line" ]
+        [ -n "$skill_line" ]
+        # Version-delete line number must be strictly less than skill-delete line number
+        [ "$ver_line" -lt "$skill_line" ]
+    done
+
+    # Live skill (synthesizing-evidence) must NOT be deleted
+    local live_del_count
+    live_del_count=$(printf '%s' "$log_content" | grep -c 'DELETE.*skill_LIVE_SE004' || true)
+    [ "$live_del_count" -eq 0 ]
+
+    # Workspace routing-skill files must be deleted (3 matching, 2 non-matching skipped)
+    local file_del_count
+    file_del_count=$(printf '%s' "$log_content" | grep -c 'DELETE.*v1/files/' || true)
+    [ "$file_del_count" -eq 3 ]
+
+    # Non-matching files must NOT be deleted
+    local unrelated_del
+    unrelated_del=$(printf '%s' "$log_content" | grep -c 'DELETE.*file_UNRELATED' || true)
+    [ "$unrelated_del" -eq 0 ]
+
+    local case_del
+    case_del=$(printf '%s' "$log_content" | grep -c 'DELETE.*file_CASE_001' || true)
+    [ "$case_del" -eq 0 ]
+
+    rm -f "$req_log"
+}
+
+@test "bl_setup_skills_gc: no orphans found → no-op clean exit" {
+    # Only live skills present — none match the orphan display_title set
+    bl_curator_mock_add_route 'GET.*v1/skills$' 'skills-gc-list-no-orphans.json' 200
+    bl_curator_mock_add_route 'GET.*v1/files$' 'skills-gc-files-list.json' 200
+    bl_curator_mock_add_route 'DELETE.*v1/files/.*' 'skills-list-empty.json' 200
+
+    _state_json_seeded
+
+    run bash -c "
+        export BL_VAR_DIR='$BL_VAR_DIR'
+        export BL_STATE_DIR='$BL_VAR_DIR/state'
+        '$BL_SOURCE' setup --gc
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"no orphan skills"* ]]
+}
+
+@test "bl_setup_skills_gc: dry-run logs intent without executing deletes" {
+    local req_log
+    req_log=$(mktemp)
+
+    bl_curator_mock_add_route 'GET.*v1/skills$' 'skills-gc-list-orphans.json' 200
+    bl_curator_mock_add_route 'GET.*v1/files$' 'skills-gc-files-list.json' 200
+
+    _state_json_seeded
+
+    run bash -c "
+        export BL_VAR_DIR='$BL_VAR_DIR'
+        export BL_STATE_DIR='$BL_VAR_DIR/state'
+        export BL_MOCK_REQUEST_LOG='$req_log'
+        '$BL_SOURCE' setup --gc --dry-run
+    "
+    unset BL_MOCK_REQUEST_LOG
+
+    [ "$status" -eq 0 ]
+    # Output must describe planned operations
+    [[ "$output" == *"would gc skill"* ]]
+    [[ "$output" == *"would gc workspace file"* ]]
+
+    # No DELETE calls must have been issued
+    local del_count
+    del_count=$(grep -c 'DELETE' "$req_log" 2>/dev/null || true)
+    [ "$del_count" -eq 0 ]
+
+    rm -f "$req_log"
+}
+
+@test "bl_setup_skills_gc: only removes workspace files matching routing-skill-name pattern" {
+    # Files list has workspace files: 3 matching + 1 unrelated + 1 case-scoped
+    # Only the 3 matching workspace files should be deleted
+    local req_log
+    req_log=$(mktemp)
+    export BL_MOCK_REQUEST_LOG="$req_log"
+
+    bl_curator_mock_add_route 'GET.*v1/skills$' 'skills-gc-list-no-orphans.json' 200
+    bl_curator_mock_add_route 'GET.*v1/files$' 'skills-gc-files-list.json' 200
+    bl_curator_mock_add_route 'DELETE.*v1/files/.*' 'skills-list-empty.json' 200
+
+    _state_json_seeded
+
+    run bash -c "
+        export BL_VAR_DIR='$BL_VAR_DIR'
+        export BL_STATE_DIR='$BL_VAR_DIR/state'
+        export BL_MOCK_REQUEST_LOG='$req_log'
+        '$BL_SOURCE' setup --gc
+    "
+    unset BL_MOCK_REQUEST_LOG
+
+    [ "$status" -eq 0 ]
+
+    # Only the 3 routing-skill workspace files deleted
+    local del_count
+    del_count=$(grep -c 'DELETE.*v1/files/' "$req_log" 2>/dev/null || true)
+    [ "$del_count" -eq 3 ]
+
+    # Unrelated workspace file must not be touched
+    local unrelated
+    unrelated=$(grep -c 'file_UNRELATED' "$req_log" 2>/dev/null || true)
+    [ "$unrelated" -eq 0 ]
+
+    # Case-scoped file must not be touched
+    local case_f
+    case_f=$(grep -c 'file_CASE_001' "$req_log" 2>/dev/null || true)
+    [ "$case_f" -eq 0 ]
+
+    rm -f "$req_log"
 }

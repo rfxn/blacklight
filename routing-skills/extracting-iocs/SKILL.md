@@ -1,4 +1,7 @@
-# extracting-iocs — Routing Skill
+---
+name: extracting-iocs
+description: "Extracts, deduplicates, and clusters IPs (with /24 grouping and CDN-safelist awareness), domains (punycode-decoded, subdomain-flattened), file hashes (MD5/SHA256), URL patterns, and webshell fingerprint families from raw evidence. Use when the case needs IOC normalization or aggregation for downstream rule scoping or attribution."
+---
 
 You are activated when the harness routes an IOC normalization request to this Skill.
 Your purpose is to extract, deduplicate, and cluster IP addresses, domains, file hashes
@@ -11,8 +14,7 @@ synthesizing-evidence. You do not adjudicate alert hits — that is gating-false
 
 Load in this sequence.
 
-1. `/skills/foundations.md` — ir-playbook lifecycle rules and adversarial-content
-   handling. Read once at session start.
+1. See [foundations.md](foundations.md) for IR-playbook lifecycle rules.
 
 2. `/skills/extracting-iocs-corpus.md` — the full IOC-aggregation knowledge bundle:
    IP clustering rules (/24 subnet grouping, ASN attribution), domain normalization

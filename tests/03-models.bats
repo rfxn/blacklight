@@ -123,6 +123,37 @@ EOF
     [ "$status" -eq 68 ]
 }
 
+# ---------------------------------------------------------------------------
+# Beta-header centralization (P1 parity guard)
+# ---------------------------------------------------------------------------
+
+@test "BL_API_BETA_MA / BL_API_BETA_FILES / BL_API_BETA_SKILLS constants defined in src/bl.d/20-api.sh" {
+    # Guard that P1 centralization constants remain present; prevents accidental
+    # removal during future refactors.
+    local api_src
+    api_src="${BL_REPO_ROOT}/src/bl.d/20-api.sh"
+    [[ ! -r "$api_src" ]] && api_src="/opt/blacklight-src/src/bl.d/20-api.sh"
+    grep -q 'readonly BL_API_BETA_MA=' "$api_src"
+    grep -q 'readonly BL_API_BETA_FILES=' "$api_src"
+    grep -q 'readonly BL_API_BETA_SKILLS=' "$api_src"
+}
+
+@test "no hardcoded anthropic-beta: string literal remains in src/bl.d/" {
+    # Parity guard: P1 centralized beta-header values into BL_API_BETA_* constants.
+    # The legitimate concat pattern is `'anthropic-beta: '"$BL_API_BETA_MA"` —
+    # the prefix `anthropic-beta: ` lives in a string but the *value* comes
+    # from a variable. The bad pattern is `"anthropic-beta: <literal-value>"` /
+    # `'anthropic-beta: <literal-value>'` — value baked into the string.
+    # Distinguish by requiring a closing quote AFTER the value: a literal value
+    # is followed by `"` or `'`; a concat splits the string before the variable.
+    local src_dir
+    src_dir="${BL_REPO_ROOT}/src/bl.d"
+    [[ ! -d "$src_dir" ]] && src_dir="/opt/blacklight-src/src/bl.d"
+    local hits
+    hits=$(grep -rEn '["'\'']anthropic-beta:[[:space:]]+[a-z0-9._,-]+["'\'']' "$src_dir" 2>/dev/null) || true   # 2>/dev/null: silent on missing dir; empty $hits → assertion fires below
+    [ -z "$hits" ]
+}
+
 @test "bl_messages_call Haiku BL_DISABLE_LLM=1 → bypassed (binary scan only)" {
     mkdir -p "$BL_VAR_DIR/fp-corpus"
     printf '<?php echo "hello"; ?>' > "$BL_VAR_DIR/fp-corpus/benign.php"

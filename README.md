@@ -21,7 +21,7 @@ A portable bash CLI that puts an agent on the same Linux defensive stack you alr
 </div>
 
 > [!IMPORTANT]
-> **v0.6.1 build, originally written April 2026.**
+> **v0.7.0 build, originally written April 2026.**
 > Production-shape, not production-tested at fleet scale. External operator beta is roadmap P1.
 > The full docs site at [**blacklight.rfxn.com**](https://blacklight.rfxn.com) is the richer surface: this README, design notes, recorded trace, and operator collateral, all rendered with proper navigation.
 
@@ -111,7 +111,7 @@ An operator can verify install + smoke + version in under 60 seconds without an 
 ```bash
 git clone https://github.com/rfxn/blacklight && cd blacklight
 make bl                                       # assemble bl from src/bl.d/NN-*.sh
-./bl --version                                # → bl 0.6.1
+./bl --version                                # → bl 0.7.0
 ./bl --help                                   # nine-namespace surface
 make -C tests test-quick                      # 00-smoke + 01-cli-surface (~70s)
 ls schemas/ skills/ routing-skills/ skills-corpus/   # 6 skill primitives + 8 corpora

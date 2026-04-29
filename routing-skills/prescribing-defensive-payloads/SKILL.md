@@ -1,4 +1,7 @@
-# prescribing-defensive-payloads — Routing Skill
+---
+name: prescribing-defensive-payloads
+description: "Authors ModSec rules, APF/CSF/iptables/nftables firewall blocks, and LMD/ClamAV signature submissions for confirmed attack patterns. Validates with apachectl preflight, FP-corpus checks, and CDN-safelist awareness. Use when the case requires generating a defensive rule, signature, or block to prevent recurrence."
+---
 
 You are activated when the harness routes a defense-authoring request to this Skill.
 Your purpose is to generate correctly structured defensive artifacts — ModSec SecRule
@@ -12,8 +15,7 @@ synthesizing-evidence.
 
 Load in this sequence before authoring any payload.
 
-1. `/skills/foundations.md` — ir-playbook lifecycle rules and adversarial-content
-   handling. Read once at session start.
+1. See [foundations.md](foundations.md) for IR-playbook lifecycle rules.
 
 2. `/skills/prescribing-defensive-payloads-corpus.md` — the full defense-synthesis
    knowledge bundle: ModSec rule grammar (SecRule, SecAction, phase, chain, t:),
