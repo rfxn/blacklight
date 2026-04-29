@@ -844,9 +844,12 @@ bl_setup_compose_agent_update_body() {
 }
 
 # bl_setup_ensure_env <out-var> — same shape as old ensure_env; targets /v1/environments.
-# Reads env_id from state.json if present; otherwise creates it.
+# Reads env_id from state.json if present; checks packages-drift vs canonical list.
+# On mismatch: renames old env to bl-curator-env-archive-<id>, creates new env, updates state.
 bl_setup_ensure_env() {
     local _out="$1"
+    # Canonical sorted package list for drift-equality check (jq-sorted).
+    local _canonical_pkgs='["apache2","duckdb","jq","libapache2-mod-security2","modsecurity-crs","pandoc","weasyprint","yara","zstd"]'
     # Check state.json first; fall back to legacy env-id file during migration window
     local state_file="$BL_STATE_DIR/state.json"
     local cached_env=""
@@ -856,15 +859,66 @@ bl_setup_ensure_env() {
         [[ -r "$id_file" ]] && cached_env=$(command cat "$id_file")
     fi
     if [[ -n "$cached_env" ]]; then
-        BL_STATE_ENV_ID="$cached_env"
-        [[ -n "$_out" ]] && printf -v "$_out" '%s' "$cached_env"
-        return "$BL_EX_OK"
+        # Packages-drift check: fetch live env; compare sorted apt list to canonical.
+        local live_env_resp live_pkgs_sorted drift=0
+        live_env_resp=$(bl_api_call GET "/v1/environments/$cached_env") || drift=1
+        if (( drift == 0 )); then
+            live_pkgs_sorted=$(printf '%s' "$live_env_resp" \
+                | jq -c '[.config.packages.apt // [] | .[] ] | sort' 2>/dev/null || printf '[]')   # 2>/dev/null: jq diagnostic on missing/malformed field — drift=1 already handles any failure
+            if [[ "$live_pkgs_sorted" != "$_canonical_pkgs" ]]; then
+                drift=1
+            fi
+        fi
+        if (( drift == 0 )); then
+            BL_STATE_ENV_ID="$cached_env"
+            [[ -n "$_out" ]] && printf -v "$_out" '%s' "$cached_env"
+            return "$BL_EX_OK"
+        fi
+        # Packages drifted — rename old env to archive name, then create new env.
+        bl_info "bl setup: env packages drift detected ($cached_env); archiving and recreating"
+        local archive_body_file rename_rc
+        archive_body_file=$(command mktemp)
+        jq -n --arg n "bl-curator-env-archive-$cached_env" '{name: $n}' > "$archive_body_file"
+        rename_rc=0
+        bl_api_call PATCH "/v1/environments/$cached_env" "$archive_body_file" >/dev/null || rename_rc=$?   # >/dev/null: response body not needed; rename is best-effort (rename_rc handled below)
+        command rm -f "$archive_body_file"
+        if (( rename_rc != 0 )); then
+            bl_warn "bl setup: env archive-rename failed (non-fatal); proceeding to create new env"
+        fi
     fi
     local body_file create_resp created_id rc
     body_file=$(command mktemp)
     bl_setup_compose_env_body > "$body_file" || { command rm -f "$body_file"; return "$BL_EX_PREFLIGHT_FAIL"; }
+    # On name collision (old env still carries bl-curator-env name): fall back to bl-curator-env-pkgs.
     rc=0
     create_resp=$(bl_api_call POST "/v1/environments" "$body_file") || rc=$?
+    if (( rc != 0 )); then
+        # Retry with fallback name on 409/name-conflict
+        command rm -f "$body_file"
+        body_file=$(command mktemp)
+        jq -n '{
+            name: "bl-curator-env-pkgs",
+            config: {
+                type: "cloud",
+                networking: {type: "unrestricted"},
+                packages: {
+                    apt: [
+                        "apache2",
+                        "libapache2-mod-security2",
+                        "modsecurity-crs",
+                        "yara",
+                        "jq",
+                        "zstd",
+                        "duckdb",
+                        "pandoc",
+                        "weasyprint"
+                    ]
+                }
+            }
+        }' > "$body_file"
+        rc=0
+        create_resp=$(bl_api_call POST "/v1/environments" "$body_file") || rc=$?
+    fi
     command rm -f "$body_file"
     (( rc != 0 )) && return $rc
     created_id=$(printf '%s' "$create_resp" | jq -r '.id // empty')
@@ -972,20 +1026,27 @@ bl_setup_compose_agent_body() {
 }
 
 # bl_setup_compose_env_body — emits env-create JSON per setup-flow.md §4.3.
-# Canonical body (managed-agents-2026-04-01, probed 2026-04-26):
-#   {name, config:{type:"cloud", networking:{type:"unrestricted"}}}
-# `packages` is NOT a valid field — pre-installed apt packages are not
-# supported at env-create. Sessions install via bash tool when needed
-# (apache2, libapache2-mod-security2, modsecurity-crs, yara, jq, zstd,
-# duckdb, pandoc, weasyprint). Future API surfaces may add a setup_script
-# or image field; the agent prompts MUST therefore drive package install
-# explicitly per session until then. Tracked as a Path C gap.
+# Canonical body (managed-agents-2026-04-01, re-probed 2026-04-28; config.packages.apt accepted):
+#   {name, config:{type:"cloud", networking:{type:"unrestricted"}, packages:{apt:[…9 names…]}}}
 bl_setup_compose_env_body() {
     jq -n '{
         name: "bl-curator-env",
         config: {
             type: "cloud",
-            networking: {type: "unrestricted"}
+            networking: {type: "unrestricted"},
+            packages: {
+                apt: [
+                    "apache2",
+                    "libapache2-mod-security2",
+                    "modsecurity-crs",
+                    "yara",
+                    "jq",
+                    "zstd",
+                    "duckdb",
+                    "pandoc",
+                    "weasyprint"
+                ]
+            }
         }
     }'
 }

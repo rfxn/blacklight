@@ -1,0 +1,1 @@
+{"id":"env_M8_TEST","name":"bl-curator-env","config":{"type":"cloud","networking":{"type":"unrestricted"},"packages":{"apt":["apache2","libapache2-mod-security2","modsecurity-crs","yara","jq","zstd","duckdb","pandoc","weasyprint"]}}}

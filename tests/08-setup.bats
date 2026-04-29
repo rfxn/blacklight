@@ -50,6 +50,9 @@ setup() {
     export BL_REPO_ROOT="$BATS_TEST_DIRNAME/.."
     export ANTHROPIC_API_KEY="sk-ant-test-M13P6"
     bl_curator_mock_init
+    # Default env-GET route: bl_setup_ensure_env packages-drift check sees canonical
+    # packages and reuses the existing env (no recreation) unless a test overrides.
+    bl_curator_mock_add_route 'GET.*v1/environments/' 'setup-env-fetch-with-packages.json' 200
 }
 
 teardown() {
@@ -1065,4 +1068,83 @@ teardown() {
     [ "$?" -eq 0 ]
     printf '%s' "$body" | jq -e 'has("output_config") | not'
     [ "$?" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# P2 (M17): env body emits config.packages.apt with canonical list
+# Regression-case: tests/08-setup.bats::@test "env body emits config.packages.apt with canonical list"
+# ---------------------------------------------------------------------------
+
+@test "env body emits config.packages.apt with canonical list" {
+    # bl_setup_compose_env_body must emit config.packages.apt with exactly the
+    # 9 canonical package names (managed-agents-2026-04-01 re-probe 2026-04-28:
+    # config.packages.apt is now accepted at env-create).
+    local body
+    body=$(bash -c ". \"$BL_SOURCE\"; bl_setup_compose_env_body")
+    # top-level shape
+    run bash -c "printf '%s' '$body' | jq -e '.name == \"bl-curator-env\"'"
+    [ "$status" -eq 0 ]
+    run bash -c "printf '%s' '$body' | jq -e '.config.type == \"cloud\"'"
+    [ "$status" -eq 0 ]
+    run bash -c "printf '%s' '$body' | jq -e '.config.networking.type == \"unrestricted\"'"
+    [ "$status" -eq 0 ]
+    # config.packages.apt exists and has exactly 9 entries
+    run bash -c "printf '%s' '$body' | jq -e '(.config.packages.apt | type) == \"array\"'"
+    [ "$status" -eq 0 ]
+    run bash -c "printf '%s' '$body' | jq -e '(.config.packages.apt | length) == 9'"
+    [ "$status" -eq 0 ]
+    # Every canonical name is present (order-independent)
+    for pkg in apache2 libapache2-mod-security2 modsecurity-crs yara jq zstd duckdb pandoc weasyprint; do
+        run bash -c "printf '%s' '$body' | jq -e --arg p '$pkg' '.config.packages.apt | contains([\$p])'"
+        [ "$status" -eq 0 ]
+    done
+    # Networking remains unrestricted (Q2 — no lockdown in M17)
+    run bash -c "printf '%s' '$body' | jq -e '.config.networking.type == \"unrestricted\"'"
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# P2 (M17): bl_setup_ensure_env packages-drift branch triggers new-env create
+# ---------------------------------------------------------------------------
+
+@test "bl_setup_ensure_env: packages drift triggers archive-rename and new env create" {
+    # Simulate: cached env exists in state.json; live fetch returns no packages field
+    # (old env provisioned before M17) → drift detected → PATCH archive-rename,
+    # POST new env; state.json env_id updated to new id.
+    local fake_repo
+    fake_repo=$(mktemp -d)
+    _make_fake_repo "$fake_repo"
+    mkdir -p "$fake_repo/routing-skills/skill-x"
+    printf 'desc' > "$fake_repo/routing-skills/skill-x/description.txt"
+    printf '# body' > "$fake_repo/routing-skills/skill-x/SKILL.md"
+    local ds bs
+    ds=$(sha256sum "$fake_repo/routing-skills/skill-x/description.txt" | awk '{print $1}')
+    bs=$(sha256sum "$fake_repo/routing-skills/skill-x/SKILL.md" | awk '{print $1}')
+    _state_json_seeded
+    # Override env_id to a pre-M17 env (no packages in live fetch response)
+    jq '.env_id = "env_OLD_NO_PKGS"
+        | .skills["skill-x"] = {id:"skill_P6FIXTURE001",version:"1",description_sha256:$ds,body_sha256:$bs}
+        | .agent.skill_versions["skill-x"] = "1"' \
+        --arg ds "$ds" --arg bs "$bs" \
+        "$BL_STATE_DIR/state.json" > "$BL_STATE_DIR/state.json.tmp"
+    command mv "$BL_STATE_DIR/state.json.tmp" "$BL_STATE_DIR/state.json"
+    export BL_REPO_ROOT="$fake_repo"
+    export BL_MOCK_REQUEST_LOG="$BL_VAR_DIR/curl-requests.log"
+    command touch "$BL_MOCK_REQUEST_LOG"
+    # Reset routes; register specific env_OLD_NO_PKGS routes before the catch-all.
+    bl_curator_mock_reset_routes
+    bl_curator_mock_add_route 'GET.*v1/environments/env_OLD_NO_PKGS' 'setup-env-fetch-no-packages.json' 200
+    bl_curator_mock_add_route 'PATCH.*v1/environments/env_OLD_NO_PKGS' 'setup-env-create-success.json' 200
+    bl_curator_mock_add_route 'POST.*v1/environments$' 'setup-env-create-with-pkgs.json' 201
+    bl_curator_mock_add_route '/v1/agents/' 'setup-agent-update-cas-success.json' 200
+    run "$BL_SOURCE" setup --sync
+    rm -rf "$fake_repo"
+    [ "$status" -eq 0 ]
+    # state.json env_id must be updated to the new env
+    run jq -r '.env_id' "$BL_STATE_DIR/state.json"
+    [ "$output" = "env_M17_PKGS" ]
+    # PATCH to archive the old env must appear in request log
+    grep -q 'PATCH.*environments/env_OLD_NO_PKGS' "$BL_VAR_DIR/curl-requests.log"
+    # POST to create new env must appear in request log
+    grep -q 'POST.*v1/environments' "$BL_VAR_DIR/curl-requests.log"
 }
