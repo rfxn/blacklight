@@ -246,7 +246,7 @@ observable behavior change; existing `tests/03-models.bats` and
 
 ### Phase 5: agent.skills:[] + pdf attach + curator-agent.md prose trim
 
-**Status:** pending
+**Status:** complete
 
 **Mode:** serial-agent
 
